@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["Pbox","A pointer type for persistent heap allocation."]]});

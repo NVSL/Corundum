@@ -1,0 +1,1 @@
+initSidebarItems({"trait":[["PFrom","An equivalent to [`From`] for persistent memory which requires a `Journal` to operate"]]});
