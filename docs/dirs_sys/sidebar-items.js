@@ -1,1 +1,0 @@
-initSidebarItems({"fn":[["home_dir",""],["is_absolute_path",""]]});

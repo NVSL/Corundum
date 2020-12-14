@@ -1,4 +1,0 @@
-(function() {var implementors = {};
-implementors["crndm"] = [{"text":"impl&lt;A:&nbsp;MemPool&gt; AsMut&lt;str&gt; for String&lt;A&gt;","synthetic":false,"types":[]},{"text":"impl&lt;T:&nbsp;PSafe, A:&nbsp;MemPool&gt; AsMut&lt;Vec&lt;T, A&gt;&gt; for Vec&lt;T, A&gt;","synthetic":false,"types":[]},{"text":"impl&lt;T:&nbsp;PSafe, A:&nbsp;MemPool&gt; AsMut&lt;[T]&gt; for Vec&lt;T, A&gt;","synthetic":false,"types":[]}];
-implementors["memmap"] = [{"text":"impl AsMut&lt;[u8]&gt; for MmapMut","synthetic":false,"types":[]}];
-if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

@@ -1,1 +1,0 @@
-initSidebarItems({"fn":[["clflush","Flushes cache line back to memory"],["clflush_obj","Flushes cache lines of a whole object back to memory"],["mfence","Memory fence"],["msync","Synchronize caches and memories and acts like a write barrier"],["msync_obj","Synchronize caches and memories and acts like a write barrier"],["sfence","Store fence"]]});

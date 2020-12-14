@@ -1,1 +1,0 @@
-initSidebarItems({"constant":[["JOURNAL_COMMITTED","Determines that the changes are committed"]],"struct":[["Journal","A Journal object to be used for writing logs onto"]]});
