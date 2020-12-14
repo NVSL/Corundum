@@ -166,7 +166,8 @@ transaction(|j| {
 
 ## Documentation
 
-Please visit [`documentation`](http://) page for more information.
+Please visit the [`Documentation`](https://nvsl.github.io/Corundum/) page for
+more information.
 
 ## Issues and Contribution
 
