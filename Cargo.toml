@@ -1,0 +1,46 @@
+[package]
+name = "crndm"
+version = "0.1.0"
+authors = ["morteza"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+verbose = []
+concurrent_pools = []
+capture_footprint = []
+use_clflushopt = []
+use_clwb = []
+use_msync = []
+no_persist = []
+access_violation_check = []
+cyclic_link_check = []
+no_log_rc = []
+pin_journals = [] # consistency bugs
+no_flush_alloc = []
+display_all_flushes = []
+no_flush_updates = []
+replace_with_log = [] # replaces src with log to save one flush
+pthread = []
+# default = ["verbose", "access_violation_check"]
+# default = ["access_violation_check", "concurrent_pools"]
+# default = ["access_violation_check"]
+# default = ["verbose"]
+# default = ["access_violation_check"]
+default = ["pthread", "use_clflushopt"]#, "access_violation_check"] #, "pin_journals"] #, "replace_with_log", "use_clflushopt"]
+# default = []
+
+[dependencies]
+memmap = "*"
+term-painter = "*"
+libc = "*"
+num_cpus = "*"
+lazy_static = "*"
+impl-trait-for-tuples = "*"
+crndm_derive = {path = "./crndm_derive"}
+
+# examples
+rand = "0.7.3"
+regex = "1.3.9"
+num = "*"
