@@ -1,6 +1,6 @@
 (function() {var implementors = {};
 implementors["aho_corasick"] = [{"text":"impl StructuralEq for MatchKind","synthetic":false,"types":[]},{"text":"impl StructuralEq for MatchKind","synthetic":false,"types":[]},{"text":"impl StructuralEq for Match","synthetic":false,"types":[]}];
-implementors["crndm"] = [{"text":"impl&lt;T:&nbsp;PSafe, A:&nbsp;MemPool&gt; StructuralEq for FatPtr&lt;T, A&gt;","synthetic":false,"types":[]},{"text":"impl&lt;T:&nbsp;PSafe + ?Sized, A:&nbsp;MemPool&gt; StructuralEq for Ptr&lt;T, A&gt;","synthetic":false,"types":[]},{"text":"impl&lt;A:&nbsp;MemPool&gt; StructuralEq for String&lt;A&gt;","synthetic":false,"types":[]}];
+implementors["corundum"] = [{"text":"impl&lt;T:&nbsp;PSafe, A:&nbsp;MemPool&gt; StructuralEq for FatPtr&lt;T, A&gt;","synthetic":false,"types":[]},{"text":"impl&lt;T:&nbsp;PSafe + ?Sized, A:&nbsp;MemPool&gt; StructuralEq for Ptr&lt;T, A&gt;","synthetic":false,"types":[]},{"text":"impl&lt;A:&nbsp;MemPool&gt; StructuralEq for String&lt;A&gt;","synthetic":false,"types":[]}];
 implementors["getrandom"] = [{"text":"impl StructuralEq for Error","synthetic":false,"types":[]}];
 implementors["num_bigint"] = [{"text":"impl StructuralEq for Sign","synthetic":false,"types":[]},{"text":"impl StructuralEq for ParseBigIntError","synthetic":false,"types":[]},{"text":"impl&lt;T&gt; StructuralEq for TryFromBigIntError&lt;T&gt;","synthetic":false,"types":[]}];
 implementors["num_complex"] = [{"text":"impl&lt;T&gt; StructuralEq for Complex&lt;T&gt;","synthetic":false,"types":[]}];

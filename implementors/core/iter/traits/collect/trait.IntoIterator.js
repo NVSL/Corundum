@@ -1,5 +1,5 @@
 (function() {var implementors = {};
-implementors["crndm"] = [{"text":"impl&lt;T:&nbsp;PSafe, A:&nbsp;MemPool&gt; IntoIterator for Vec&lt;T, A&gt;","synthetic":false,"types":[]},{"text":"impl&lt;'a, T:&nbsp;PSafe, A:&nbsp;MemPool&gt; IntoIterator for &amp;'a Vec&lt;T, A&gt;","synthetic":false,"types":[]}];
+implementors["corundum"] = [{"text":"impl&lt;T:&nbsp;PSafe, A:&nbsp;MemPool&gt; IntoIterator for Vec&lt;T, A&gt;","synthetic":false,"types":[]},{"text":"impl&lt;'a, T:&nbsp;PSafe, A:&nbsp;MemPool&gt; IntoIterator for &amp;'a Vec&lt;T, A&gt;","synthetic":false,"types":[]}];
 implementors["proc_macro2"] = [{"text":"impl IntoIterator for TokenStream","synthetic":false,"types":[]}];
 implementors["regex"] = [{"text":"impl IntoIterator for SetMatches","synthetic":false,"types":[]},{"text":"impl&lt;'a&gt; IntoIterator for &amp;'a SetMatches","synthetic":false,"types":[]},{"text":"impl IntoIterator for SetMatches","synthetic":false,"types":[]},{"text":"impl&lt;'a&gt; IntoIterator for &amp;'a SetMatches","synthetic":false,"types":[]}];
 implementors["regex_syntax"] = [{"text":"impl&lt;'a&gt; IntoIterator for &amp;'a Utf8Sequence","synthetic":false,"types":[]}];
