@@ -58,6 +58,7 @@ echo "Running performance test (PMDK-BST:CHK)..."
 CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 1 -o $dir_path/outputs/perf/pmdk-bst-CHK.out -d $dir_path/pmdk-1.8/src/examples/libpmemobj/btree $pool r 30000
 
 rm -f $pool
+pmempool create obj --layout=simplekv -s 1G path_to_pool
 echo "Running performance test (PMDK-KVStore:PUT)..."
 CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 1 -o $dir_path/outputs/perf/pmdk-kv-PUT.out -d $dir_path/libpmemobj-cpp-1.8/build/examples/example-simplekv $pool burst put 100000
 echo "Running performance test (PMDK-KVStore:GET)..."
