@@ -15,15 +15,13 @@ apt-get -y install cmake
 apt-get -y install python
 apt-get -y install curl
 apt-get -y install libz-dev
-apt-get -y install doxygen pandoc
+apt-get -y install doxygen pandoc bsdmainutils
 apt-get -y install linux-tools-generic linux-cloud-tools-generic
 
 rm -f /usr/bin/perf
 ln -s /usr/lib/linux-tools/*/perf /usr/bin/perf
 
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-source $HOME/.cargo/env
-rustup default nightly
 
 wget https://github.com/pmem/pmdk/archive/1.8.tar.gz && \
     tar -xzvf 1.8.tar.gz && rm -f 1.8.tar.gz
