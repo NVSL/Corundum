@@ -27,7 +27,7 @@ done
 
 function read_time() {
 	echo $(cat $1 | grep -oP '(\d+\.\d+)\s+seconds time elapsed' | grep -oP '(\d+\.\d+)')
-}	
+}
 
 echo "p/c,1,2,4,8,16," > $dir_path/outputs/scale.csv
 
@@ -38,8 +38,6 @@ for r in 1 2; do
     done
 echo
 done >> $dir_path/outputs/scale.csv
-
-cat $dir_path/outputs/scale.csv | perl -pe 's/((?<=,)|(?<=^)),/ ,/g;' | column -t -s, 
 
 mkdir -p $dir_path/outputs/perf
 
@@ -104,4 +102,9 @@ echo -n      $(read_time "$dir_path/outputs/perf/crndm-REM.out"),         >> $di
 echo -n      $(read_time "$dir_path/outputs/perf/crndm-RAND.out")         >> $dir_path/outputs/perf.csv
 echo                                                                      >> $dir_path/outputs/perf.csv
 
+echo -e "\nPerformance Results"
 cat $dir_path/outputs/perf.csv | perl -pe 's/((?<=,)|(?<=^)),/ ,/g;' | column -t -s, 
+
+
+echo -e "\nScalability Results"
+cat $dir_path/outputs/scale.csv | perl -pe 's/((?<=,)|(?<=^)),/ ,/g;' | column -t -s, 
