@@ -1,0 +1,23 @@
+[package]
+name = "crndm_derive"
+version = "0.1.1"
+authors = ["Morteza Hoseinzadeh"]
+edition = "2018"
+license = "MIT"
+description = "Persistent Programming Library Procedural Macros"
+documentation = "https://nvsl.github.io/Corundum/"
+repository = "https://github.com/NVSL/Corundum"
+keywords = ["pmem", "persistent", "memory", "pmdk"]
+categories = ["development-tools", "memory-management", "hardware-support"]
+
+[lib]
+name = "crndm_derive"
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.0"
+quote = "1.0"
+
+[dependencies.syn]
+features = ["extra-traits", "full", "visit-mut", "parsing"]
+version = "1.0"
