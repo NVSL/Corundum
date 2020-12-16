@@ -7,11 +7,6 @@ dir_path=$(dirname $full_path)
 source $HOME/.cargo/env
 rustup default nightly
 
-p=$(pwd)
-cd $dir_path/..
-cargo build --release --examples
-cd $p
-
 [ -f $dir_path/inputs.tar.gz ] && tar xzvf $dir_path/inputs.tar.gz -C $dir_path && rm -f $dir_path/inputs.tar.gz
 
 ls -1 $dir_path/inputs/wc/* > $dir_path/files.list
@@ -102,9 +97,3 @@ echo -n      $(read_time "$dir_path/outputs/perf/crndm-REM.out"),         >> $di
 echo -n      $(read_time "$dir_path/outputs/perf/crndm-RAND.out")         >> $dir_path/outputs/perf.csv
 echo                                                                      >> $dir_path/outputs/perf.csv
 
-echo -e "\nPerformance Results"
-cat $dir_path/outputs/perf.csv | perl -pe 's/((?<=,)|(?<=^)),/ ,/g;' | column -t -s, 
-
-
-echo -e "\nScalability Results"
-cat $dir_path/outputs/scale.csv | perl -pe 's/((?<=,)|(?<=^)),/ ,/g;' | column -t -s, 
