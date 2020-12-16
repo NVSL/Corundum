@@ -60,7 +60,7 @@ pmempool create obj --layout=simplekv -s 1G $pool
 echo "Running performance test (PMDK-KVStore:PUT)..."
 CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-kv-PUT.out -d $dir_path/simplekv/simplekv $pool burst put 100000
 echo "Running performance test (PMDK-KVStore:GET)..."
-CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-kv-GET.out -d $dir_path/simplkv/simplekv $pool burst get 100000
+CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-kv-GET.out -d $dir_path/simplekv/simplekv $pool burst get 100000
 
 rm -f $pool
 for i in ${ins[@]}; do
