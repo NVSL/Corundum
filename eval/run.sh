@@ -18,7 +18,7 @@ ls -1 $dir_path/inputs/wc/* > $dir_path/files.list
 mkdir -p $dir_path/outputs/wc
 
 for r in 1 2; do
-    for c in 1 2 4 8 16; do
+    for c in 1 3 5 7 15; do
         rm -f $pool
         echo -e "\nRunning scalability test $r:$c ..."
         perf stat -o $dir_path/outputs/wc/$r-$c.out -C 1-$(($r+$c)) $dir_path/../target/release/examples/grep -r $r -c $c -f $pool $dir_path/files.list > $dir_path/outputs/wc/$r-$c.res
