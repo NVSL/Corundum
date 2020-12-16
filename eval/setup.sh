@@ -22,4 +22,6 @@ rm -f /usr/bin/perf
 ln -s /usr/lib/linux-tools/*/perf /usr/bin/perf
 
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+source $HOME/.cargo/env
+rustup default nightly
 
