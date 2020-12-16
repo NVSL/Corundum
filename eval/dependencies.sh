@@ -36,4 +36,7 @@ cp -f ../simplekv/* examples/simplekv/
 mkdir build && cd build && cmake .. && make -j || exit 1
 make install && cd ../.. || exit 1
 
+cd simplekv
+g++ -O2 -o simplekv simplekv.cpp -lpmemobj
+
 exit 0
