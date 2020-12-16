@@ -51,9 +51,9 @@ done
 
 rm -f $pool
 echo "Running performance test (PMDK-BST:INS)..."
-CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-bst-INS.out -d $dir_path/pmdk-1.8/src/examples/libpmemobj/btree $pool s 30000
+CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-bst-INS.out -d $dir_path/bst/btree $pool s 30000
 echo "Running performance test (PMDK-BST:CHK)..."
-CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-bst-CHK.out -d $dir_path/pmdk-1.8/src/examples/libpmemobj/btree $pool r 30000
+CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-bst-CHK.out -d $dir_path/bst/btree $pool r 30000
 
 rm -f $pool
 pmempool create obj --layout=simplekv -s 1G $pool

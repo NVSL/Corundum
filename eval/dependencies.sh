@@ -26,17 +26,19 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 wget https://github.com/pmem/pmdk/archive/1.8.tar.gz && \
     tar -xzvf 1.8.tar.gz && rm -f 1.8.tar.gz
 cd pmdk-1.8
-cp -f ../bst/* src/examples/libpmemobj/ && make -j || exit 1
+make -j || exit 1
 make install && cd .. || exit 1
 
 wget https://github.com/pmem/libpmemobj-cpp/archive/1.8.tar.gz && \
     tar -xzvf 1.8.tar.gz && rm -f 1.8.tar.gz
 cd libpmemobj-cpp-1.8
-cp -f ../simplekv/* examples/simplekv/
 mkdir build && cd build && cmake .. && make -j || exit 1
 make install && cd ../.. || exit 1
 
 cd simplekv
 g++ -O2 -o simplekv simplekv.cpp -lpmemobj
+
+cd ../bst
+gcc -O2 -o btree btree.c -lpmemobj
 
 exit 0

@@ -34,7 +34,7 @@
  * btree.c -- implementation of persistent binary search tree
  */
 
-#include <ex_common.h>
+#include "ex_common.h"
 #include <stdio.h>
 #include <sys/stat.h>
 #include <stdlib.h>
