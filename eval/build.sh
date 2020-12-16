@@ -12,6 +12,9 @@ wget https://github.com/pmem/libpmemobj-cpp/archive/1.8.tar.gz && \
     mkdir -p build && cd build && cmake .. && make -j && make install && \
     cd ../..
 
+source $HOME/.cargo/env
+rustup default nightly
+
 cd $dir_path/simplekv
 g++ -O2 -o simplekv simplekv.cpp -lpmemobj
 
