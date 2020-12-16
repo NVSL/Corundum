@@ -39,7 +39,7 @@ for r in 1 2; do
 	echo
 done >> $dir_path/outputs/scale.csv
 
-cat $dir_path/outputs/scale.csv | column -t -s,
+cat $dir_path/outputs/scale.csv | perl -pe 's/((?<=,)|(?<=^)),/ ,/g;' | column -t -s, 
 
 mkdir -p $dir_path/outputs/perf
 
@@ -104,4 +104,4 @@ echo -n      $(read_time "$dir_path/outputs/perf/crndm-REM.out"),         >> $di
 echo -n      $(read_time "$dir_path/outputs/perf/crndm-RAND.out")         >> $dir_path/outputs/perf.csv
 echo                                                                      >> $dir_path/outputs/perf.csv
 
-cat $dir_path/outputs/perf.csv | column -t -s,
+cat $dir_path/outputs/perf.csv | perl -pe 's/((?<=,)|(?<=^)),/ ,/g;' | column -t -s, 
