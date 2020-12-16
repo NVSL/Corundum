@@ -21,7 +21,7 @@ for r in 1 2; do
     for c in 1 3 5 7 15; do
         rm -f $pool
         echo -e "\nRunning scalability test $r:$c ..."
-        perf stat -o $dir_path/outputs/wc/$r-$c.out -C 1-$(($r+$c)) $dir_path/../target/release/examples/grep -r $r -c $c -f $pool $dir_path/files.list > $dir_path/outputs/wc/$r-$c.res
+        perf stat -o $dir_path/outputs/wc/$r-$c.out -C 0-$(($r+$c-1)) $dir_path/../target/release/examples/grep -r $r -c $c -f $pool $dir_path/files.list > $dir_path/outputs/wc/$r-$c.res
     done
 done
 
@@ -48,39 +48,39 @@ ins=(INS CHK REM RAND)
 rm -f $pool
 for i in ${ins[@]}; do
 echo "Running performance test (PMDK-B+Tree:$i)..."
-PMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 1 -o $dir_path/outputs/perf/pmdk-$i.out -d $dir_path/pmdk-1.8/src/examples/libpmemobj/map/mapcli btree $pool < $dir_path/inputs/perf/$i > /dev/null
+PMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-$i.out -d $dir_path/pmdk-1.8/src/examples/libpmemobj/map/mapcli btree $pool < $dir_path/inputs/perf/$i > /dev/null
 done
 
 rm -f $pool
 echo "Running performance test (PMDK-BST:INS)..."
-CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 1 -o $dir_path/outputs/perf/pmdk-bst-INS.out -d $dir_path/pmdk-1.8/src/examples/libpmemobj/btree $pool s 30000
+CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-bst-INS.out -d $dir_path/pmdk-1.8/src/examples/libpmemobj/btree $pool s 30000
 echo "Running performance test (PMDK-BST:CHK)..."
-CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 1 -o $dir_path/outputs/perf/pmdk-bst-CHK.out -d $dir_path/pmdk-1.8/src/examples/libpmemobj/btree $pool r 30000
+CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-bst-CHK.out -d $dir_path/pmdk-1.8/src/examples/libpmemobj/btree $pool r 30000
 
 rm -f $pool
 pmempool create obj --layout=simplekv -s 1G $pool
 echo "Running performance test (PMDK-KVStore:PUT)..."
-CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 1 -o $dir_path/outputs/perf/pmdk-kv-PUT.out -d $dir_path/libpmemobj-cpp-1.8/build/examples/example-simplekv $pool burst put 100000
+CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-kv-PUT.out -d $dir_path/libpmemobj-cpp-1.8/build/examples/example-simplekv $pool burst put 100000
 echo "Running performance test (PMDK-KVStore:GET)..."
-CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 1 -o $dir_path/outputs/perf/pmdk-kv-GET.out -d $dir_path/libpmemobj-cpp-1.8/build/examples/example-simplekv $pool burst get 100000
+CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-kv-GET.out -d $dir_path/libpmemobj-cpp-1.8/build/examples/example-simplekv $pool burst get 100000
 
 rm -f $pool
 for i in ${ins[@]}; do
 echo "Running performance test (Corundum-B+Tree:$i)..."
-CPUS=1 perf stat -C 1 -o $dir_path/outputs/perf/crndm-$i.out -d $dir_path/../target/release/examples/mapcli btree $pool < $dir_path/inputs/perf/$i > /dev/null
+CPUS=1 perf stat -C 0 -o $dir_path/outputs/perf/crndm-$i.out -d $dir_path/../target/release/examples/mapcli btree $pool < $dir_path/inputs/perf/$i > /dev/null
 done
 
 rm -f $pool
 echo "Running performance test (Corundum-BST:INS)..."
-CPUS=1 perf stat -C 1 -o $dir_path/outputs/perf/crndm-bst-INS.out -d $dir_path/../target/release/examples/btree $pool s 30000
+CPUS=1 perf stat -C 0 -o $dir_path/outputs/perf/crndm-bst-INS.out -d $dir_path/../target/release/examples/btree $pool s 30000
 echo "Running performance test (Corundum-BST:CHK)..."
-CPUS=1 perf stat -C 1 -o $dir_path/outputs/perf/crndm-bst-CHK.out -d $dir_path/../target/release/examples/btree $pool r 30000
+CPUS=1 perf stat -C 0 -o $dir_path/outputs/perf/crndm-bst-CHK.out -d $dir_path/../target/release/examples/btree $pool r 30000
 
 rm -f $pool
 echo "Running performance test (Corundum-KVStore:PUT)..."
-CPUS=1 perf stat -C 1 -o $dir_path/outputs/perf/crndm-kv-PUT.out -d $dir_path/../target/release/examples/simplekv $pool burst put 100000
+CPUS=1 perf stat -C 0 -o $dir_path/outputs/perf/crndm-kv-PUT.out -d $dir_path/../target/release/examples/simplekv $pool burst put 100000
 echo "Running performance test (Corundum-KVStore:GET)..."
-CPUS=1 perf stat -C 1 -o $dir_path/outputs/perf/crndm-kv-GET.out -d $dir_path/../target/release/examples/simplekv $pool burst get 100000
+CPUS=1 perf stat -C 0 -o $dir_path/outputs/perf/crndm-kv-GET.out -d $dir_path/../target/release/examples/simplekv $pool burst get 100000
 
 echo "Execution Time (s),,,,,,,,,"                                         > $dir_path/outputs/perf.csv
 echo ",BST,,KVStore,,B+Tree,,,,"                                          >> $dir_path/outputs/perf.csv
