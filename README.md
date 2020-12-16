@@ -1,4 +1,4 @@
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4321062.svg)](https://doi.org/10.5281/zenodo.4321062)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4329841.svg)](https://doi.org/10.5281/zenodo.4329841)
 [![GHA build status](https://github.com/NVSL/Corundum/workflows/CI/badge.svg)](https://github.com/NVSL/Corundum/actions)
 [![Build Status](https://travis-ci.org/NVSL/Corundum.svg?branch=main)](https://travis-ci.org/NVSL/Corundum)
 
