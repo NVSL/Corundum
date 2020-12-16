@@ -20,11 +20,8 @@ mkdir -p $dir_path/outputs/wc
 for r in 1 2; do
     for c in 1 2 4 8 16; do
         rm -f $pool
-        echo "\nRunning scalability test $r:$c ..."
+        echo -e "\nRunning scalability test $r:$c ..."
         perf stat -o $dir_path/outputs/wc/$r-$c.out -C 1-$(($r+$c)) $dir_path/../target/release/examples/grep -r $r -c $c -f $pool $dir_path/files.list > $dir_path/outputs/wc/$r-$c.res
-
-        curl -X POST -H 'Content-type: application/json' --data "{\"text\":\"$r:$c Output
-\`\`\``cat $dir_path/outputs/wc/$r-$c.out`\`\`\`\"}" https://hooks.slack.com/services/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
     done
 done
 
@@ -107,7 +104,3 @@ echo -n      $(read_time "$dir_path/outputs/wc/crndm-RAND.out")         >> $dir_
 echo                                                                    >> $dir_path/outputs/perf.csv
 
 cat $dir_path/outputs/perf.csv | column -t -s,
-curl -X POST -H 'Content-type: application/json' --data "{\"text\":\"Final Scalability Output
-\`\`\``cat $dir_path/outputs/perf.csv | column -t -s,`\`\`\`\"}" https://hooks.slack.com/services/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
-
-
