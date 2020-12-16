@@ -59,9 +59,9 @@ CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -
 
 rm -f $pool
 echo "Running performance test (PMDK-KVStore:PUT)..."
-CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 1 -o $dir_path/outputs/perf/pmdk-kv-PUT.out -d $dir_path/libpmemobj-cpp/build/examples/example-simplekv $pool burst put 100000
+CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 1 -o $dir_path/outputs/perf/pmdk-kv-PUT.out -d $dir_path/libpmemobj-cpp-1.8/build/examples/example-simplekv $pool burst put 100000
 echo "Running performance test (PMDK-KVStore:GET)..."
-CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 1 -o $dir_path/outputs/perf/pmdk-kv-GET.out -d $dir_path/libpmemobj-cpp/build/examples/example-simplekv $pool burst get 100000
+CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 1 -o $dir_path/outputs/perf/pmdk-kv-GET.out -d $dir_path/libpmemobj-cpp-1.8/build/examples/example-simplekv $pool burst get 100000
 
 rm -f $pool
 for i in ${ins[@]}; do
@@ -71,36 +71,36 @@ done
 
 rm -f $pool
 echo "Running performance test (Corundum-BST:INS)..."
-CPUS=1 perf stat -C 1 -o $dir_path/outputs/perf/crndm-bst-INS.out -d $dir_path/..target/release/examples/btree $pool s 30000
+CPUS=1 perf stat -C 1 -o $dir_path/outputs/perf/crndm-bst-INS.out -d $dir_path/../target/release/examples/btree $pool s 30000
 echo "Running performance test (Corundum-BST:CHK)..."
-CPUS=1 perf stat -C 1 -o $dir_path/outputs/perf/crndm-bst-CHK.out -d $dir_path/..target/release/examples/btree $pool r 30000
+CPUS=1 perf stat -C 1 -o $dir_path/outputs/perf/crndm-bst-CHK.out -d $dir_path/../target/release/examples/btree $pool r 30000
 
 rm -f $pool
 echo "Running performance test (Corundum-KVStore:PUT)..."
-CPUS=1 perf stat -C 1 -o $dir_path/outputs/perf/crndm-kv-PUT.out -d $dir_path/..target/release/examples/simplekv $pool burst put 100000
+CPUS=1 perf stat -C 1 -o $dir_path/outputs/perf/crndm-kv-PUT.out -d $dir_path/../target/release/examples/simplekv $pool burst put 100000
 echo "Running performance test (Corundum-KVStore:GET)..."
-CPUS=1 perf stat -C 1 -o $dir_path/outputs/perf/crndm-kv-GET.out -d $dir_path/..target/release/examples/simplekv $pool burst get 100000
+CPUS=1 perf stat -C 1 -o $dir_path/outputs/perf/crndm-kv-GET.out -d $dir_path/../target/release/examples/simplekv $pool burst get 100000
 
-echo "Execution Time (s),,,,,,,,,"                                       > $dir_path/outputs/perf.csv
-echo ",BST,,KVStore,,B+Tree,,,,"                                        >> $dir_path/outputs/perf.csv
-echo ",INS,CHK,PUT,GET,INS,CHK,REM,RAND"                                >> $dir_path/outputs/perf.csv
-echo -n PMDK,$(read_time "$dir_path/outputs/wc/pmdk-bst-INS.out"),      >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/wc/pmdk-bst-CHK.out"),      >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/wc/pmdk-kv-PUT.out"),       >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/wc/pmdk-kv-GET.out"),       >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/wc/pmdk-INS.out"),          >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/wc/pmdk-CHK.out"),          >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/wc/pmdk-REM.out"),          >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/wc/pmdk-RAND.out")          >> $dir_path/outputs/perf.csv
-echo                                                                    >> $dir_path/outputs/perf.csv
-echo -n Corundum,$(read_time "$dir_path/outputs/wc/crndm-bst-INS.out"), >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/wc/crndm-bst-CHK.out"),     >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/wc/crndm-kv-PUT.out"),      >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/wc/crndm-kv-GET.out"),      >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/wc/crndm-INS.out"),         >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/wc/crndm-CHK.out"),         >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/wc/crndm-REM.out"),         >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/wc/crndm-RAND.out")         >> $dir_path/outputs/perf.csv
-echo                                                                    >> $dir_path/outputs/perf.csv
+echo "Execution Time (s),,,,,,,,,"                                         > $dir_path/outputs/perf.csv
+echo ",BST,,KVStore,,B+Tree,,,,"                                          >> $dir_path/outputs/perf.csv
+echo ",INS,CHK,PUT,GET,INS,CHK,REM,RAND"                                  >> $dir_path/outputs/perf.csv
+echo -n PMDK,$(read_time "$dir_path/outputs/perf/pmdk-bst-INS.out"),      >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/pmdk-bst-CHK.out"),      >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/pmdk-kv-PUT.out"),       >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/pmdk-kv-GET.out"),       >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/pmdk-INS.out"),          >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/pmdk-CHK.out"),          >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/pmdk-REM.out"),          >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/pmdk-RAND.out")          >> $dir_path/outputs/perf.csv
+echo                                                                      >> $dir_path/outputs/perf.csv
+echo -n Corundum,$(read_time "$dir_path/outputs/perf/crndm-bst-INS.out"), >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/crndm-bst-CHK.out"),     >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/crndm-kv-PUT.out"),      >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/crndm-kv-GET.out"),      >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/crndm-INS.out"),         >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/crndm-CHK.out"),         >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/crndm-REM.out"),         >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/crndm-RAND.out")         >> $dir_path/outputs/perf.csv
+echo                                                                      >> $dir_path/outputs/perf.csv
 
 cat $dir_path/outputs/perf.csv | column -t -s,
