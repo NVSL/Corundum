@@ -32,11 +32,11 @@ function read_time() {
 echo "p/c,1,2,4,8,16," > $dir_path/outputs/scale.csv
 
 for r in 1 2; do
-	echo -n "$r,"
-	for c in 1 2 4 8 16; do
-		echo -n $(read_time "$dir_path/outputs/wc/$r-$c.out"),
-	done
-	echo
+    echo -n "$r,"
+    for c in 1 3 5 7 14; do
+        echo -n $(read_time "$dir_path/outputs/wc/$r-$c.out"),
+    done
+echo
 done >> $dir_path/outputs/scale.csv
 
 cat $dir_path/outputs/scale.csv | perl -pe 's/((?<=,)|(?<=^)),/ ,/g;' | column -t -s, 
