@@ -13,6 +13,7 @@ wget https://github.com/pmem/libpmemobj-cpp/archive/1.8.tar.gz && \
     cd ../..
 
 source $HOME/.cargo/env
+rustup update
 rustup default nightly
 
 ldconfig
