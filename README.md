@@ -39,7 +39,7 @@ them to allocate persistent memory safely.
 `corundum` depends on some unstable features of Rust. Therefore, it requires
 nightly Rust compiler [1.50.0-nightly](https://github.com/rust-lang/rust).
 Please run the following commands to download the latest version of Rust (See
-[https://www.rust-lang.org/tools/install] for more details).
+https://www.rust-lang.org/tools/install for more details).
 
 ```shell
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -90,7 +90,7 @@ the scope. The open functions take a pool file path and a flag set to create
 the pool file.
 
 ```rust
-if let Ok(_) = my_mod::BuddyAlloc::open_no_root("image", O_F) {
+if let Ok(_) = my_pool::BuddyAlloc::open_no_root("image", O_F) {
     println!("Image file is formatted and ready to use");
 } else {
     println!("No image file found");
@@ -98,7 +98,7 @@ if let Ok(_) = my_mod::BuddyAlloc::open_no_root("image", O_F) {
 ```
 
 ```rust
-if let Ok(root) = my_mod::BuddyAlloc::open::<Root>("image", O_F) {
+if let Ok(root) = my_pool::BuddyAlloc::open::<Root>("image", O_F) {
     println!("Image file is formatted and the root object is created ({:?})", root);
 } else {
     println!("No image file");
