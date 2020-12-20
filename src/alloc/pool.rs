@@ -560,14 +560,14 @@ where
         addr >= rng.start && addr < rng.end
     }
 
-    /// Allocate memory as described by the given `layout`.
+    /// Allocate memory as described by the given `size`.
     ///
     /// Returns a pointer to newly-allocated memory.
     ///
     /// # Safety
     ///
     /// This function is unsafe because undefined behavior can result
-    /// if the caller does not ensure that `layout` has non-zero size.
+    /// if the caller does not ensure that `size` has non-zero.
     /// The allocated block of memory may or may not be initialized.
     #[inline]
     #[track_caller]
@@ -600,7 +600,7 @@ where
     /// Prepares allocation without performing it
     /// 
     /// This function is used internally for low-level atomicity in memory
-    /// allocation. See [`Log::set()`] for more details.
+    /// allocation. As an example, please see [`drop_on_failure`].
     /// 
     /// It returns a 4-tuple:
     ///     1. Raw pointer
@@ -621,14 +621,14 @@ where
     /// }
     /// ```
     /// 
-    /// [`Log::set()`]: ../stm/struct.Log.html#method.set
+    /// [`drop_on_failure`]: #method.drop_on_failure
     /// 
     unsafe fn pre_alloc(size: usize) -> (*mut u8, u64, usize, usize);
 
     /// Prepares deallocation without performing it
     /// 
     /// This function is used internally for low-level atomicity in memory
-    /// allocation. See [`Log::set()`] for more details.
+    /// allocation. As an example, please see [`drop_on_failure`].
     /// 
     /// It returns the zone in which the deallocation happens.
     /// 
@@ -648,12 +648,12 @@ where
     /// }
     /// ```
     /// 
-    /// [`Log::set()`]: ../stm/struct.Log.html#method.set
+    /// [`drop_on_failure`]: #method.drop_on_failure
     /// 
     unsafe fn pre_dealloc(ptr: *mut u8, size: usize) -> usize;
 
     /// Adds a low-level log to update as 64-bit `obj` to `val` when 
-    /// [`perform()`] is called. See [`Log::set()`] for more details.
+    /// [`perform()`] is called. As an example, please see [`Log::set()`].
     /// 
     /// [`perform()`]: #method.perform
     /// [`Log::set()`]: ../stm/struct.Log.html#method.set
@@ -711,10 +711,10 @@ where
     /// 
     /// It materializes the changes made by [`pre_alloc`](#method.pre_alloc),
     /// [`pre_dealloc`](#method.pre_dealloc), and
-    /// [`pre_realloc`](#method.pre_realloc). See [`Log::set()`] for more
+    /// [`pre_realloc`](#method.pre_realloc). See [`drop_on_failure`] for more
     /// details.
     /// 
-    /// [`Log::set()`]: ../stm/struct.Log.html#method.set
+    /// [`drop_on_failure`]: #method.drop_on_failure
     /// 
     unsafe fn perform(_zone: usize) { }
 
@@ -722,10 +722,10 @@ where
     /// 
     /// Discards the changes made by [`pre_alloc`](#method.pre_alloc),
     /// [`pre_dealloc`](#method.pre_dealloc), and
-    /// [`pre_realloc`](#method.pre_realloc).  See [`Log::set()`] for more
+    /// [`pre_realloc`](#method.pre_realloc).  See [`drop_on_failure`] for more
     /// details.
     /// 
-    /// [`Log::set()`]: ../stm/struct.Log.html#method.set
+    /// [`drop_on_failure`]: #method.drop_on_failure
     /// 
     unsafe fn discard(_zone: usize) { }
 
@@ -740,8 +740,7 @@ where
     /// # Errors
     ///
     /// Returning a null pointer indicates that either memory is exhausted
-    /// or `layout` does not meet allocator's size or alignment constraints,
-    /// just as in `alloc`.
+    /// or `size` does not meet allocator's size constraints, just as in `alloc`.
     ///
     /// Clients wishing to abort computation in response to an
     /// allocation error are encouraged to call the [`handle_alloc_error`] function,
@@ -831,7 +830,6 @@ where
     unsafe fn new_uninit<'a, T: PSafe + 'a>(j: &Journal<Self>) -> &'a mut T {
         let mut log = Log::drop_on_failure(u64::MAX, 1, j);
         let (p, off, size, z) = Self::atomic_new_uninit();
-        Self::drop_on_failure(off, size, z);
         log.set(off, size, z);
         Self::perform(z);
         p

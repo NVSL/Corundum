@@ -289,7 +289,6 @@ pub(crate) mod problems {
             let vp = Prc::volatile(&root.v.borrow());
             P::transaction(|j| {
                 if let Some(p) = vp.upgrade(j) {
-                    println!("data = {}", p);
 
                     let _vp2 = Prc::volatile(&p);
                     // drop a recently created volatile reference
@@ -302,7 +301,7 @@ pub(crate) mod problems {
                 } else {
                     println!("no data");
                 }
-
+                
                 // Dropping the old Prc
                 let mut b = root.v.borrow_mut(j);
                 *b = Prc::new(12, j);

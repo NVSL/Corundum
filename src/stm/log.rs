@@ -193,6 +193,48 @@ impl<A: MemPool> Log<A> {
     /// drop log, the high-level recovery procedure reclaims the allocation as
     /// the crash happened inside a transaction.
     /// 
+    /// # Examples
+    /// 
+    /// ```
+    /// # use corundum::default::*;
+    /// # use corundum::stm::Log;
+    /// # type P = BuddyAlloc;
+    /// # let _ = P::open_no_root("foo.pool", O_CF).unwrap();
+    /// P::transaction(|j| unsafe {
+    ///     // Create a neutral high-level log to drop the allocation on failure.
+    ///     // It is different from the low-level drop log which is inside the
+    ///     // allocator's ring buffer. Unlike that, this log is stored in the
+    ///     // journal object.
+    ///     let mut log = Log::drop_on_failure(u64::MAX, 1, j);
+    ///    
+    ///     // Prepare an allocation. The allocation is not durable yet. In case
+    ///     // of a crash, the prepared allocated space is gone. It is fine
+    ///     // because it has not been used. The `atomic_` functions
+    ///     // form a low-level atomic section.
+    ///     let (obj, off, len, zone) = P::atomic_new([1,2,3,4,5]);
+    ///    
+    ///     // Set the offset and size of the allocation to make the log valid.
+    ///     // Note that the changes will be effective after the allocation is
+    ///     // successfully performed.
+    ///     log.set(off, len, zone);
+    ///     
+    ///     // It is fine to work with the prepared raw pointer. All changes in
+    ///     // the low-level atomic section are considered as part of the
+    ///     // allocation and will be gone in case of a crash, as the allocation
+    ///     // will be dropped.
+    ///     obj[1] = 20;
+    ///    
+    ///     // Transaction ends here. The perform function sets the `operating`
+    ///     // flag to show that the prepared changes are being materialized.
+    ///     // This flag remains set until the end of materialization. In case
+    ///     // of a crash while operating, the recovery procedure first continues
+    ///     // the materialization, and then uses the `DropOnFailure` logs to
+    ///     // reclaim the allocation. `perform` function realizes the changes
+    ///     // made by the `pre_` function on the given memory zone.
+    ///     P::perform(zone);
+    /// }).unwrap();
+    /// ```
+    /// 
     /// [`Journal`]: ./journal/struct.Journal.html
     /// [`pre_alloc()`]: ../alloc/trait.MemPool.html#method.pre_alloc
     /// [`validate()`]: ../alloc/trait.MemPool.html#method.validate
@@ -266,28 +308,6 @@ impl<A: MemPool> Log<A> {
     }
 
     #[inline]
-    #[cfg(feature = "replace_with_log")]
-    fn take_impl(
-        off: &u64,
-        log: &u64,
-        len: usize,
-        journal: &Journal<A>,
-        notifier: Notifier<A>,
-    ) -> Ptr<Log<A>, A> {
-        debug_assert_ne!(len, 0);
-        let res = Self::write_on_journal(DataLog(*off, *log, len), journal, notifier);
-        unsafe {
-            let tmp = *off;
-            *(off as *const u64 as *mut u64) = *log;
-            *(log as *const u64 as *mut u64) = tmp;
-            msync(off, 1);
-        }
-        res
-    }
-
-
-    #[inline]
-    #[cfg(not(feature = "replace_with_log"))]
     fn take_impl(
         off: u64,
         log: u64,
@@ -315,11 +335,22 @@ impl<A: MemPool> Log<A> {
             #[cfg(feature = "verbose")]
             print_log!(x, pointer.off(), len);
 
-            #[cfg(not(feature = "replace_with_log"))]
-            unsafe { Self::take_impl(pointer.off(), pointer.dup().off(), len, journal, notifier) }
-            
-            #[cfg(feature = "replace_with_log")]
-            unsafe { Self::take_impl(pointer.off_ref(), pointer.dup().off_ref(), len, journal, notifier) }
+            let log = unsafe { pointer.dup() };
+            let _log = log.as_ref();
+
+            if cfg!(feature = "replace_with_log") {
+                pointer.replace(log.replace(pointer.off()));
+
+                debug_assert_eq!(
+                    crate::utils::as_slice(pointer.as_ref()), 
+                    crate::utils::as_slice(log.as_ref()),
+                    "Log is not the same as the original data");
+
+                Self::take_impl(log.off(), pointer.off(), len, journal, notifier)
+            } else {
+                crate::ll::msync_obj(log.as_ref());
+                Self::take_impl(pointer.off(), log.off(), len, journal, notifier)
+            }
         }
     }
 

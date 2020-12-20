@@ -616,7 +616,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Deref for Pbox<T, A> {
     }
 }
 
-impl<T: PSafe + ?Sized, A: MemPool> DerefMut for Pbox<T, A> {
+impl<T: PSafe, A: MemPool> DerefMut for Pbox<T, A> {
     fn deref_mut(&mut self) -> &mut T {
         let d = self.0.as_mut();
         if self.1 == 0 && A::valid(&self.1) {

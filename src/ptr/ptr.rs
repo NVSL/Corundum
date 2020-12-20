@@ -1,8 +1,6 @@
 use crate::alloc::MemPool;
 use crate::alloc::PmemUsage;
-use crate::ll::*;
 use crate::{PSafe, TxOutSafe};
-use std::alloc::Layout;
 use std::fmt::{Debug, Display, Formatter};
 use std::marker::PhantomData;
 use std::ops::*;
@@ -115,16 +113,14 @@ impl<A: MemPool, T: PSafe + ?Sized> Ptr<T, A> {
     /// responsibility of deallocating inner value. Also, it does not clone the
     /// inner value. Instead, it just copies the memory.
     pub(crate) unsafe fn dup(&self) -> Ptr<T, A> {
-        let src = A::get_unchecked::<T>(self.off);
-        let this = self.as_ref();
-        let dst = A::alloc_for_value(this);
+        let src = self.as_ref();
+        let dst = A::alloc_for_value(src);
         let trg = A::off_unchecked(dst);
         std::ptr::copy_nonoverlapping(
             src as *const T as *const u8,
             dst as *mut T as *mut u8,
-            Layout::for_value(this).size(),
+            std::alloc::Layout::for_value(src).size(),
         );
-        msync_obj(dst);
         Ptr::from_off_unchecked(trg)
     }
 
@@ -145,6 +141,19 @@ impl<A: MemPool, T: PSafe + ?Sized> Ptr<T, A> {
     /// Returns a reference to the file offset
     pub fn off_ref(&self) -> &u64 {
         &self.off
+    }
+
+    #[inline]
+    /// Returns a reference to the file offset
+    pub(crate) fn off_mut(&self) -> &mut u64 {
+        unsafe { &mut *(&self.off as *const u64 as *mut u64) }
+    }
+
+    #[inline]
+    pub(crate) fn replace(&self, new: u64) -> u64 {
+        let old = self.off;
+        *self.off_mut() = new;
+        old
     }
 
     /// Creates a new `Ptr`.
