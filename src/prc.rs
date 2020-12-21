@@ -863,18 +863,18 @@ trait PrcBoxPtr<T: PSafe + ?Sized, A: MemPool> {
 
     #[inline]
     #[cfg(not(feature = "no_log_rc"))]
-    fn log_count(&self, journal: &Journal<A>) {
+    fn log_count(&self, journal: *const Journal<A>) {
         let inner = self.count();
 
         if inner.has_log == 0 {
             unsafe {
-                inner.take_log(journal, Notifier::NonAtomic(Ptr::from_ref(&inner.has_log)));
+                inner.take_log(&*journal, Notifier::NonAtomic(Ptr::from_ref(&inner.has_log)));
             }
         }
     }
 
     #[inline]
-    fn inc_strong(&self, _journal: &Journal<A>) {
+    fn inc_strong(&self, _journal: *const Journal<A>) {
         let inner = self.count();
         let strong = inner.strong;
 
@@ -888,7 +888,7 @@ trait PrcBoxPtr<T: PSafe + ?Sized, A: MemPool> {
     }
 
     #[inline]
-    fn dec_strong(&self, _journal: &Journal<A>) {
+    fn dec_strong(&self, _journal: *const Journal<A>) {
         #[cfg(not(feature = "no_log_rc"))]
         self.log_count(_journal);
 
@@ -901,7 +901,7 @@ trait PrcBoxPtr<T: PSafe + ?Sized, A: MemPool> {
     }
 
     #[inline]
-    fn inc_weak(&self, _journal: &Journal<A>) {
+    fn inc_weak(&self, _journal: *const Journal<A>) {
         let weak = self.weak();
 
         if weak == 0 || weak == usize::max_value() {
@@ -915,7 +915,7 @@ trait PrcBoxPtr<T: PSafe + ?Sized, A: MemPool> {
     }
 
     #[inline]
-    fn dec_weak(&self, _journal: &Journal<A>) {
+    fn dec_weak(&self, _journal: *const Journal<A>) {
         #[cfg(not(feature = "no_log_rc"))]
         self.log_count(_journal);
 
@@ -1086,16 +1086,18 @@ impl<T: ?Sized, A: MemPool> Drop for VWeak<T, A> {
     fn drop(&mut self) {
         unsafe {
             let this = &mut *self.valid;
-            if self.gen == A::gen() {
-                if !this.list.is_null() {
-                    let head = &mut (*this.list).head;
-                    if this.prev.is_null() {
-                        *head = this.next;
-                    } else {
-                        (*this.prev).next = this.next;
-                    }
-                    if !this.next.is_null() {
-                        (*this.next).prev = this.prev;
+            if A::is_open() {
+                if self.gen == A::gen() {
+                    if !this.list.is_null() {
+                        let head = &mut (*this.list).head;
+                        if this.prev.is_null() {
+                            *head = this.next;
+                        } else {
+                            (*this.prev).next = this.next;
+                        }
+                        if !this.next.is_null() {
+                            (*this.next).prev = this.prev;
+                        }
                     }
                 }
             }

@@ -18,7 +18,7 @@ use term_painter::ToStyle;
 /// A pass-through allocator for volatile memory
 pub struct Heap {}
 
-static mut JOURNALS: Option<HashMap<ThreadId, (&Journal<Heap>, i32)>> = None;
+static mut JOURNALS: Option<HashMap<ThreadId, (u64, i32)>> = None;
 static mut CHAPERONS: Option<HashMap<ThreadId, Chaperon>> = None;
 static mut MUTEX: Option<Mutex<bool>> = None;
 
@@ -131,6 +131,10 @@ unsafe impl MemPool for Heap {
         Ok(Self {})
     }
 
+    fn is_open() -> bool {
+        true
+    }
+
     unsafe fn format(_path: &str) -> Result<()> {
         Ok(())
     }
@@ -145,40 +149,22 @@ unsafe impl MemPool for Heap {
 
     unsafe fn recover() {}
 
-    unsafe fn guarded<T, F: FnOnce() -> T>(f: F) -> T {
-        if let Some(mutex) = &mut MUTEX {
-            let _guard = mutex.lock();
-            f()
-        } else {
-            MUTEX = Some(Mutex::new(false));
-            Self::guarded(f)
-        }
-    }
-
-    unsafe fn new_journal(tid: ThreadId) {
-        if JOURNALS.is_none() {
-            JOURNALS = Some(HashMap::new());
-        }
-        let (journal, offset, size, z) = Self::atomic_new(Journal::<Self>::new());
-        Self::drop_on_failure(offset, size, z);
-        Self::perform(z);
-        JOURNALS
-            .as_mut()
-            .unwrap()
-            .insert(tid, (journal, 0));
-    }
-
     unsafe fn drop_journal(journal: &mut Journal<Self>) {
         let tid = std::thread::current().id();
         JOURNALS.as_mut().unwrap().remove(&tid);
         Self::free_nolog(journal);
     }
 
-    unsafe fn journals() -> &'static mut HashMap<ThreadId, (&'static Journal<Self>, i32)> {
+    unsafe fn journals<T, F: Fn(&mut HashMap<ThreadId, (u64, i32)>)->T>(f: F)->T{
         if JOURNALS.is_none() {
             JOURNALS = Some(HashMap::new());
         }
-        JOURNALS.as_mut().unwrap()
+        f(JOURNALS.as_mut().unwrap())
+    }
+
+    unsafe fn journals_head() -> &'static u64 {
+        static mut HEAD: u64 = u64::MAX;
+        &HEAD
     }
 
     unsafe fn close() -> Result<()> {

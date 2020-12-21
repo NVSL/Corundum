@@ -107,7 +107,7 @@ pub(crate) mod problems {
 
         type P = BuddyAlloc;
 
-        let _pool = P::open_no_root("my_test.pool", O_CFNE).unwrap();
+        let _pool = P::open_no_root("my_test.pool", O_CF).unwrap();
 
         let _ = P::transaction(|j| {
             let a = Parc::new(42, j);
@@ -196,7 +196,7 @@ pub(crate) mod problems {
 
         type P = BuddyAlloc;
 
-        let _ = P::open_no_root("nosb.pool", O_CFNE).unwrap();
+        let _img = P::open_no_root("nosb.pool", O_CF).unwrap();
         crate::tests::test::print_usage(0);
 
         P::transaction(|j| {
@@ -242,7 +242,7 @@ pub(crate) mod problems {
             }
         }
 
-        let _ = P::open_no_root("ref_cycle_mem_leak.pool", O_CFNE).unwrap();
+        let _img = P::open_no_root("ref_cycle_mem_leak.pool", O_CF).unwrap();
         println!("usage 1: {}", P::used());
         P::transaction(|j| {
             let a = Prc::new(Cons(5, LogRefCell::new(Prc::new(Nil, j), j)), j);
@@ -413,7 +413,7 @@ pub(crate) mod problems {
         use crate::boxed::Pbox;
         use std::time::Instant;
 
-        let _pool = BuddyAlloc::open_no_root("conc.pool", O_CFNE).unwrap();
+        let _pool = BuddyAlloc::open_no_root("conc.pool", O_CF).unwrap();
 
         let mut threads = vec![];
         let start = Instant::now();
@@ -570,7 +570,7 @@ pub(crate) mod test {
     fn multiple_transactions() {
         use crate::boxed::Pbox;
 
-        let _image = A::open_no_root("nosb.pool", O_CFNE).unwrap();
+        let _image = A::open_no_root("nosb.pool", O_CF).unwrap();
 
         A::transaction(|j1| {
             let b1 = Pbox::new(LogCell::new(1, j1), j1);
@@ -587,6 +587,7 @@ pub(crate) mod test {
     }
 
     #[test]
+    #[ignore]
     fn multiple_open() {
         use crate::boxed::Pbox;
 
@@ -594,7 +595,7 @@ pub(crate) mod test {
 
         for _ in 0..10 {
             threads.push(std::thread::spawn(move || {
-                let _image = A::open_no_root("nosb.pool", O_CFNE).unwrap();
+                let _image = A::open_no_root("nosb.pool", O_CF).unwrap();
                 A::transaction(|j1| {
                     let b1 = Pbox::new(LogRefCell::new(1, j1), j1);
                     let mut b1 = b1.borrow_mut(j1);
@@ -692,22 +693,6 @@ pub(crate) mod test {
     }
 
     #[test]
-    /// FIXME: It commits the previous allocations which are memory leaks on the next run
-    fn memory_leak() {
-        // let p = x as *const T as *const u8;
-        // let p = ptr::slice_from_raw_parts(p, layout.size());
-        // Self::drop_later(&p);
-
-        let _image = A::open_no_root("nosb.pool", O_CFNE).unwrap();
-
-        println!("usage = {}", A::used());
-        A::transaction(|j| {
-            let _p1 = Prc::<i32, A>::new(1, j);
-        })
-        .unwrap();
-    }
-
-    #[test]
     fn concat_test() {
         type P = BuddyAlloc;
         type Ptr = Option<Prc<LogRefCell<Node, P>, P>>;
@@ -717,7 +702,7 @@ pub(crate) mod test {
         }
         fn remove_all(k: i32) {
             let root = P::open::<Pbox<LogRefCell<Ptr, P>, P>>("foo3.pool", 0).unwrap();
-            P::transaction(move |j| {
+            P::transaction(|j| {
                 let mut curr = root.borrow().pclone(j);
                 let mut prev = Weak::<LogRefCell<Node, P>, P>::new();
                 while let Some(n) = curr {
@@ -740,7 +725,7 @@ pub(crate) mod test {
 
     #[test]
     fn prc_test() {
-        let _image = A::open_no_root("nosb.pool", O_CFNE).unwrap();
+        let _image = A::open_no_root("nosb.pool", O_CF).unwrap();
 
         struct Cell {
             k: i32,
@@ -935,7 +920,7 @@ pub(crate) mod test {
 
     #[test]
     fn test_gadget_owners() {
-        let _image = A::open_no_root("nosb.pool", O_CFNE);
+        let _image = A::open_no_root("nosb.pool", O_CF);
         struct Owner {
             name: [u8; 8],
             gadgets: [Weak<Gadget, A>; 2],
@@ -1177,8 +1162,9 @@ pub(crate) mod test {
                 }
             }
         }).ok();
+        println!("strong_count = {}", RootCell::strong_count(&sb));
         print_usage(2);
-        let counter = transaction(move |j| {
+        let counter = transaction(|j| {
             let mut counter = 0;
             if let Some(root) = &sb.root.borrow().next {
                 let mut curr = Prc::downgrade(&root, j);
@@ -1287,7 +1273,7 @@ pub(crate) mod test {
 
     #[test]
     fn test_transaction() {
-        let _heap = A::open_no_root("nosb.pool", O_CFNE);
+        let _heap = A::open_no_root("nosb.pool", O_CF);
         A::transaction(|j| {
             let data = Pbox::new(LogRefCell::new(1, j), j);
             let mut data = data.borrow_mut(j);
@@ -1647,7 +1633,7 @@ pub(crate) mod test {
 
     #[test]
     fn propagate_panic() {
-        let _image = A::open_no_root("nosb.pool", O_CFNE);
+        let _image = A::open_no_root("nosb.pool", O_CF);
         if A::transaction(|j| {
             let ptr = Parc::new(Mutex::new(1, j), j);
             print_usage(1);

@@ -33,6 +33,10 @@ impl<'a, T: 'a + PSafe, A: MemPool> RootCell<'a, T, A> {
     pub fn new(value: &'a T, pool: Arc<A>) -> Self {
         Self(value, pool)
     }
+
+    pub fn strong_count(root: &Self) -> usize {
+        Arc::strong_count(&root.1)
+    }
 }
 
 impl<T: PSafe, A: MemPool> Clone for RootCell<'_, T, A> {

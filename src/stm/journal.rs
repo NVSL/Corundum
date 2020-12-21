@@ -318,41 +318,42 @@ impl<A: MemPool> Journal<A> {
     /// Clears all logs and drops itself from the memory pool
     pub fn clear(&mut self) {
         unsafe {
-            A::guarded(|| {
-                // let this = self as *const Self as *mut Self;
-                #[cfg(feature = "pin_journals")]
-                {
-                    let mut page = self.pages.as_option();
-                    while let Some(p) = page {
-                        p.clear();
-                        page = p.next.as_option();
-                    }
-                    self.current = self.pages;
+            // let this = self as *const Self as *mut Self;
+            #[cfg(feature = "pin_journals")]
+            {
+                let mut page = self.pages.as_option();
+                while let Some(p) = page {
+                    p.clear();
+                    page = p.next.as_option();
                 }
+                self.current = self.pages;
+            }
 
-                #[cfg(not(feature = "pin_journals"))]
-                {
-                    while let Some(page) = self.pages.clone().as_option() {
-                        let nxt = page.next;
-                        page.clear();
-                        let z = A::pre_dealloc(page.as_mut_ptr() as *mut u8, std::mem::size_of::<Page<A>>());
-                        A::log64(A::off_unchecked(self.pages.off_ref()), nxt.off(), z);
-                        A::perform(z);
-                    }
+            #[cfg(not(feature = "pin_journals"))]
+            {
+                while let Some(page) = self.pages.clone().as_option() {
+                    let nxt = page.next;
+                    page.clear();
+                    let z = A::pre_dealloc(page.as_mut_ptr() as *mut u8, std::mem::size_of::<Page<A>>());
+                    A::log64(A::off_unchecked(self.pages.off_ref()), nxt.off(), z);
+                    A::perform(z);
                 }
-                if let Ok(prev) = A::deref_mut::<Self>(self.prev_off) {
-                    prev.next_off = self.next_off;
-                }
-                if let Ok(next) = A::deref_mut::<Self>(self.next_off) {
-                    next.prev_off = self.prev_off;
-                }
-                self.complete();
+            }
+            if let Ok(prev) = A::deref_mut::<Self>(self.prev_off) {
+                prev.next_off = self.next_off;
+            }
+            if let Ok(next) = A::deref_mut::<Self>(self.next_off) {
+                next.prev_off = self.prev_off;
+            }
+            self.complete();
 
-                #[cfg(not(feature = "pin_journals"))]
-                {
-                    A::drop_journal(self);
-                }
-            });
+            #[cfg(not(feature = "pin_journals"))]
+            {
+                A::drop_journal(self);
+                A::journals(|journals| {
+                    journals.remove(&std::thread::current().id());
+                });
+            }
         }
     }
 
@@ -449,38 +450,57 @@ impl<A: MemPool> Journal<A> {
     /// Returns a journal for the current thread. If there is no `Journal`
     /// object for the running thread, it may create a new journal and returns
     /// its mutable reference. Each thread may have only one journal.
-    pub(crate) fn current(create: bool) -> Option<&'static mut (&'static Journal<A>, i32)>
+    pub(crate) fn current(create: bool) -> Option<(*const Journal<A>, *mut i32)>
     where
         Self: Sized,
     {
         unsafe {
-            A::guarded(|| {
-                let tid = std::thread::current().id();
-                let journals = A::journals();
+            let tid = std::thread::current().id();
+            A::journals(|journals| {
                 if !journals.contains_key(&tid) && create {
-                    A::new_journal(tid);
+                    let (journal, offset, _, z) = A::atomic_new(Journal::<A>::new());
+                    journal.enter_into(A::journals_head(), z);
+                    A::perform(z);
+                    journals.insert(tid, (offset, 0));
                 }
-                journals.get_mut(&tid)
+                if let Some((j, c)) = journals.get_mut(&tid) {
+                    Some((Ptr::<Self, A>::from_off_unchecked(*j).as_ptr(), c as *mut i32))
+                } else {
+                    None
+                }
             })
+        }
+    }
+
+    /// Returns true if there is a running transaction on the current thread
+    pub fn is_running() -> bool {
+        if let Some((_, cnt)) = Self::try_current() {
+            unsafe {*cnt != 0}
+        } else {
+            false
         }
     }
 
     /// Returns a journal for the current thread. If there is no `Journal`
     /// object for the running thread, it may create a new journal and returns
     /// its mutable reference. Each thread may have only one journal.
-    pub(crate) fn try_current() -> Option<&'static mut (&'static Journal<A>, i32)>
+    pub(crate) fn try_current() -> Option<(*const Journal<A>, *mut i32)>
     where
         Self: Sized,
     {
         unsafe {
             let tid = std::thread::current().id();
-            let journals = A::journals();
-            if !journals.contains_key(&tid) {
-                None
-            } else {
-                let journal = journals.get_mut(&tid).unwrap();
-                Some(journal)
-            }
+            A::journals(|journals| {
+                if !journals.contains_key(&tid) {
+                    None
+                } else {
+                    if let Some((j, c)) = journals.get_mut(&tid) {
+                        Some((Ptr::<Self, A>::from_off_unchecked(*j).as_ptr(), c as *mut i32))
+                    } else {
+                        None
+                    }
+                }
+            })
         }
     }
 }

@@ -1892,19 +1892,19 @@ impl<A: MemPool> From<String<A>> for Vec<u8, A> {
 impl<A: MemPool> fmt::Write for String<A> {
     #[inline]
     fn write_str(&mut self, s: &str) -> fmt::Result {
-        let j = &Journal::try_current()
+        let j = Journal::try_current()
             .expect("This function should be called only inside a transaction")
             .0;
-        self.push_str(s, j);
+        self.push_str(s, unsafe { &*j });
         Ok(())
     }
 
     #[inline]
     fn write_char(&mut self, c: char) -> fmt::Result {
-        let j = &Journal::try_current()
+        let j = Journal::try_current()
             .expect("This function should be called only inside a transaction")
             .0;
-        self.push(c, j);
+        self.push(c, unsafe { &*j });
         Ok(())
     }
 }

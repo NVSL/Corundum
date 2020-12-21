@@ -251,7 +251,7 @@ impl<T: PSafe, A: MemPool> Pbox<T, A> {
     ///
     pub fn initialize(boxed: &Option<Pbox<T, A>>, value: T) -> crate::result::Result<()> {
         assert!(
-            Journal::<A>::try_current().is_none(),
+            !Journal::<A>::is_running(),
             "Pbox::initialize() cannot be used inside a transaction"
         );
         match boxed {
@@ -620,10 +620,10 @@ impl<T: PSafe, A: MemPool> DerefMut for Pbox<T, A> {
     fn deref_mut(&mut self) -> &mut T {
         let d = self.0.as_mut();
         if self.1 == 0 && A::valid(&self.1) {
-            let journal = &Journal::<A>::try_current()
+            let journal = Journal::<A>::try_current()
                 .expect("Unloggable data modification").0;
             unsafe {
-                d.take_log(journal, Notifier::NonAtomic(Ptr::from_ref(&self.1)));
+                d.take_log(&*journal, Notifier::NonAtomic(Ptr::from_ref(&self.1)));
             }
         }
         d

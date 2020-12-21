@@ -28,7 +28,7 @@ display_all_flushes = []
 no_flush_updates = []
 replace_with_log = []
 pthread = []
-default = ["pthread", "replace_with_log"]
+default = ["pthread", "pin_journals"]
 
 [dependencies]
 memmap = "0.7.0"
@@ -38,6 +38,7 @@ num_cpus = "1.13.0"
 lazy_static = "1.4.0"
 impl-trait-for-tuples = "0.2.0"
 crndm_derive = "0.1.1"
+rusty-fork = "0.3.0"
 
 # examples
 rand = "0.7.3"

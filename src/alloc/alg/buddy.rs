@@ -694,6 +694,7 @@ mod test {
         crate::utils::allow_crash(true);
         P::transaction(|j| {
             let _b = Pbox::new(1, j);
+            println!("done");
         })
         .unwrap();
         println!("{}", P::used());
@@ -785,6 +786,7 @@ macro_rules! pool {
             use std::sync::{Arc, Mutex};
             use std::thread::current;
             use std::thread::ThreadId;
+            use lazy_static::lazy_static;
             use $crate::ll::*;
             use $crate::result::Result;
             pub use $crate::*;
@@ -794,6 +796,7 @@ macro_rules! pool {
             pub use $crate::convert::PFrom;
             pub use $crate::str::ToString;
             pub use $crate::stm::transaction;
+            pub use $crate::ptr::Ptr;
 
             static mut BUDDY_START: u64 = 0;
             static mut BUDDY_VALID_START: u64 = 0;
@@ -813,8 +816,7 @@ macro_rules! pool {
 
             struct VData {
                 filename: String,
-                mutex: Mutex<()>,
-                journals: HashMap<ThreadId, (&'static Journal, i32)>,
+                journals: HashMap<ThreadId, (u64, i32)>,
                 mmap: MmapMut,
             }
 
@@ -833,7 +835,6 @@ macro_rules! pool {
                 fn new(mmap: MmapMut, filename: &str) -> Self {
                     Self {
                         filename: filename.to_string(),
-                        mutex: Mutex::new(()),
                         journals: HashMap::new(),
                         mmap,
                     }
@@ -893,19 +894,24 @@ macro_rules! pool {
             /// [`pool!()`]: ../../macro.pool.html
             pub struct BuddyAlloc {}
 
-            static_inner_object!(BUDDY_INNER, BuddyAllocInner);
-            static mut VDATA: Option<VData> = None;
+            static mut BUDDY_INNER: Option<&'static mut BuddyAllocInner> = None;
             static mut OPEN: AtomicBool = AtomicBool::new(false);
             static mut MAX_GEN: u32 = 0;
 
+            lazy_static! {
+                static ref VDATA: Arc<Mutex<Option<VData>>> = Arc::new(Mutex::new(None));
+            }
+
             impl BuddyAlloc {
-                fn inside_transaction() -> bool {
-                    unsafe {
-                        if let Some(vdata) = &VDATA {
-                            !vdata.journals.is_empty()
-                        } else {
-                            false
-                        }
+                fn running_transaction() -> bool {
+                    let vdata = match VDATA.lock() {
+                        Ok(g) => g,
+                        Err(p) => p.into_inner()
+                    };
+                    if let Some(vdata) = &*vdata {
+                        !vdata.journals.is_empty()
+                    } else {
+                        false
                     }
                 }
 
@@ -957,7 +963,11 @@ macro_rules! pool {
                                     + mem::size_of::<BuddyAlg<Self>>() as u64;
                                 BUDDY_END = BUDDY_START + inner.size as u64 + 1;
                                 BUDDY_INNER = Some(inner);
-                                VDATA = Some(VData::new(mmap, filename));
+                                let mut vdata = match VDATA.lock() {
+                                    Ok(g) => g,
+                                    Err(p) => p.into_inner()
+                                };
+                                *vdata = Some(VData::new(mmap, filename));
                             }
 
                             Ok(Self {})
@@ -967,84 +977,6 @@ macro_rules! pool {
             }
 
             unsafe impl MemPool for BuddyAlloc {
-                #[cfg(any(feature = "concurrent_pools", test))]
-                #[allow(unused_unsafe)]
-                #[track_caller]
-                fn open_no_root(path: &str, flags: u32) -> Result<Self> {
-                    unsafe {
-                        while OPEN.compare_and_swap(false, true, Ordering::AcqRel) {}
-                        if !Self::inside_transaction() {
-                            if let Ok(_) = Self::apply_flags(path, flags) {
-                                let res = Self::open_impl(path);
-                                if res.is_ok() {
-                                    Self::recover();
-                                }
-                                res
-                            } else {
-                                OPEN.store(false, Ordering::Release);
-                                Err("Could not open file".to_string())
-                            }
-                        } else {
-                            OPEN.store(false, Ordering::Release);
-                            Err("Could not open a pool inside a transaction of its own kind"
-                                .to_string())
-                        }
-                    }
-                }
-
-                #[cfg(not(any(feature = "concurrent_pools", test)))]
-                #[allow(unused_unsafe)]
-                #[track_caller]
-                fn open_no_root(path: &str, flags: u32) -> Result<Self> {
-                    unsafe {
-                        if !OPEN.compare_and_swap(false, true, Ordering::AcqRel) {
-                            if !Self::inside_transaction() {
-                                if let Ok(_) = Self::apply_flags(path, flags) {
-                                    let res = mem::ManuallyDrop::new(Self::open_impl(path));
-                                    if res.is_ok() {
-                                        Self::recover();
-                                    }
-                                    mem::ManuallyDrop::into_inner(res)
-                                } else {
-                                    OPEN.store(false, Ordering::Release);
-                                    Err("Could not open file".to_string())
-                                }
-                            } else {
-                                OPEN.store(false, Ordering::Release);
-                                Err("Could not open a pool inside a transaction of its own kind"
-                                    .to_string())
-                            }
-                        } else {
-                            static_inner!(VDATA, vdata, {
-                                Err(format!(
-                                    "The pool was already opened (`{}')",
-                                    vdata.filename
-                                ))
-                            })
-                        }
-                    }
-                }
-
-                #[allow(unused_unsafe)]
-                unsafe fn close() -> Result<()> {
-                    if OPEN.load(Ordering::Acquire) {
-                        static_inner!(BUDDY_INNER, inner, {
-                            while let Ok(logs) =Self::deref_mut::<Journal>(inner.logs) {
-
-                                logs.commit();
-                                logs.clear();
-
-                                #[cfg(feature = "pin_journals")]
-                                Self::drop_journal(logs);
-                            }
-                            OPEN.store(false, Ordering::Release);
-                            Ok(())
-                        })
-                    } else {
-                        Err("Pool was already closed".to_string())
-                    }
-                }
-
                 /// Formats the image file
                 unsafe fn format(filename: &str) -> Result<()> {
                     if Path::new(filename).exists() {
@@ -1080,15 +1012,18 @@ macro_rules! pool {
                 }
 
                 #[inline]
+                #[track_caller]
                 fn gen() -> u32 {
                     static_inner!(BUDDY_INNER, inner, { inner.gen })
                 }
 
+                #[track_caller]
                 fn size() -> usize {
                     static_inner!(BUDDY_INNER, inner, { inner.size })
                 }
 
                 #[inline]
+                #[track_caller]
                 fn available() -> usize {
                     static_inner!(BUDDY_INNER, inner, {
                         let mut sum = 0;
@@ -1099,6 +1034,7 @@ macro_rules! pool {
                     })
                 }
 
+                #[track_caller]
                 fn used() -> usize {
                     static_inner!(BUDDY_INNER, inner, {
                         let mut sum = 0;
@@ -1223,22 +1159,20 @@ macro_rules! pool {
                     })
                 }
 
+                #[inline]
                 #[allow(unused_unsafe)]
-                unsafe fn new_journal(tid: ThreadId) {
-                    let journal = static_inner!(BUDDY_INNER, inner, {
-                        let (journal, _, _, z) = Self::atomic_new(Journal::new());
-                        journal.enter_into(&inner.logs, z);
-                        Self::perform(z);
-                        journal
-                    });
-                    Self::journals().insert(tid, (journal, 0));
+                #[track_caller]
+                unsafe fn journals_head() -> &'static u64 {
+                    static_inner!(BUDDY_INNER, inner, {
+                        &inner.logs
+                    })
                 }
 
                 #[allow(unused_unsafe)]
+                #[track_caller]
                 unsafe fn drop_journal(journal: &mut Journal) {
                     static_inner!(BUDDY_INNER, inner, {
                         let off = Self::off(journal).unwrap();
-                        let tid = current().id();
                         if inner.logs == off {
                             inner.logs = journal.next_off();
                         }
@@ -1247,26 +1181,20 @@ macro_rules! pool {
                         journal.drop_pages();
 
                         Self::free_nolog(journal);
-                        Self::journals().remove(&tid);
                     })
                 }
 
                 #[allow(unused_unsafe)]
-                unsafe fn journals(
-                ) -> &'static mut HashMap<ThreadId, (&'static Journal, i32)> {
-                    static_inner!(VDATA, vdata, { &mut vdata.journals })
-                }
-
-                #[inline]
-                #[allow(unused_unsafe)]
-                unsafe fn guarded<T, F>(f: F) -> T
-                where
-                    F: FnOnce() -> T,
-                {
-                    static_inner!(VDATA, vdata, {
-                        let _lock = vdata.mutex.lock();
-                        f()
-                    })
+                unsafe fn journals<T, F: Fn(&mut HashMap<ThreadId, (u64, i32)>)->T>(f: F)->T{
+                    let mut vdata = match VDATA.lock() {
+                        Ok(g) => g,
+                        Err(p) => p.into_inner()
+                    };
+                    if let Some(vdata) = &mut *vdata {
+                        f(&mut vdata.journals)
+                    } else {
+                        panic!("No memory pool is open");
+                    }
                 }
 
                 #[allow(unused_unsafe)]
@@ -1330,6 +1258,104 @@ macro_rules! pool {
                             }
                         }
                     })
+                }
+
+                #[inline]
+                fn is_open() -> bool {
+                    unsafe { BUDDY_INNER.is_some() }
+                }
+
+                #[cfg(any(feature = "concurrent_pools", test))]
+                #[allow(unused_unsafe)]
+                #[track_caller]
+                fn open_no_root(path: &str, flags: u32) -> Result<Self> {
+                    unsafe {
+                        while OPEN.compare_and_swap(false, true, Ordering::AcqRel) {}
+                        if !Self::running_transaction() {
+                            if let Ok(_) = Self::apply_flags(path, flags) {
+                                let res = Self::open_impl(path);
+                                if res.is_ok() {
+                                    Self::recover();
+                                }
+                                res
+                            } else {
+                                OPEN.store(false, Ordering::Release);
+                                Err("Could not open file".to_string())
+                            }
+                        } else {
+                            OPEN.store(false, Ordering::Release);
+                            Err("Could not open a pool inside a transaction of its own kind"
+                                .to_string())
+                        }
+                    }
+                }
+
+                #[cfg(not(any(feature = "concurrent_pools", test)))]
+                #[allow(unused_unsafe)]
+                #[track_caller]
+                fn open_no_root(path: &str, flags: u32) -> Result<Self> {
+                    unsafe {
+                        if !OPEN.compare_and_swap(false, true, Ordering::AcqRel) {
+                            if !Self::running_transaction() {
+                                if let Ok(_) = Self::apply_flags(path, flags) {
+                                    let res = mem::ManuallyDrop::new(Self::open_impl(path));
+                                    if res.is_ok() {
+                                        Self::recover();
+                                    }
+                                    mem::ManuallyDrop::into_inner(res)
+                                } else {
+                                    OPEN.store(false, Ordering::Release);
+                                    Err("Could not open file".to_string())
+                                }
+                            } else {
+                                OPEN.store(false, Ordering::Release);
+                                Err("Could not open a pool inside a transaction of its own kind"
+                                    .to_string())
+                            }
+                        } else {
+                            let vdata = match VDATA.lock() {
+                                Ok(g) => g,
+                                Err(p) => p.into_inner()
+                            };
+                            if let Some(vdata) = &*vdata {
+                                Err(format!(
+                                    "The pool was already opened (`{}')",
+                                    vdata.filename
+                                ))
+                            } else {
+                                Err("The pool was already opened".to_string())
+                            }
+                        }
+                    }
+                }
+
+                #[allow(unused_unsafe)]
+                unsafe fn close() -> Result<()> {
+                    if OPEN.load(Ordering::Acquire) {
+                        static_inner!(BUDDY_INNER, inner, {
+                            while let Ok(logs) =Self::deref_mut::<Journal>(inner.logs) {
+                                logs.commit();
+                                logs.clear();
+
+                                #[cfg(feature = "pin_journals")]
+                                Self::drop_journal(logs);
+
+                                Self::journals(|journals| {
+                                    journals.remove(&current().id());
+                                });
+                            }
+                        });
+                        let mut vdata = match VDATA.lock() {
+                            Ok(g) => g,
+                            Err(p) => p.into_inner()
+                        };
+                        *vdata = None;
+                        BUDDY_INNER = None;
+                        OPEN.store(false, Ordering::Release);
+                        Ok(())
+                    } else {
+                        Err("Pool was already closed".to_string())
+                    }
                 }
 
                 #[cfg(feature = "capture_footprint")]

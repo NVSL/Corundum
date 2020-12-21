@@ -526,7 +526,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Parc<T, A> {
     pub fn volatile(&self) -> VWeak<T, A> {
         debug_assert!(!self.ptr.is_dangling());
         assert!(
-            Journal::<A>::try_current().is_none(),
+            !Journal::<A>::is_running(),
             "Parc::volatile() cannot be used inside a transaction"
         );
         VWeak::new(self)
@@ -1090,14 +1090,14 @@ trait ParcBoxPtr<T: PSafe + ?Sized, A: MemPool> {
 
     #[inline]
     #[cfg(not(feature = "no_log_rc"))]
-    fn log_count(&self, journal: &Journal<A>) {
+    fn log_count(&self, journal: *const Journal<A>) {
         let inner = self.count();
 
         unsafe {
             if A::contains(inner as *const _ as *const u8 as u64) {
                 let flag = &inner.has_log as *const u8 as *mut u8;
                 if std::intrinsics::atomic_cxchg_acqrel(flag, 0, 1).0 == 0 {
-                    inner.take_log(journal, Notifier::Atomic(Ptr::from_ref(&inner.has_log)));
+                    inner.take_log(&*journal, Notifier::Atomic(Ptr::from_ref(&inner.has_log)));
                 }
             }
         }

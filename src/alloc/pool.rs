@@ -87,15 +87,6 @@ pub use open_flags::*;
 /// Shows that the pool has a root object
 pub const FLAG_HAS_ROOT: u64 = 0x0000_0001;
 
-/// This macro can be used to declare a static struct for the inner data of an
-/// arbitrary allocator.
-#[macro_export]
-macro_rules! static_inner_object {
-    ($id:ident, $ty:ty) => {
-        static mut $id: Option<&'static mut $ty> = None;
-    };
-}
-
 /// This macro can be used to access static data of an arbitrary allocator
 #[macro_export]
 #[track_caller]
@@ -316,6 +307,11 @@ where
         _path: &str,
         _flags: u32,
     ) -> Result<RootCell<'a, U, Self>> {
+        unimplemented!()
+    }
+
+    /// Returns true if the pool is open
+    fn is_open() -> bool {
         unimplemented!()
     }
 
@@ -885,9 +881,9 @@ where
         let off = Self::off_unchecked(x);
         let len = mem::size_of_val(x);
         if std::thread::panicking() {
-            Log::drop_on_abort(off, len, &mut Journal::<Self>::current(true).unwrap().0);
+            Log::drop_on_abort(off, len, &*Journal::<Self>::current(true).unwrap().0);
         } else {
-            Log::drop_on_commit(off, len, &mut Journal::<Self>::current(true).unwrap().0);
+            Log::drop_on_commit(off, len, &*Journal::<Self>::current(true).unwrap().0);
         }
     }
 
@@ -899,7 +895,7 @@ where
             Log::drop_on_commit(
                 off,
                 x.len() * mem::size_of::<T>(),
-                &mut Journal::<Self>::current(true).unwrap().0,
+                &*Journal::<Self>::current(true).unwrap().0,
             );
         }
     }
@@ -911,19 +907,14 @@ where
         );
     }
 
-    /// Executes a closure guarded by a global mutex
-    unsafe fn guarded<T, F: FnOnce() -> T>(f: F) -> T {
-        f()
-    }
-
-    /// Creates a new `Journal` object for the current thread
-    unsafe fn new_journal(_tid: ThreadId) { }
-
     /// Drops a `journal` from memory
     unsafe fn drop_journal(_journal: &mut Journal<Self>) { }
 
-    /// Returns the list of all journals
-    unsafe fn journals() -> &'static mut HashMap<ThreadId, (&'static Journal<Self>, i32)> {
+    /// Returns a reference to the offset of the first journal
+    unsafe fn journals_head() -> &'static u64 { unimplemented!() }
+
+    /// Runs a closure with a mutable reference to a thread->journal HashMap
+    unsafe fn journals<T, F: Fn(&mut HashMap<ThreadId, (u64, i32)>)->T>(_: F)->T {
         unimplemented!()
     }
 
@@ -945,9 +936,9 @@ where
     unsafe fn commit() {
         // Self::discard(crate::ll::cpu());
         if let Some(journal) = Journal::<Self>::current(false) {
-            journal.1 -= 1;
+            *journal.1 -= 1;
 
-            if journal.1 == 0 {
+            if *journal.1 == 0 {
                 #[cfg(feature = "verbose")]
                 println!("{:?}", journal.0);
 
@@ -971,7 +962,7 @@ where
     unsafe fn commit_no_clear() {
         // Self::discard(crate::ll::cpu());
         if let Some(journal) = Journal::<Self>::current(false) {
-            if journal.1 == 1 {
+            if *journal.1 == 1 {
                 #[cfg(feature = "verbose")]
                 println!("{:?}", journal.0);
 
@@ -992,9 +983,9 @@ where
     ///
     unsafe fn clear() {
         if let Some(journal) = Journal::<Self>::current(false) {
-            journal.1 -= 1;
+            *journal.1 -= 1;
 
-            if journal.1 == 0 {
+            if *journal.1 == 0 {
                 #[cfg(feature = "verbose")]
                 println!("{:?}", journal.0);
 
@@ -1016,9 +1007,9 @@ where
     unsafe fn rollback() {
         // Self::discard(crate::ll::cpu());
         if let Some(journal) = Journal::<Self>::current(false) {
-            journal.1 -= 1;
+            *journal.1 -= 1;
 
-            if journal.1 == 0 {
+            if *journal.1 == 0 {
                 #[cfg(feature = "verbose")]
                 println!("{:?}", journal.0);
 
@@ -1044,7 +1035,7 @@ where
     ///
     unsafe fn rollback_no_clear() {
         if let Some(journal) = Journal::<Self>::current(false) {
-            if journal.1 == 1 {
+            if *journal.1 == 1 {
                 #[cfg(feature = "verbose")]
                 println!("{:?}", journal.0);
 
@@ -1105,7 +1096,7 @@ where
     {
         let mut chaperoned = false;
         let cptr = &mut chaperoned as *mut bool;
-        let res = std::panic::catch_unwind(move || {
+        let res = std::panic::catch_unwind(|| {
             let chaperon = Chaperon::current();
             if let Some(ptr) = chaperon {
                 // FIXME: Chaperone session is corrupted. fix it.
@@ -1119,7 +1110,7 @@ where
                     );
                     body({
                         let j = Journal::<Self>::current(true).unwrap();
-                        j.1 += 1;
+                        *j.1 += 1;
                         let journal = as_mut(j.0);
                         journal.start_session(&mut chaperon);
                         journal.reset(JOURNAL_COMMITTED);
@@ -1129,9 +1120,11 @@ where
             } else {
                 body({
                     let j = Journal::<Self>::current(true).unwrap();
-                    j.1 += 1;
-                    as_mut(j.0).reset(JOURNAL_COMMITTED);
-                    j.0
+                    unsafe {
+                        *j.1 += 1;
+                        as_mut(j.0).reset(JOURNAL_COMMITTED);
+                        &*j.0
+                    }
                 })
             }
         });

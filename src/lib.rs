@@ -163,8 +163,8 @@ pub mod result {
 
 #[inline]
 #[doc(hidden)]
-pub(crate) fn as_mut<T>(v: &T) -> &mut T {
+pub(crate) fn as_mut<T>(v: *const T) -> &'static mut T {
     unsafe {
-        &mut *(v as *const T as *mut T)
+        &mut *(v as *mut T)
     }
 }
