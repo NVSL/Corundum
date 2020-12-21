@@ -36,6 +36,7 @@ echo
 done >> $dir_path/outputs/scale.csv
 
 mkdir -p $dir_path/outputs/perf
+ldconfig
 
 ins=(INS CHK REM RAND)
 
