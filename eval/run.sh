@@ -75,7 +75,7 @@ echo "Running performance test (Corundum-KVStore:GET)..."
 CPUS=1 perf stat -C 0 -o $dir_path/outputs/perf/crndm-kv-GET.out -d $dir_path/../target/release/examples/simplekv $pool burst get 100000
 
 cd $dir_path/..
-cargo build --release --example grep --features="pin_journals"
+cargo build --release --example mapcli --features="pin_journals"
 
 rm -f $pool
 for i in ${ins[@]}; do
