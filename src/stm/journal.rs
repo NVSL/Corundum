@@ -197,26 +197,20 @@ impl<A: MemPool> Journal<A> {
 
     #[inline]
     #[cfg(feature = "pin_journals")]
-    fn next_page(&self) -> Ptr<Page<A>, A> {
-        if self.current.next.is_dangling() {
+    fn next_page(&self, page: Ptr<Page<A>, A>) -> Ptr<Page<A>, A> {
+        if page.is_dangling() {
             self.new_page()
-        } else if self.current.next.is_full() {
-            self.new_page()
+        } else if page.is_full() {
+            self.next_page(page.next)
         } else {
-            self.current.next
+            page
         }
     }
 
     /// Writes a new log to the journal
     #[cfg(feature = "pin_journals")]
     pub(crate) fn write(&self, log: LogEnum, notifier: Notifier<A>) -> Ptr<Log<A>, A> {
-        let mut page = if self.current.is_dangling() {
-            self.new_page()
-        } else if self.current.is_full() {
-            self.next_page()
-        } else {
-            self.current
-        };
+        let mut page = self.next_page(self.current);
         page.as_mut().write(log, notifier)
     }
 
@@ -233,7 +227,7 @@ impl<A: MemPool> Journal<A> {
             A::log64(A::off_unchecked(self.pages.off_ref()), off, z);
 
             #[cfg(feature = "pin_journals")] {
-            A::log64(A::off_unchecked(self.pages.off_ref()), off, z);}
+            A::log64(A::off_unchecked(self.current.off_ref()), off, z);}
 
             A::perform(z);
 
@@ -318,7 +312,6 @@ impl<A: MemPool> Journal<A> {
     /// Clears all logs and drops itself from the memory pool
     pub fn clear(&mut self) {
         unsafe {
-            // let this = self as *const Self as *mut Self;
             #[cfg(feature = "pin_journals")]
             {
                 let mut page = self.pages.as_option();
