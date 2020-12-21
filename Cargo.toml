@@ -28,7 +28,7 @@ display_all_flushes = []
 no_flush_updates = []
 replace_with_log = []
 pthread = []
-default = ["pthread", "pin_journals"]
+default = ["pthread"]
 
 [dependencies]
 memmap = "0.7.0"
