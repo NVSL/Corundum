@@ -38,14 +38,6 @@ done >> $dir_path/outputs/scale.csv
 mkdir -p $dir_path/outputs/perf
 ldconfig
 
-ins=(INS CHK REM RAND)
-
-rm -f $pool
-for i in ${ins[@]}; do
-echo "Running performance test (PMDK-B+Tree:$i)..."
-PMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-$i.out -d $dir_path/pmdk-1.8/src/examples/libpmemobj/map/mapcli btree $pool < $dir_path/inputs/perf/$i > /dev/null
-done
-
 rm -f $pool
 echo "Running performance test (PMDK-BST:INS)..."
 CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-bst-INS.out -d $dir_path/bst/btree $pool s 30000
@@ -59,10 +51,12 @@ CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -
 echo "Running performance test (PMDK-KVStore:GET)..."
 CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-kv-GET.out -d $dir_path/simplekv/simplekv $pool burst get 100000
 
+ins=(INS CHK REM RAND)
+
 rm -f $pool
 for i in ${ins[@]}; do
-echo "Running performance test (Corundum-B+Tree:$i)..."
-CPUS=1 perf stat -C 0 -o $dir_path/outputs/perf/crndm-$i.out -d $dir_path/../target/release/examples/mapcli btree $pool < $dir_path/inputs/perf/$i > /dev/null
+echo "Running performance test (PMDK-B+Tree:$i)..."
+PMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-$i.out -d $dir_path/pmdk-1.8/src/examples/libpmemobj/map/mapcli btree $pool < $dir_path/inputs/perf/$i > /dev/null
 done
 
 rm -f $pool
@@ -76,6 +70,15 @@ echo "Running performance test (Corundum-KVStore:PUT)..."
 CPUS=1 perf stat -C 0 -o $dir_path/outputs/perf/crndm-kv-PUT.out -d $dir_path/../target/release/examples/simplekv $pool burst put 100000
 echo "Running performance test (Corundum-KVStore:GET)..."
 CPUS=1 perf stat -C 0 -o $dir_path/outputs/perf/crndm-kv-GET.out -d $dir_path/../target/release/examples/simplekv $pool burst get 100000
+
+cd $dir_path/..
+cargo build --release --example grep --features="pin_journals"
+
+rm -f $pool
+for i in ${ins[@]}; do
+echo "Running performance test (Corundum-B+Tree:$i)..."
+CPUS=1 perf stat -C 0 -o $dir_path/outputs/perf/crndm-$i.out -d $dir_path/../target/release/examples/mapcli btree $pool < $dir_path/inputs/perf/$i > /dev/null
+done
 
 echo "Execution Time (s),,,,,,,,,"                                         > $dir_path/outputs/perf.csv
 echo ",BST,,KVStore,,B+Tree,,,,"                                          >> $dir_path/outputs/perf.csv
