@@ -784,7 +784,6 @@ macro_rules! pool {
             use std::path::{Path, PathBuf};
             use std::sync::atomic::{AtomicBool, Ordering};
             use std::sync::{Arc, Mutex};
-            use std::thread::current;
             use std::thread::ThreadId;
             use lazy_static::lazy_static;
             use $crate::ll::*;
@@ -1339,10 +1338,6 @@ macro_rules! pool {
 
                                 #[cfg(feature = "pin_journals")]
                                 Self::drop_journal(logs);
-
-                                Self::journals(|journals| {
-                                    journals.remove(&current().id());
-                                });
                             }
                         });
                         let mut vdata = match VDATA.lock() {
