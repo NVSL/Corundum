@@ -1,3 +1,5 @@
+use std::sync::Arc;
+use crate::cell::RootCell;
 use crate::utils::Ring;
 use crate::alloc::MemPool;
 use crate::result::Result;
@@ -131,6 +133,27 @@ unsafe impl MemPool for Heap {
         Ok(Self {})
     }
 
+    #[track_caller]
+    fn open<'a, U: 'a + PSafe + RootObj<Self>>(
+        path: &str,
+        flags: u32,
+    ) -> Result<RootCell<'a, U, Self>> {
+        let slf = Self::open_no_root(path, flags)?;
+        if std::mem::size_of::<U>() == 0 {
+            Err("root type cannot be a ZST".to_string())
+        } else {
+            unsafe {
+                let root_off = Self::transaction(move |j| {
+                    let ptr = Self::new(U::init(j), j);
+                    Self::off_unchecked(ptr)
+                })
+                .unwrap();
+                let ptr = Self::get_unchecked(root_off);
+                Ok(RootCell::new(ptr, Arc::new(slf)))
+            }
+        }
+    }
+
     fn is_open() -> bool {
         true
     }
@@ -171,3 +194,4 @@ unsafe impl MemPool for Heap {
         Ok(())
     }
 }
+

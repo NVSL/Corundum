@@ -50,7 +50,7 @@ POBJ_LAYOUT_END(btree);
 struct btree_node {
 	int64_t key;
 	TOID(struct btree_node) slots[2];
-	char value[];
+	char value[32];
 };
 
 struct btree {
