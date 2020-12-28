@@ -12,6 +12,16 @@ wget https://github.com/pmem/libpmemobj-cpp/archive/1.8.tar.gz && \
     mkdir -p build && cd build && cmake .. && make -j && make install && \
     cd ../..
 
+cd $dir_path
+git clone https://github.com/HewlettPackard/Atlas.git
+cp -r atlas_deltas/* Atlas/
+cd Atlas/compiler-plugin
+./build_plugin
+cd ../runtime
+mkdir build
+cd build
+cmake -D CMAKE_BUILD_TYPE=Release .. && make -j
+
 source $HOME/.cargo/env
 rustup update
 rustup default nightly
