@@ -21,7 +21,7 @@ apt-get -y install linux-tools-generic linux-cloud-tools-generic
 rm -f /usr/bin/perf
 ln -s /usr/lib/linux-tools/*/perf /usr/bin/perf
 
-wget https://github.com/NVSL/Corundum/blob/24130f8789b4bed6cf6526562045586e19e88592/eval/inputs.tar.gz
+wget https://github.com/NVSL/Corundum/raw/24130f8789b4bed6cf6526562045586e19e88592/eval/inputs.tar.gz
 
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 source $HOME/.cargo/env
