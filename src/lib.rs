@@ -43,8 +43,8 @@
 //! 
 //! * [`LogCell<T,P>`] (or [`PCell<T>`]): An unborrowable, mutable persistent
 //! memory location for a value of type `T` in pool `P`.
-//! * [`LogRefCell<T,P>`] (or [`PRefCell<T>`]): A mutable persistent memory location with
-//! dynamically checked borrow rules for a value of type `T` in pool `P`.
+//! * [`LogRefCell<T,P>`] (or [`PRefCell<T>`]): A mutable persistent memory location
+//! with dynamically checked borrow rules for a value of type `T` in pool `P`.
 //! * [`Mutex<T,P>`] (or [`PMutex<T>`]): A mutual exclusion primitive useful for
 //! protecting shared persistent data of type `T` in pool `P`.
 //! 

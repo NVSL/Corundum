@@ -1269,7 +1269,7 @@ macro_rules! pool {
                 #[track_caller]
                 fn open_no_root(path: &str, flags: u32) -> Result<Self> {
                     unsafe {
-                        while OPEN.compare_and_swap(false, true, Ordering::AcqRel) {}
+                        while OPEN.compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed).is_err() {}
                         if !Self::running_transaction() {
                             if let Ok(_) = Self::apply_flags(path, flags) {
                                 let res = Self::open_impl(path);
@@ -1294,7 +1294,11 @@ macro_rules! pool {
                 #[track_caller]
                 fn open_no_root(path: &str, flags: u32) -> Result<Self> {
                     unsafe {
-                        if !OPEN.compare_and_swap(false, true, Ordering::AcqRel) {
+                        if match OPEN.compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed) {
+                            Ok(a) => a,
+                            Err(_) => true
+                        } {}
+                        if OPEN.compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed).is_ok() {
                             if !Self::running_transaction() {
                                 if let Ok(_) = Self::apply_flags(path, flags) {
                                     let res = mem::ManuallyDrop::new(Self::open_impl(path));
@@ -1331,6 +1335,10 @@ macro_rules! pool {
                 #[allow(unused_unsafe)]
                 unsafe fn close() -> Result<()> {
                     if OPEN.load(Ordering::Acquire) {
+                        let mut vdata = match VDATA.lock() {
+                            Ok(g) => g,
+                            Err(p) => p.into_inner()
+                        };
                         static_inner!(BUDDY_INNER, inner, {
                             while let Ok(logs) =Self::deref_mut::<Journal>(inner.logs) {
                                 logs.commit();
@@ -1340,10 +1348,6 @@ macro_rules! pool {
                                 Self::drop_journal(logs);
                             }
                         });
-                        let mut vdata = match VDATA.lock() {
-                            Ok(g) => g,
-                            Err(p) => p.into_inner()
-                        };
                         *vdata = None;
                         BUDDY_INNER = None;
                         OPEN.store(false, Ordering::Release);

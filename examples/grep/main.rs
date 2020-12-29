@@ -1,5 +1,4 @@
 #![allow(dead_code)]
-#![feature(min_const_generics)]
 //! # Word Count example with MapReduce model
 
 mod consumer;

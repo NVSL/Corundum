@@ -259,6 +259,8 @@ impl<A: MemPool> Journal<A> {
                 A::perform(z);
             }
         }
+        self.current = Ptr::dangling();
+        self.pages = Ptr::dangling();
     }
 
     /// Commits all logs in the journal
