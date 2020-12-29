@@ -14,8 +14,8 @@ will be available in our ASPLOS 2020 paper (Please read the
 for a brief overview on Corundum).
 
 Carefully using Rust's strict type checking rules and borrowing mechanism,
-`corundum` guarantees that the implementation is free of common persistent memory
-related bugs. `corundum` leaves the software implementation with zero persistent
+Corundum guarantees that the implementation is free of common persistent memory
+related bugs. Corundum leaves the software implementation with zero persistent
 memory related problems of the following types:
 
 * A persistent pointer pointing to the volatile heap,
@@ -25,10 +25,10 @@ memory related problems of the following types:
 * plus All memory-related issues that Rust handles.
 
 Developers will see these issues during the design time. Therefore, it lowers
-the risk of making mistakes. `corundum`'s programming model consists of using safe
+the risk of making mistakes. Corundum's programming model consists of using safe
 persistent pointers and software transactional memory.
 
-Three pointer-wrappers lie at the heart of `corundum` interface. Developers may use
+Three pointer-wrappers lie at the heart of Corundum interface. Developers may use
 them to allocate persistent memory safely.
 
 * [`Pbox<T>`](src/boxed.rs#L108): the simplest form of dynamic allocation,
@@ -39,7 +39,7 @@ them to allocate persistent memory safely.
 
 ## Dependencies
 
-`corundum` depends on some unstable features of Rust. Therefore, it requires
+Corundum depends on some unstable features of Rust. Therefore, it requires
 nightly Rust compiler [1.50.0-nightly](https://github.com/rust-lang/rust).
 Please run the following commands to download the latest version of Rust (See
 https://www.rust-lang.org/tools/install for more details).
@@ -54,7 +54,7 @@ in [`Cargo.toml`](Cargo.toml#L35-L46).
 
 ## Usage
 
-Use either of the following instructions to add `corundum` in your `Cargo.toml`
+Use either of the following instructions to add Corundum in your `Cargo.toml`
 dependencies section:
 
 ```toml
@@ -155,7 +155,7 @@ struct MyData {
 
 ### Transactional Memory
 
-`corundum` does not allow any modification to the protected data outside a
+Corundum does not allow any modification to the protected data outside a
 transaction. To let mutably borrowing the protected data, you may wrap it in
 [`LogCell`](src/stm/cell.rs#34), [`Mutex`](src/sync/mutex.rs#88), etc.,
 and use their corresponding interface for interior mutability which requires a
@@ -171,6 +171,22 @@ transaction(|j| {
     let mut my_data = my_data.borrow_mut(j);
     my_data.id = 2;
 })
+```
+
+## Running Experiments on Docker
+
+We provide a [docker image](https://hub.docker.com/r/mhz88/corundum) for running 
+performance tests and compare Corundum with a bunch of other persistent memory
+libraries. The following commands pulls the docker image and runs a container with
+all dependencies and opponent libraries pre-installed.
+
+```sh
+$ sudo sysctl -w kernel.perf_event_paranoid=-1
+$ wget https://raw.githubusercontent.com/NVSL/Corundum/main/eval/docker-default.json
+$ docker run --security-opt \
+    seccomp=./docker-default.json \
+    --mount type=tmpfs,destination=/mnt/pmem0 \
+    -it mhz88/corundum:latest bin/bash
 ```
 
 ## Documentation
