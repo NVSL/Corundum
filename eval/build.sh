@@ -22,6 +22,20 @@ mkdir build
 cd build
 cmake -D CMAKE_BUILD_TYPE=Release .. && make -j
 
+cd $dir_path
+git clone https://github.com/jerrinsg/go-pmem.git
+cd go-pmem/src
+./all.bash
+apt -y remove golang
+apt -y autoremove
+echo "export PATH=$dir_path/go-pmem/bin:\$PATH" >> ~/.profile
+. ~/.profile
+go get -u github.com/vmware/go-pmem-transaction
+cd $dir_path/go
+go build -txn btree.go
+go build -txn btree_map.go
+go build -txn simplekv.go
+
 source $HOME/.cargo/env
 rustup update
 rustup default nightly

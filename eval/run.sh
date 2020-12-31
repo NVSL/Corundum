@@ -12,6 +12,7 @@ function help() {
 	echo "    -s, --scale      Test scalability"
 	echo "    -p, --pmdk       Run PMDK performance tests"
 	echo "    -a, --atlas      Run Atlas performance tests"
+	echo "    -g, --go-pmem    Run go-pmem performance tests"
         echo "    -c, --corundum   Run Corundum performance tests"
         echo "    -h, --help       Display this information"
 }
@@ -27,8 +28,10 @@ do
             ;;
         -a|--atlas)   op=3
             ;;
-        -c|--corundum)op=4
+	-g|--go-pmem) op=4
             ;;
+        -c|--corundum)op=5
+	    ;;
         --*) echo "bad option $1"
             ;;
         *) echo "argument $1"
@@ -119,6 +122,26 @@ fi
 
 if [ $op -eq 0 ] || [ $op -eq 4 ]; then
     rm -f $pool
+    echo "Running performance test (go-pmem-BST:INS)..."
+    perf stat -C 0 -o $dir_path/outputs/perf/go-bst-INS.out -d $dir_path/go/btree $pool s 30000
+    echo "Running performance test (go-pmem-BST:CHK)..."
+    perf stat -C 0 -o $dir_path/outputs/perf/go-bst-CHK.out -d $dir_path/go/btree $pool r 30000
+
+    rm -f $pool
+    echo "Running performance test (go-pmem-KVStore:PUT)..."
+    perf stat -C 0 -o $dir_path/outputs/perf/go-kv-PUT.out -d $dir_path/go/simplekv $pool burst put 100000
+    echo "Running performance test (go-pmem-KVStore:GET)..."
+    perf stat -C 0 -o $dir_path/outputs/perf/go-kv-GET.out -d $dir_path/go/simplekv $pool burst get 100000
+
+    rm -f $pool
+    for i in ${ins[@]}; do
+    echo "Running performance test (go-pmem-B+Tree:$i)..."
+    perf stat -C 0 -o $dir_path/outputs/perf/go-$i.out -d $dir_path/go/btree_map $pool < $dir_path/inputs/perf/$i > /dev/null
+    done
+fi
+
+if [ $op -eq 0 ] || [ $op -eq 5 ]; then
+    rm -f $pool
     echo "Running performance test (Corundum-BST:INS)..."
     CPUS=1 perf stat -C 0 -o $dir_path/outputs/perf/crndm-bst-INS.out -d $dir_path/../target/release/examples/btree $pool s 30000
     echo "Running performance test (Corundum-BST:CHK)..."
@@ -160,6 +183,15 @@ echo -n      $(read_time "$dir_path/outputs/perf/atlas-INS.out"),         >> $di
 echo -n      $(read_time "$dir_path/outputs/perf/atlas-CHK.out"),         >> $dir_path/outputs/perf.csv
 echo -n      $(read_time "$dir_path/outputs/perf/atlas-REM.out"),         >> $dir_path/outputs/perf.csv
 echo -n      $(read_time "$dir_path/outputs/perf/atlas-RAND.out")         >> $dir_path/outputs/perf.csv
+echo                                                                      >> $dir_path/outputs/perf.csv
+echo -n go-pmem,$(read_time "$dir_path/outputs/perf/go-bst-INS.out"),     >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/go-bst-CHK.out"),        >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/go-kv-PUT.out"),         >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/go-kv-GET.out"),         >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/go-INS.out"),            >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/go-CHK.out"),            >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/go-REM.out"),            >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/go-RAND.out")            >> $dir_path/outputs/perf.csv
 echo                                                                      >> $dir_path/outputs/perf.csv
 echo -n Corundum,$(read_time "$dir_path/outputs/perf/crndm-bst-INS.out"), >> $dir_path/outputs/perf.csv
 echo -n      $(read_time "$dir_path/outputs/perf/crndm-bst-CHK.out"),     >> $dir_path/outputs/perf.csv

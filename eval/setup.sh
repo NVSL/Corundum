@@ -18,6 +18,7 @@ apt-get -y install libz-dev
 apt-get -y install doxygen pandoc bsdmainutils
 apt-get -y install linux-tools-generic linux-cloud-tools-generic
 apt-get -y install llvm clang cmake libboost-graph-dev
+apt-get -y install golang
 
 rm -f /usr/bin/perf
 ln -s /usr/lib/linux-tools/*/perf /usr/bin/perf
