@@ -1294,10 +1294,6 @@ macro_rules! pool {
                 #[track_caller]
                 fn open_no_root(path: &str, flags: u32) -> Result<Self> {
                     unsafe {
-                        if match OPEN.compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed) {
-                            Ok(a) => a,
-                            Err(_) => true
-                        } {}
                         if OPEN.compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed).is_ok() {
                             if !Self::running_transaction() {
                                 if let Ok(_) = Self::apply_flags(path, flags) {
