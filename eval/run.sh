@@ -169,7 +169,7 @@ if $all || $crndm; then
     done
 fi
 
-echo "Execution Time (s),,,,,,,,,"                                         > $dir_path/outputs/perf.csv
+echo ",Execution Time (s),,,,,,,,"                                         > $dir_path/outputs/perf.csv
 echo ",BST,,KVStore,,B+Tree,,,,"                                          >> $dir_path/outputs/perf.csv
 echo ",INS,CHK,PUT,GET,INS,CHK,REM,RAND"                                  >> $dir_path/outputs/perf.csv
 echo -n PMDK,$(read_time "$dir_path/outputs/perf/pmdk-bst-INS.out"),      >> $dir_path/outputs/perf.csv
