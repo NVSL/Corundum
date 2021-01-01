@@ -36,16 +36,11 @@ public:
         pthread_mutex_init(this->lock, NULL);
     }
 
-    const Value &
-    get(const std::string &key)
-    {
+    const Value &get(const std::string &key) {
         auto index = std::hash<std::string>{}(key) % N;
 
-        fix_string pkey(key);
-        for (int i=0; i<buckets[index].size(); i++)
-        {
-            auto e = buckets[index][i];
-            if (e.first == pkey) {
+        for (const auto &e: buckets[index]) {
+            if (e.first == key) {
                 return values[e.second];
             }
         }
@@ -55,21 +50,15 @@ public:
         throw std::out_of_range(msg);
     }
 
-    void
-    put(const std::string &key, const Value &val)
-    {
+    void put(const std::string &key, const Value &val) {
         auto index = std::hash<std::string>{}(key) % N;
         pthread_mutex_lock(this->lock);
 
-        fix_string pkey(key);
         /* search for element with specified key - if found
 		 * transactionally update its value */
-        for (int i=0; i<buckets[index].size(); i++)
-        {
-            auto e = buckets[index][i];
-            if (e.first == pkey)
+        for (const auto &e: buckets[index]) {
+            if (e.first == key)
             {
-                // printf("key (%s, %s) found at %d with value %d; new value is %d\n", pkey.c_str(), e.first.c_str(), values.size() - 1, values[e.second], val);
                 values[e.second] = val;
                 pthread_mutex_unlock(this->lock);
                 return;
@@ -79,10 +68,8 @@ public:
         /* if there is no element with specified key, insert new value
 		 * to the end of values vector and put reference in proper
 		 * bucket transactionally */
-        values.push(val, kv_rgn_id);        
-        // printf("new key %s and value %d pair at %d\n", pkey.c_str(), val, values.size() - 1);
-        buckets[index].push(std::pair<key_type, std::size_t>(pkey, values.size() - 1), kv_rgn_id);
+        values.push_back(val, kv_rgn_id);        
+        buckets[index].push_back(std::pair<key_type, std::size_t>(key, values.size() - 1), kv_rgn_id);
         pthread_mutex_unlock(this->lock);
     }
 };
-

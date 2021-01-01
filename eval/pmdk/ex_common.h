@@ -56,7 +56,7 @@ extern "C" {
 static inline int
 file_exists(char const *file)
 {
-	return access(file, F_OK);
+    return access(file, F_OK);
 }
 
 /*
@@ -65,7 +65,7 @@ file_exists(char const *file)
 static inline int
 find_last_set_64(uint64_t val)
 {
-	return 64 - __builtin_clzll(val) - 1;
+    return 64 - __builtin_clzll(val) - 1;
 }
 #else
 
@@ -81,7 +81,7 @@ find_last_set_64(uint64_t val)
 static inline int
 file_exists(char const *file)
 {
-	return _access(file, 0);
+    return _access(file, 0);
 }
 
 /*
@@ -90,12 +90,12 @@ file_exists(char const *file)
 static inline int
 find_last_set_64(uint64_t val)
 {
-	DWORD lz = 0;
+    DWORD lz = 0;
 
-	if (BitScanReverse64(&lz, val))
-		return (int)lz;
-	else
-		return -1;
+    if (BitScanReverse64(&lz, val))
+        return (int)lz;
+    else
+        return -1;
 }
 #endif
 

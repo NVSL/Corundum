@@ -24,7 +24,7 @@ public:
     }
 
     inline void
-    push(const T &val, uint32_t rgn_id)
+    push_back(const T &val, uint32_t rgn_id)
     {
         if (len == capacity) {
             capacity = std::max(1,capacity*2);
@@ -42,6 +42,10 @@ public:
 
     inline T operator [](int idx) const {return data[idx];}
     inline T & operator [](int idx) {return data[idx];}
+
+    typedef T * iterator;
+    iterator begin() { return data; }
+    iterator end() { return data + len; }
 
     friend class string;
 };
@@ -70,16 +74,17 @@ public:
     inline void operator+=(const char*a) {
         int i=0;
         while (a[i]) {
-            vec.push(a[i++], rgn_id);
+            vec.push_back(a[i++], rgn_id);
         }
     }
 
     inline bool operator==(const string &other) {
         if (vec.len != other.vec.len) return false;
-        for (int i=0; i<=vec.len; i++) {
-            if (vec.data[i] != other.vec.data[i]) return false;
-        }
-        return true;
+        return strcmp(vec.data, other.vec.data) == 0;
+    }
+
+    inline bool operator==(const std::string &other) {
+        return other.compare(vec.data) == 0;
     }
 };
 
@@ -92,7 +97,7 @@ private:
 public:
     fix_string() {data[0] = '\0'; len=0;}
     fix_string(const std::string &s) {
-	len = std::min(31lu,s.length());
+        len = std::min(31lu,s.length());
         memcpy(data, s.c_str(), len);
         data[len] = '\0';
     }
@@ -105,12 +110,8 @@ public:
         return std::string(data, len);
     }
 
-    inline bool operator==(const fix_string &other) {
-        if (len != other.len) return false;
-        for (int i=0; i<=len; i++) {
-            if (data[i] != other.data[i]) return false;
-        }
-        return true;
+    inline bool operator==(const std::string &other) const {
+        return other.compare(data) == 0;
     }
 };
 

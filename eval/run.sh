@@ -4,37 +4,42 @@ pool=/mnt/pmem0/pmem.pool
 full_path=$(realpath $0)
 dir_path=$(dirname $full_path)
 
-op=0
+all=true
+scale=false
+pmdk=false
+atlas=false
+go=false
+crndm=false
 
 function help() {
-	echo "usage: $0 [OPTIONS]"
-	echo "OPTIONS:"
-	echo "    -s, --scale      Test scalability"
-	echo "    -p, --pmdk       Run PMDK performance tests"
-	echo "    -a, --atlas      Run Atlas performance tests"
-	echo "    -g, --go-pmem    Run go-pmem performance tests"
-        echo "    -c, --corundum   Run Corundum performance tests"
-        echo "    -h, --help       Display this information"
+    echo "usage: $0 [OPTIONS]"
+    echo "OPTIONS:"
+    echo "    -s, --scale      Test scalability"
+    echo "    -p, --pmdk       Run PMDK performance tests"
+    echo "    -a, --atlas      Run Atlas performance tests"
+    echo "    -g, --go-pmem    Run go-pmem performance tests"
+    echo "    -c, --corundum   Run Corundum performance tests"
+    echo "    -h, --help       Display this information"
 }
 
 while test $# -gt 0
 do
     case "$1" in
-        -h|--help) help && exit 0
+        -h|--help)     help && exit 0
             ;;
-        -s|--scale)   op=1
+        -s|--scale)    all=false && scale=true
             ;;
-        -p|--pmdk)    op=2
+        -p|--pmdk)     all=false && pmdk=true
             ;;
-        -a|--atlas)   op=3
+        -a|--atlas)    all=false && atlas=true
             ;;
-	-g|--go-pmem) op=4
+        -g|--go-pmem)  all=false && go=true
             ;;
-        -c|--corundum)op=5
-	    ;;
-        --*) echo "bad option $1"
+        -c|--corundum) all=false && crndm=true
             ;;
-        *) echo "argument $1"
+        --*)           echo "bad option $1"
+            ;;
+        *)             echo "argument $1"
             ;;
     esac
     shift
@@ -55,7 +60,7 @@ cargo build --release --examples
 ls -1 $dir_path/inputs/wc/* > $dir_path/files.list
 mkdir -p $dir_path/outputs/wc
 
-if [ $op -eq 0 ] || [ $op -eq 1 ]; then
+if $all || $scale; then
     for r in 1 2; do
         for c in 1 2 3 7 14; do
             rm -f $pool
@@ -78,49 +83,49 @@ fi
 
 ins=(INS CHK REM RAND)
 
-if [ $op -eq 0 ] || [ $op -eq 2 ]; then
+if $all || $pmdk; then
     mkdir -p $dir_path/outputs/perf
     ldconfig
     
     rm -f $pool
     echo "Running performance test (PMDK-BST:INS)..."
-    CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-bst-INS.out -d $dir_path/bst/btree $pool s 30000
+    CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-bst-INS.out -d $dir_path/pmdk/btree $pool s 30000
     echo "Running performance test (PMDK-BST:CHK)..."
-    CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-bst-CHK.out -d $dir_path/bst/btree $pool r 30000
+    CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-bst-CHK.out -d $dir_path/pmdk/btree $pool r 30000
     
     rm -f $pool
     pmempool create obj --layout=simplekv -s 1G $pool
     echo "Running performance test (PMDK-KVStore:PUT)..."
-    CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-kv-PUT.out -d $dir_path/simplekv/simplekv $pool burst put 100000
+    CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-kv-PUT.out -d $dir_path/pmdk/simplekv $pool burst put 100000
     echo "Running performance test (PMDK-KVStore:GET)..."
-    CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-kv-GET.out -d $dir_path/simplekv/simplekv $pool burst get 100000
+    CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-kv-GET.out -d $dir_path/pmdk/simplekv $pool burst get 100000
     
     
     rm -f $pool
     for i in ${ins[@]}; do
     echo "Running performance test (PMDK-B+Tree:$i)..."
-    PMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-$i.out -d $dir_path/pmdk-1.8/src/examples/libpmemobj/map/mapcli btree $pool < $dir_path/inputs/perf/$i > /dev/null
+    PMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=1 PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-$i.out -d $dir_path/pmdk/pmdk-1.8/src/examples/libpmemobj/map/mapcli btree $pool < $dir_path/inputs/perf/$i > /dev/null
     done
 fi
 
-if [ $op -eq 0 ] || [ $op -eq 3 ]; then
+if $all || $atlas; then
     echo "Running performance test (Atlas-BST:INS)..."
-    perf stat -C 0 -o $dir_path/outputs/perf/atlas-bst-INS.out -d $dir_path/Atlas/runtime/build/tests/data_structures/btree s 30000
+    perf stat -C 0 -o $dir_path/outputs/perf/atlas-bst-INS.out -d $dir_path/atlas/Atlas/runtime/build/tests/data_structures/btree s 30000
     echo "Running performance test (Atlas-BST:CHK)..."
-    perf stat -C 0 -o $dir_path/outputs/perf/atlas-bst-CHK.out -d $dir_path/Atlas/runtime/build/tests/data_structures/btree r 30000
+    perf stat -C 0 -o $dir_path/outputs/perf/atlas-bst-CHK.out -d $dir_path/atlas/Atlas/runtime/build/tests/data_structures/btree r 30000
     
     echo "Running performance test (Atlas-KVStore:PUT)..."
-    perf stat -C 0 -o $dir_path/outputs/perf/atlas-kv-PUT.out -d $dir_path/Atlas/runtime/build/tests/data_structures/simplekv burst put 100000
+    perf stat -C 0 -o $dir_path/outputs/perf/atlas-kv-PUT.out -d $dir_path/atlas/Atlas/runtime/build/tests/data_structures/simplekv burst put 100000
     echo "Running performance test (Atlas-KVStore:GET)..."
-    perf stat -C 0 -o $dir_path/outputs/perf/atlas-kv-GET.out -d $dir_path/Atlas/runtime/build/tests/data_structures/simplekv burst get 100000
+    perf stat -C 0 -o $dir_path/outputs/perf/atlas-kv-GET.out -d $dir_path/atlas/Atlas/runtime/build/tests/data_structures/simplekv burst get 100000
     
     for i in ${ins[@]}; do
     echo "Running performance test (Atlas-B+Tree:$i)..."
-    perf stat -C 0 -o $dir_path/outputs/perf/atlas-$i.out -d $dir_path/Atlas/runtime/build/tests/data_structures/btree_map < $dir_path/inputs/perf/$i > /dev/null
+    perf stat -C 0 -o $dir_path/outputs/perf/atlas-$i.out -d $dir_path/atlas/Atlas/runtime/build/tests/data_structures/btree_map < $dir_path/inputs/perf/$i > /dev/null
     done
 fi
 
-if [ $op -eq 0 ] || [ $op -eq 4 ]; then
+if $all || $go; then
     rm -f $pool
     echo "Running performance test (go-pmem-BST:INS)..."
     perf stat -C 0 -o $dir_path/outputs/perf/go-bst-INS.out -d $dir_path/go/btree $pool s 30000
@@ -140,7 +145,7 @@ if [ $op -eq 0 ] || [ $op -eq 4 ]; then
     done
 fi
 
-if [ $op -eq 0 ] || [ $op -eq 5 ]; then
+if $all || $crndm; then
     rm -f $pool
     echo "Running performance test (Corundum-BST:INS)..."
     CPUS=1 perf stat -C 0 -o $dir_path/outputs/perf/crndm-bst-INS.out -d $dir_path/../target/release/examples/btree $pool s 30000
