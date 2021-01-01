@@ -22,7 +22,7 @@ wget https://github.com/pmem/libpmemobj-cpp/archive/1.8.tar.gz && \
 cd $dir_path/atlas
 git clone https://github.com/HewlettPackard/Atlas.git
 cp -r deltas/* Atlas/
-cd atlas/Atlas/compiler-plugin
+cd Atlas/compiler-plugin
 ./build_plugin
 cd ../runtime
 mkdir build
