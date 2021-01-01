@@ -10,9 +10,6 @@ use std::fmt::{Debug, Error, Formatter};
 /// Determines that the changes are committed
 pub const JOURNAL_COMMITTED: u64 = 0x0000_0001;
 
-/// Determines that the changes are committed
-pub const JOURNAL_CLEARED: u64 = 0x0000_0001;
-
 /// A Journal object to be used for writing logs onto
 ///
 /// Each transaction, hence each thread, may have only one journal for every
@@ -163,26 +160,22 @@ impl<A: MemPool> Journal<A> {
     }
 
     /// Returns true if the journal is committed
-    #[inline]
     pub fn is_committed(&self) -> bool {
         self.is_set(JOURNAL_COMMITTED)
     }
 
     /// Sets a flag
-    #[inline]
     pub(crate) fn set(&mut self, flag: u64) {
         self.flags |= flag;
         msync_obj(&self.flags);
     }
 
     /// Resets a flag
-    #[inline]
     pub(crate) fn reset(&mut self, flag: u64) {
         self.flags &= !flag;
     }
 
     /// Checks a flag
-    #[inline]
     pub fn is_set(&self, flag: u64) -> bool {
         self.flags & flag == flag
     }
@@ -272,19 +265,17 @@ impl<A: MemPool> Journal<A> {
 
     /// Commits all logs in the journal
     pub fn commit(&mut self) {
-        if !self.is_committed() {
-            let mut curr = self.pages;
-            while let Some(page) = curr.as_option() {
-                page.notify();
-                curr = page.next;
-            }
-            let mut curr = self.pages;
-            while let Some(page) = curr.as_option() {
-                page.commit();
-                curr = page.next;
-            }
-            self.set(JOURNAL_COMMITTED);
+        let mut curr = self.pages;
+        while let Some(page) = curr.as_option() {
+            page.notify();
+            curr = page.next;
         }
+        let mut curr = self.pages;
+        while let Some(page) = curr.as_option() {
+            page.commit();
+            curr = page.next;
+        }
+        self.set(JOURNAL_COMMITTED);
     }
 
     /// Reverts all changes
