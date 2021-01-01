@@ -1335,15 +1335,6 @@ macro_rules! pool {
                             Ok(g) => g,
                             Err(p) => p.into_inner()
                         };
-                        static_inner!(BUDDY_INNER, inner, {
-                            while let Ok(logs) =Self::deref_mut::<Journal>(inner.logs) {
-                                logs.commit();
-                                logs.clear();
-
-                                #[cfg(feature = "pin_journals")]
-                                Self::drop_journal(logs);
-                            }
-                        });
                         *vdata = None;
                         BUDDY_INNER = None;
                         OPEN.store(false, Ordering::Release);

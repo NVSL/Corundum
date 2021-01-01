@@ -119,9 +119,10 @@ if $all || $atlas; then
     echo "Running performance test (Atlas-KVStore:GET)..."
     perf stat -C 0 -o $dir_path/outputs/perf/atlas-kv-GET.out -d $dir_path/atlas/Atlas/runtime/build/tests/data_structures/simplekv burst get 100000
     
+    rm -rf /mnt/pmem0/*  # Static in the code
     for i in ${ins[@]}; do
-    echo "Running performance test (Atlas-B+Tree:$i)..."
-    perf stat -C 0 -o $dir_path/outputs/perf/atlas-$i.out -d $dir_path/atlas/Atlas/runtime/build/tests/data_structures/btree_map < $dir_path/inputs/perf/$i > /dev/null
+        echo "Running performance test (Atlas-B+Tree:$i)..."
+        perf stat -C 0 -o $dir_path/outputs/perf/atlas-$i.out -d $dir_path/atlas/Atlas/runtime/build/tests/data_structures/btree_map < $dir_path/inputs/perf/$i > /dev/null
     done
 fi
 
