@@ -1,7 +1,6 @@
 use std::any::type_name;
 use std::any::Any;
 use std::marker::PhantomData;
-use crate::alloc::MemPool;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::ops::AddAssign;
@@ -37,7 +36,7 @@ struct Stat {
     cnt_logging: u128,
 }
 
-pub enum Measure<A:MemPool+Any> {
+pub enum Measure<A: Any> {
     Sync(Instant),
     Alloc(Instant),
     Dealloc(Instant),
@@ -93,7 +92,7 @@ macro_rules! add {
 
 use Measure::*;
 
-impl<A: MemPool + Any> Drop for Measure<A> {
+impl<A: Any> Drop for Measure<A> {
     #[inline]
     fn drop(&mut self) {
         match self {

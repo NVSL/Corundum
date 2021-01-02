@@ -3,7 +3,6 @@
 [![GHA build status](https://github.com/NVSL/Corundum/workflows/CI/badge.svg)](https://github.com/NVSL/Corundum/actions)
 [![Build Status](https://travis-ci.org/NVSL/Corundum.svg?branch=main)](https://travis-ci.org/NVSL/Corundum)
 
-
 # Corundum: A Persistent Memory Programming Library in Rust
 
 Corundum provides persistent memory support for Rust applications. This
@@ -175,7 +174,7 @@ transaction(|j| {
 
 ## Running Experiments on Docker
 
-We provide a [docker image](https://hub.docker.com/r/mhz88/corundum) for running 
+We provide a [docker image](https://hub.docker.com/r/mhz88/corundum) for running
 performance tests and compare Corundum with a bunch of other persistent memory
 libraries. The following commands pulls the docker image and runs a container with
 all dependencies and opponent libraries pre-installed.
