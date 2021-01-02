@@ -1,11 +1,11 @@
-use std::ops::AddAssign;
 use std::collections::HashMap;
 use std::fmt::Display;
+use std::ops::AddAssign;
 use std::sync::Mutex;
 use std::thread::{current, ThreadId};
 use std::time::Instant;
 
-#[derive(Default,Copy,Clone)]
+#[derive(Default, Copy, Clone)]
 struct Stat {
     sync: u128,
     cnt_sync: u128,
@@ -128,37 +128,39 @@ impl Drop for Measure {
             Logging(s) => {
                 add!(s, logging);
             }
-            Transaction => { add!(cnt_logging); }
+            Transaction => {
+                add!(cnt_logging);
+            }
         }
     }
 }
 
 impl AddAssign<&Stat> for Stat {
     fn add_assign(&mut self, d: &Stat) {
-        self.sync           += d.sync           ;                
-        self.alloc          += d.alloc          ;      
-        self.dealloc        += d.dealloc        ;        
-        self.drop_log       += d.drop_log       ;         
-        self.data_log       += d.data_log       ;         
-        self.mutex_log      += d.mutex_log      ;          
-        self.commit         += d.commit         ;       
-        self.rollback       += d.rollback       ;         
-        self.clear          += d.clear          ;      
-        self.new_page       += d.new_page       ;         
-        self.new_jrnl       += d.new_jrnl       ;         
-        self.logging        += d.logging        ;        
-        self.cnt_logging        += d.cnt_logging        ;        
-        self.cnt_sync       += d.cnt_sync       ;         
-        self.cnt_alloc      += d.cnt_alloc      ;          
-        self.cnt_dealloc    += d.cnt_dealloc    ;            
-        self.cnt_drop_log   += d.cnt_drop_log   ;             
-        self.cnt_data_log   += d.cnt_data_log   ;             
-        self.cnt_mutex_log  += d.cnt_mutex_log  ;              
-        self.cnt_commit     += d.cnt_commit     ;           
-        self.cnt_rollback   += d.cnt_rollback   ;             
-        self.cnt_clear      += d.cnt_clear      ;          
-        self.cnt_new_page   += d.cnt_new_page   ;             
-        self.cnt_new_jrnl   += d.cnt_new_jrnl   ;             
+        self.sync += d.sync;
+        self.alloc += d.alloc;
+        self.dealloc += d.dealloc;
+        self.drop_log += d.drop_log;
+        self.data_log += d.data_log;
+        self.mutex_log += d.mutex_log;
+        self.commit += d.commit;
+        self.rollback += d.rollback;
+        self.clear += d.clear;
+        self.new_page += d.new_page;
+        self.new_jrnl += d.new_jrnl;
+        self.logging += d.logging;
+        self.cnt_logging += d.cnt_logging;
+        self.cnt_sync += d.cnt_sync;
+        self.cnt_alloc += d.cnt_alloc;
+        self.cnt_dealloc += d.cnt_dealloc;
+        self.cnt_drop_log += d.cnt_drop_log;
+        self.cnt_data_log += d.cnt_data_log;
+        self.cnt_mutex_log += d.cnt_mutex_log;
+        self.cnt_commit += d.cnt_commit;
+        self.cnt_rollback += d.cnt_rollback;
+        self.cnt_clear += d.cnt_clear;
+        self.cnt_new_page += d.cnt_new_page;
+        self.cnt_new_jrnl += d.cnt_new_jrnl;
     }
 }
 
@@ -166,7 +168,7 @@ fn div(a: u128, b: u128) -> u128 {
     if b == 0 {
         0
     } else {
-        (1000*a) / b
+        (1000 * a) / b
     }
 }
 
@@ -186,18 +188,42 @@ Del Log     {:>10} us    avg(ns): {:<10}    cnt: {}
 New Page    {:>10} us    avg(ns): {:<10}    cnt: {}
 New Journal {:>10} us    avg(ns): {:<10}    cnt: {}
 Logging     {:>10} us    avg(ns): {:<10}    cnt: {}",
-            self.sync,      div(self.sync      ,     self.cnt_sync), self.cnt_sync,
-            self.alloc    , div(self.alloc     ,    self.cnt_alloc), self.cnt_alloc,
-            self.dealloc  , div(self.dealloc   ,  self.cnt_dealloc), self.cnt_dealloc,
-            self.drop_log , div(self.drop_log  ,  self.cnt_drop_log), self.cnt_drop_log,
-            self.data_log , div(self.data_log  ,  self.cnt_data_log), self.cnt_data_log,
-            self.mutex_log, div(self.mutex_log , self.cnt_mutex_log), self.cnt_mutex_log,
-            self.commit   , div(self.commit    ,    self.cnt_commit), self.cnt_commit,
-            self.rollback , div(self.rollback  ,  self.cnt_rollback), self.cnt_rollback,
-            self.clear    , div(self.clear     ,     self.cnt_clear), self.cnt_clear,
-            self.new_page , div(self.new_page  ,  self.cnt_new_page), self.cnt_new_page,
-            self.new_jrnl , div(self.new_jrnl  ,  self.cnt_new_jrnl), self.cnt_new_jrnl,
-            self.logging  , div(self.logging   ,   self.cnt_logging), self.cnt_logging
+            self.sync,
+            div(self.sync, self.cnt_sync),
+            self.cnt_sync,
+            self.alloc,
+            div(self.alloc, self.cnt_alloc),
+            self.cnt_alloc,
+            self.dealloc,
+            div(self.dealloc, self.cnt_dealloc),
+            self.cnt_dealloc,
+            self.drop_log,
+            div(self.drop_log, self.cnt_drop_log),
+            self.cnt_drop_log,
+            self.data_log,
+            div(self.data_log, self.cnt_data_log),
+            self.cnt_data_log,
+            self.mutex_log,
+            div(self.mutex_log, self.cnt_mutex_log),
+            self.cnt_mutex_log,
+            self.commit,
+            div(self.commit, self.cnt_commit),
+            self.cnt_commit,
+            self.rollback,
+            div(self.rollback, self.cnt_rollback),
+            self.cnt_rollback,
+            self.clear,
+            div(self.clear, self.cnt_clear),
+            self.cnt_clear,
+            self.new_page,
+            div(self.new_page, self.cnt_new_page),
+            self.cnt_new_page,
+            self.new_jrnl,
+            div(self.new_jrnl, self.cnt_new_jrnl),
+            self.cnt_new_jrnl,
+            self.logging,
+            div(self.logging, self.cnt_logging),
+            self.cnt_logging
         )
     }
 }
