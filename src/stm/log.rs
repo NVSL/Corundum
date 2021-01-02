@@ -326,6 +326,9 @@ impl<A: MemPool> Log<A> {
         journal: &Journal<A>,
         notifier: Notifier<A>,
     ) -> Ptr<Log<A>, A> {
+        #[cfg(feature = "perf_stat")]
+        let _perf = crate::stat::Measure::DataLog(std::time::Instant::now());
+
         let len = std::mem::size_of_val(x);
         if len == 0 {
             Ptr::dangling()
@@ -372,6 +375,9 @@ impl<A: MemPool> Log<A> {
     pub fn drop_on_commit(offset: u64, len: usize, journal: &Journal<A>) -> Ptr<Log<A>, A> {
         debug_assert_ne!(len, 0);
 
+        #[cfg(feature = "perf_stat")]
+        let _perf = crate::stat::Measure::DropLog(std::time::Instant::now());
+
         #[cfg(feature = "verbose")]
         println!(
             "{}",
@@ -392,6 +398,9 @@ impl<A: MemPool> Log<A> {
     pub fn drop_on_abort(offset: u64, len: usize, journal: &Journal<A>) -> Ptr<Log<A>, A> {
         debug_assert_ne!(len, 0);
 
+        #[cfg(feature = "perf_stat")]
+        let _perf = crate::stat::Measure::DropLog(std::time::Instant::now());
+
         #[cfg(feature = "verbose")]
         println!(
             "{}",
@@ -411,6 +420,9 @@ impl<A: MemPool> Log<A> {
     #[track_caller]
     pub fn drop_on_failure(offset: u64, len: usize, journal: &Journal<A>) -> Ptr<Log<A>, A> {
         debug_assert_ne!(len, 0);
+
+        #[cfg(feature = "perf_stat")]
+        let _perf = crate::stat::Measure::DropLog(std::time::Instant::now());
 
         #[cfg(feature = "verbose")]
         println!(
@@ -434,6 +446,9 @@ impl<A: MemPool> Log<A> {
         virt_addr: u64,
         journal: &Journal<A>,
     ) {
+        #[cfg(feature = "perf_stat")]
+        let _perf = crate::stat::Measure::MutexLog(std::time::Instant::now());
+
         #[cfg(feature = "verbose")]
         {
             println!(
@@ -489,6 +504,9 @@ impl<A: MemPool> Log<A> {
     }
 
     pub(crate) fn rollback(&mut self) {
+        #[cfg(feature = "perf_stat")]
+        let _perf = crate::stat::Measure::RollbackLog(std::time::Instant::now());
+
         match &mut self.0 {
             DataLog(src, log, len) => {
                 Self::rollback_datalog(src, log, len);
@@ -541,6 +559,9 @@ impl<A: MemPool> Log<A> {
 
     /// Commits changes
     pub(crate) fn commit(&mut self) {
+        #[cfg(feature = "perf_stat")]
+        let _perf = crate::stat::Measure::CommitLog(std::time::Instant::now());
+
         match &mut self.0 {
             DataLog(_src, _log, _len) => {
                 debug_assert!(A::allocated(*_src, 1), "Access Violation at address 0x{:x}", *_src);
@@ -571,6 +592,9 @@ impl<A: MemPool> Log<A> {
     /// it unlocks the mutex.
     /// 
     pub fn clear(&mut self) {
+        #[cfg(feature = "perf_stat")]
+        let _perf = crate::stat::Measure::ClearLog(std::time::Instant::now());
+
         match &mut self.0 {
             DataLog(_src, log, len) => {
                 if *log != u64::MAX {

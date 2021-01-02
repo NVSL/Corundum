@@ -144,6 +144,7 @@ pub mod stm;
 pub mod str;
 pub mod vec;
 pub mod convert;
+pub mod stat;
 
 mod utils;
 mod marker;

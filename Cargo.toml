@@ -28,6 +28,7 @@ display_all_flushes = []
 no_flush_updates = []
 replace_with_log = []
 pthread = []
+perf_stat = []
 default = ["pthread"]
 
 [dependencies]

@@ -1109,6 +1109,9 @@ where
                         &|| Self::clear(),
                     );
                     body({
+                        #[cfg(feature = "perf_stat")]
+                        let _perf = crate::stat::Measure::Logging(std::time::Instant::now());
+                        
                         let j = Journal::<Self>::current(true).unwrap();
                         *j.1 += 1;
                         let journal = as_mut(j.0);
@@ -1119,6 +1122,9 @@ where
                 }
             } else {
                 body({
+                    #[cfg(feature = "perf_stat")]
+                    let _perf = crate::stat::Measure::Logging(std::time::Instant::now());
+
                     let j = Journal::<Self>::current(true).unwrap();
                     unsafe {
                         *j.1 += 1;
@@ -1128,6 +1134,10 @@ where
                 })
             }
         });
+
+        #[cfg(feature = "perf_stat")]
+        let _perf = crate::stat::Measure::Logging(std::time::Instant::now());
+
         unsafe {
             if let Ok(res) = res {
                 if !chaperoned {

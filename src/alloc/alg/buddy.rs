@@ -108,7 +108,7 @@ pub struct BuddyAlg<A: MemPool> {
 
     #[cfg(not(feature = "pthread"))]
     /// A mutex for atomic operations
-    mutex: u8,
+    mutex: u64,
 
     // Marker
     phantom: PhantomData<A>,
@@ -191,7 +191,7 @@ impl<A: MemPool> BuddyAlg<A> {
             libc::pthread_mutex_lock(&mut self.mutex.0); 
 
             #[cfg(not(feature = "pthread"))] {
-                let tid = thread::current().id().get().unwrap();
+                let tid = std::thread::current().id().as_u64().get();
                 while std::intrinsics::atomic_cxchg_acqrel(&mut self.mutex, 0, tid).0 != tid {}
             }
         }
@@ -1062,6 +1062,9 @@ macro_rules! pool {
                 #[allow(unused_unsafe)]
                 #[track_caller]
                 unsafe fn pre_alloc(size: usize) -> (*mut u8, u64, usize, usize) {
+                    #[cfg(feature = "perf_stat")]
+                    let _perf = $crate::stat::Measure::Alloc(std::time::Instant::now());
+
                     static_inner!(BUDDY_INNER, inner, {
                         let cpu = cpu();
                         let cnt = inner.zone.count();
@@ -1079,6 +1082,9 @@ macro_rules! pool {
                 #[allow(unused_unsafe)]
                 #[track_caller]
                 unsafe fn pre_dealloc(ptr: *mut u8, size: usize) -> usize {
+                    #[cfg(feature = "perf_stat")]
+                    let _perf = $crate::stat::Measure::Dealloc(std::time::Instant::now());
+
                     static_inner!(BUDDY_INNER, inner, {
                         let off = Self::off(ptr).expect("invalid pointer");
                         let (zone,zidx) = inner.zone.from_off(off);
@@ -1368,6 +1374,9 @@ macro_rules! pool {
                     unsafe {
                         Self::close().unwrap();
                     }
+
+                    #[cfg(feature = "perf_stat")]
+                    eprintln!("{}", $crate::stat::report());
                 }
             }
 

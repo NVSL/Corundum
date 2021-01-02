@@ -16,6 +16,9 @@ use std::arch::x86_64::{_mm_clflush, _mm_mfence, _mm_sfence};
 /// Synchronize caches and memories and acts like a write barrier
 #[inline]
 pub fn msync<T: ?Sized>(ptr: &T, len: usize) {
+    #[cfg(feature = "perf_stat")]
+    let _perf = crate::stat::Measure::Sync(std::time::Instant::now());
+
     #[cfg(not(feature = "no_persist"))]
     {
         #[cfg(not(feature = "use_msync"))]
@@ -43,6 +46,9 @@ pub fn msync<T: ?Sized>(ptr: &T, len: usize) {
 /// Synchronize caches and memories and acts like a write barrier
 #[inline]
 pub fn msync_obj<T: ?Sized>(obj: &T) {
+    #[cfg(feature = "perf_stat")]
+    let _perf = crate::stat::Measure::Sync(std::time::Instant::now());
+    
     #[cfg(not(feature = "no_persist"))]
     {
         #[cfg(not(feature = "use_msync"))]
