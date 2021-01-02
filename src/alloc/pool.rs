@@ -1094,6 +1094,9 @@ where
         F: TxInSafe + UnwindSafe,
         T: TxOutSafe,
     {
+        #[cfg(feature = "perf_stat")]
+        let _perf = crate::stat::Measure::Transaction;
+        
         let mut chaperoned = false;
         let cptr = &mut chaperoned as *mut bool;
         let res = std::panic::catch_unwind(|| {

@@ -122,6 +122,7 @@
 #![feature(toowned_clone_into)]
 #![feature(fn_traits)]
 #![feature(unboxed_closures)]
+#![feature(let_chains)]
 
 #![allow(dead_code)]
 #![allow(incomplete_features)]

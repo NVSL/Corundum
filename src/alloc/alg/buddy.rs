@@ -1375,8 +1375,9 @@ macro_rules! pool {
                         Self::close().unwrap();
                     }
 
-                    #[cfg(feature = "perf_stat")]
-                    eprintln!("{}", $crate::stat::report());
+                    #[cfg(feature = "perf_stat")] {
+                        eprintln!("{}", $crate::stat::report());
+                    }
                 }
             }
 
