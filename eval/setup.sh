@@ -1,5 +1,11 @@
 #!/bin/bash
 
+n=`awk -F= '/^NAME/{print $2}' /etc/os-release`
+if [ "$n" != "Ubuntu" ]; then
+  echo "This script does not work on $n (only Ubuntu is supported)."
+  exit 1
+fi
+
 apt-get update
 
 apt-get -y install wget
