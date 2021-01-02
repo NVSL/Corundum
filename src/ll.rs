@@ -17,7 +17,7 @@ use std::arch::x86_64::{_mm_clflush, _mm_mfence, _mm_sfence};
 #[inline]
 pub fn msync<T: ?Sized>(ptr: &T, len: usize) {
     #[cfg(feature = "perf_stat")]
-    let _perf = crate::stat::Measure::Sync(std::time::Instant::now());
+    let _perf = crate::stat::Measure::<crate::default::BuddyAlloc>::Sync(std::time::Instant::now());
 
     #[cfg(not(feature = "no_persist"))]
     {
@@ -47,8 +47,8 @@ pub fn msync<T: ?Sized>(ptr: &T, len: usize) {
 #[inline]
 pub fn msync_obj<T: ?Sized>(obj: &T) {
     #[cfg(feature = "perf_stat")]
-    let _perf = crate::stat::Measure::Sync(std::time::Instant::now());
-    
+    let _perf = crate::stat::Measure::<crate::default::BuddyAlloc>::Sync(std::time::Instant::now());
+
     #[cfg(not(feature = "no_persist"))]
     {
         #[cfg(not(feature = "use_msync"))]

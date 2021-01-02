@@ -327,7 +327,7 @@ impl<A: MemPool> Log<A> {
         notifier: Notifier<A>,
     ) -> Ptr<Log<A>, A> {
         #[cfg(feature = "perf_stat")]
-        let _perf = crate::stat::Measure::DataLog(std::time::Instant::now());
+        let _perf = crate::stat::Measure::<A>::DataLog(std::time::Instant::now());
 
         let len = std::mem::size_of_val(x);
         if len == 0 {
@@ -376,7 +376,7 @@ impl<A: MemPool> Log<A> {
         debug_assert_ne!(len, 0);
 
         #[cfg(feature = "perf_stat")]
-        let _perf = crate::stat::Measure::DropLog(std::time::Instant::now());
+        let _perf = crate::stat::Measure::<A>::DropLog(std::time::Instant::now());
 
         #[cfg(feature = "verbose")]
         println!(
@@ -399,7 +399,7 @@ impl<A: MemPool> Log<A> {
         debug_assert_ne!(len, 0);
 
         #[cfg(feature = "perf_stat")]
-        let _perf = crate::stat::Measure::DropLog(std::time::Instant::now());
+        let _perf = crate::stat::Measure::<A>::DropLog(std::time::Instant::now());
 
         #[cfg(feature = "verbose")]
         println!(
@@ -422,7 +422,7 @@ impl<A: MemPool> Log<A> {
         debug_assert_ne!(len, 0);
 
         #[cfg(feature = "perf_stat")]
-        let _perf = crate::stat::Measure::DropLog(std::time::Instant::now());
+        let _perf = crate::stat::Measure::<A>::DropLog(std::time::Instant::now());
 
         #[cfg(feature = "verbose")]
         println!(
@@ -447,7 +447,7 @@ impl<A: MemPool> Log<A> {
         journal: &Journal<A>,
     ) {
         #[cfg(feature = "perf_stat")]
-        let _perf = crate::stat::Measure::MutexLog(std::time::Instant::now());
+        let _perf = crate::stat::Measure::<A>::MutexLog(std::time::Instant::now());
 
         #[cfg(feature = "verbose")]
         {
@@ -505,7 +505,7 @@ impl<A: MemPool> Log<A> {
 
     pub(crate) fn rollback(&mut self) {
         #[cfg(feature = "perf_stat")]
-        let _perf = crate::stat::Measure::RollbackLog(std::time::Instant::now());
+        let _perf = crate::stat::Measure::<A>::RollbackLog(std::time::Instant::now());
 
         match &mut self.0 {
             DataLog(src, log, len) => {
@@ -560,7 +560,7 @@ impl<A: MemPool> Log<A> {
     /// Commits changes
     pub(crate) fn commit(&mut self) {
         #[cfg(feature = "perf_stat")]
-        let _perf = crate::stat::Measure::CommitLog(std::time::Instant::now());
+        let _perf = crate::stat::Measure::<A>::CommitLog(std::time::Instant::now());
 
         match &mut self.0 {
             DataLog(_src, _log, _len) => {
@@ -593,7 +593,7 @@ impl<A: MemPool> Log<A> {
     /// 
     pub fn clear(&mut self) {
         #[cfg(feature = "perf_stat")]
-        let _perf = crate::stat::Measure::ClearLog(std::time::Instant::now());
+        let _perf = crate::stat::Measure::<A>::ClearLog(std::time::Instant::now());
 
         match &mut self.0 {
             DataLog(_src, log, len) => {

@@ -1063,7 +1063,7 @@ macro_rules! pool {
                 #[track_caller]
                 unsafe fn pre_alloc(size: usize) -> (*mut u8, u64, usize, usize) {
                     #[cfg(feature = "perf_stat")]
-                    let _perf = $crate::stat::Measure::Alloc(std::time::Instant::now());
+                    let _perf = $crate::stat::Measure::<Self>::Alloc(std::time::Instant::now());
 
                     static_inner!(BUDDY_INNER, inner, {
                         let cpu = cpu();
@@ -1083,7 +1083,7 @@ macro_rules! pool {
                 #[track_caller]
                 unsafe fn pre_dealloc(ptr: *mut u8, size: usize) -> usize {
                     #[cfg(feature = "perf_stat")]
-                    let _perf = $crate::stat::Measure::Dealloc(std::time::Instant::now());
+                    let _perf = $crate::stat::Measure::<Self>::Dealloc(std::time::Instant::now());
 
                     static_inner!(BUDDY_INNER, inner, {
                         let off = Self::off(ptr).expect("invalid pointer");

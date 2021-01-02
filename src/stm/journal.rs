@@ -217,7 +217,7 @@ impl<A: MemPool> Journal<A> {
     #[inline]
     fn new_page(&self) -> Ptr<Page<A>, A> {
         #[cfg(feature = "perf_stat")]
-        let _perf = crate::stat::Measure::NewPage(std::time::Instant::now());
+        let _perf = crate::stat::Measure::<A>::NewPage(std::time::Instant::now());
 
         unsafe {
             let page = Page::<A> {
@@ -457,7 +457,7 @@ impl<A: MemPool> Journal<A> {
             A::journals(|journals| {
                 if !journals.contains_key(&tid) && create {
                     #[cfg(feature = "perf_stat")]
-                    let _perf = crate::stat::Measure::NewJournal(std::time::Instant::now());
+                    let _perf = crate::stat::Measure::<A>::NewJournal(std::time::Instant::now());
 
                     let (journal, offset, _, z) = A::atomic_new(Journal::<A>::new());
                     journal.enter_into(A::journals_head(), z);

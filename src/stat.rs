@@ -1,3 +1,7 @@
+use std::any::type_name;
+use std::any::Any;
+use std::marker::PhantomData;
+use crate::alloc::MemPool;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::ops::AddAssign;
@@ -33,7 +37,7 @@ struct Stat {
     cnt_logging: u128,
 }
 
-pub enum Measure {
+pub enum Measure<A:MemPool+Any> {
     Sync(Instant),
     Alloc(Instant),
     Dealloc(Instant),
@@ -47,90 +51,92 @@ pub enum Measure {
     NewJournal(Instant),
     Logging(Instant),
     Transaction,
+    Unknown(PhantomData<A>)
 }
 
 lazy_static! {
-    static ref STAT: Mutex<HashMap<ThreadId, Stat>> = Mutex::new(HashMap::new());
+    static ref STAT: Mutex<HashMap<(ThreadId, &'static str), Stat>> = Mutex::new(HashMap::new());
 }
 
 macro_rules! add {
-    ($s:ident,$id:ident,$cnt:ident) => {
+    ($tp:ty,$s:ident,$id:ident,$cnt:ident) => {
         let t = $s.elapsed().as_micros();
         let mut stat = match STAT.lock() {
             Ok(g) => g,
             Err(p) => p.into_inner(),
         };
         let tid = current().id();
-        let stat = stat.entry(tid).or_insert(Default::default());
+        let stat = stat.entry((tid,type_name::<$tp>())).or_insert(Default::default());
         stat.$id += t;
         stat.$cnt += 1;
     };
-    ($s:ident,$id:ident) => {
+    ($tp:ty,$s:ident,$id:ident) => {
         let t = $s.elapsed().as_micros();
         let mut stat = match STAT.lock() {
             Ok(g) => g,
             Err(p) => p.into_inner(),
         };
         let tid = current().id();
-        let stat = stat.entry(tid).or_insert(Default::default());
+        let stat = stat.entry((tid,type_name::<$tp>())).or_insert(Default::default());
         stat.$id += t;
     };
-    ($cnt:ident) => {
+    ($tp:ty,$cnt:ident) => {
         let mut stat = match STAT.lock() {
             Ok(g) => g,
             Err(p) => p.into_inner(),
         };
         let tid = current().id();
-        let stat = stat.entry(tid).or_insert(Default::default());
+        let stat = stat.entry((tid,type_name::<$tp>())).or_insert(Default::default());
         stat.$cnt += 1;
     };
 }
 
 use Measure::*;
 
-impl Drop for Measure {
+impl<A: MemPool + Any> Drop for Measure<A> {
     #[inline]
     fn drop(&mut self) {
         match self {
             Sync(s) => {
-                add!(s, sync, cnt_sync);
+                add!(A, s, sync, cnt_sync);
             }
             Alloc(s) => {
-                add!(s, alloc, cnt_alloc);
+                add!(A, s, alloc, cnt_alloc);
             }
             Dealloc(s) => {
-                add!(s, dealloc, cnt_dealloc);
+                add!(A, s, dealloc, cnt_dealloc);
             }
             DropLog(s) => {
-                add!(s, drop_log, cnt_drop_log);
+                add!(A, s, drop_log, cnt_drop_log);
             }
             DataLog(s) => {
-                add!(s, data_log, cnt_data_log);
+                add!(A, s, data_log, cnt_data_log);
             }
             MutexLog(s) => {
-                add!(s, mutex_log, cnt_mutex_log);
+                add!(A, s, mutex_log, cnt_mutex_log);
             }
             CommitLog(s) => {
-                add!(s, commit, cnt_commit);
+                add!(A, s, commit, cnt_commit);
             }
             RollbackLog(s) => {
-                add!(s, rollback, cnt_rollback);
+                add!(A, s, rollback, cnt_rollback);
             }
             ClearLog(s) => {
-                add!(s, clear, cnt_clear);
+                add!(A, s, clear, cnt_clear);
             }
             NewPage(s) => {
-                add!(s, new_page, cnt_new_page);
+                add!(A, s, new_page, cnt_new_page);
             }
             NewJournal(s) => {
-                add!(s, new_jrnl, cnt_new_jrnl);
+                add!(A, s, new_jrnl, cnt_new_jrnl);
             }
             Logging(s) => {
-                add!(s, logging);
+                add!(A, s, logging);
             }
             Transaction => {
-                add!(cnt_logging);
+                add!(A, cnt_logging);
             }
+            _ => {}
         }
     }
 }
@@ -238,7 +244,7 @@ pub fn report() -> String {
     for (tid, stat) in stat.iter() {
         res += &format!(
             "
-Performance Details ({:?})
+Performance Details {:?}
 -------------------------------------------------------------------
 {}",
             tid, stat
@@ -247,7 +253,7 @@ Performance Details ({:?})
     }
     format!(
         "{}
-All Threads
+All Threads and Pool Types
 ===================================================================
 {}",
         res, total

@@ -1095,7 +1095,7 @@ where
         T: TxOutSafe,
     {
         #[cfg(feature = "perf_stat")]
-        let _perf = crate::stat::Measure::Transaction;
+        let _perf = crate::stat::Measure::<Self>::Transaction;
         
         let mut chaperoned = false;
         let cptr = &mut chaperoned as *mut bool;
@@ -1113,7 +1113,7 @@ where
                     );
                     body({
                         #[cfg(feature = "perf_stat")]
-                        let _perf = crate::stat::Measure::Logging(std::time::Instant::now());
+                        let _perf = crate::stat::Measure::<Self>::Logging(std::time::Instant::now());
                         
                         let j = Journal::<Self>::current(true).unwrap();
                         *j.1 += 1;
@@ -1126,7 +1126,7 @@ where
             } else {
                 body({
                     #[cfg(feature = "perf_stat")]
-                    let _perf = crate::stat::Measure::Logging(std::time::Instant::now());
+                    let _perf = crate::stat::Measure::<Self>::Logging(std::time::Instant::now());
 
                     let j = Journal::<Self>::current(true).unwrap();
                     unsafe {
@@ -1139,7 +1139,7 @@ where
         });
 
         #[cfg(feature = "perf_stat")]
-        let _perf = crate::stat::Measure::Logging(std::time::Instant::now());
+        let _perf = crate::stat::Measure::<Self>::Logging(std::time::Instant::now());
 
         unsafe {
             if let Ok(res) = res {
