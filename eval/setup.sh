@@ -16,12 +16,18 @@ apt-get -y install python
 apt-get -y install curl
 apt-get -y install libz-dev
 apt-get -y install doxygen pandoc bsdmainutils
-apt-get -y install linux-tools-generic linux-cloud-tools-generic
 apt-get -y install llvm clang cmake libboost-graph-dev
 apt-get -y install golang
 
-rm -f /usr/bin/perf
-ln -s /usr/lib/linux-tools/*/perf /usr/bin/perf
+if apt-get -y install linux-tools-generic linux-cloud-tools-generic; then
+  rm -f /usr/bin/perf
+  ln -s /usr/lib/linux-tools/*/perf /usr/bin/perf
+else
+  git clone --depth 1 https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git
+  cd linux/tools/perf
+  make && rm -f /usr/bin/perf && cp perf /usr/bin
+  cd ../../..
+fi
 
 wget https://github.com/NVSL/Corundum/raw/24130f8789b4bed6cf6526562045586e19e88592/eval/inputs.tar.gz
 
