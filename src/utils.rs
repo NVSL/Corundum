@@ -107,6 +107,7 @@ impl<T, const N: usize> Ring<T, N> {
     #[inline]
     pub fn sync_all(&self) {
         if self.head == self.tail {
+            #[cfg(not(feature = "no_flush_alloc"))]
             msync(&self.head, 16);
             return;
         }
