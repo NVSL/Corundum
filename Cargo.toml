@@ -29,7 +29,7 @@ no_flush_updates = []
 replace_with_log = []
 pthread = []
 perf_stat = []
-default = ["pthread", "no_flush_updates", "no_flush_alloc"]
+default = ["pthread"]
 
 [dependencies]
 memmap = "0.7.0"

@@ -70,6 +70,7 @@ pub fn clflush<T: ?Sized>(ptr: &T, len: usize) {
     {
         let ptr = ptr as *const _ as *const u8 as *mut u8;
         let mut start = ptr as usize;
+        start = (start >> 9) << 9;
         let end = start + len;
 
         #[cfg(feature = "display_all_flushes")]

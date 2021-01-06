@@ -238,8 +238,6 @@ impl<A: MemPool> BuddyAlg<A> {
     /// [`alloc_impl`]: #method.alloc_impl
     /// [`dealloc_impl`]: #method.dealloc_impl
     pub fn drain_aux(&mut self) {
-        self.aux.sync_all();
-        self.log64.sync_all();
         self.aux_valid = true;
         self.aux.foreach(|(off, next)| {
             let n = Self::buddy(off);
@@ -348,10 +346,9 @@ impl<A: MemPool> BuddyAlg<A> {
 
                     self.available_log = self.available - len;
 
+                    self.aux.sync_all();
                     if perform {
                         self.perform();
-                    } else {
-                        self.aux.sync_all();
                     }
 
                     #[cfg(feature = "capture_footprint")]
@@ -393,10 +390,9 @@ impl<A: MemPool> BuddyAlg<A> {
         self.available_log = self.available;
         self.free_impl(off, len);
 
+        self.aux.sync_all();
         if perform {
             self.perform();
-        } else {
-            self.aux.sync_all();
         }
     }
 
