@@ -109,6 +109,7 @@ if $all || $pmdk; then
 fi
 
 if $all || $atlas; then
+    rm -rf /mnt/pmem0/`whoami`
     echo "Running performance test (Atlas-BST:INS)..."
     perf stat -C 0 -o $dir_path/outputs/perf/atlas-bst-INS.out -d $dir_path/atlas/Atlas/runtime/build/tests/data_structures/btree s 30000
     echo "Running performance test (Atlas-BST:CHK)..."
@@ -119,7 +120,7 @@ if $all || $atlas; then
     echo "Running performance test (Atlas-KVStore:GET)..."
     perf stat -C 0 -o $dir_path/outputs/perf/atlas-kv-GET.out -d $dir_path/atlas/Atlas/runtime/build/tests/data_structures/simplekv burst get 100000
     
-    rm -rf /mnt/pmem0/root  # Static in the code
+    rm -rf /mnt/pmem0/`whoami`  # Static in the code
     for i in ${ins[@]}; do
         echo "Running performance test (Atlas-B+Tree:$i)..."
         perf stat -C 0 -o $dir_path/outputs/perf/atlas-$i.out -d $dir_path/atlas/Atlas/runtime/build/tests/data_structures/btree_map < $dir_path/inputs/perf/$i > /dev/null
