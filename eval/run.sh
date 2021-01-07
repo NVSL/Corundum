@@ -165,7 +165,7 @@ if $all || $crndm; then
     rm -f $pool
     for i in ${ins[@]}; do
     echo "Running performance test (Corundum-B+Tree:$i)..."
-    CPUS=1 perf stat -C 0 -o $dir_path/outputs/perf/crndm-$i.out -d $dir_path/../target/release/examples/mapcli btree $pool < $dir_path/inputs/perf/$i > /dev/null
+    perf stat -C 0 -o $dir_path/outputs/perf/crndm-$i.out -d $dir_path/../target/release/examples/mapcli btree $pool < $dir_path/inputs/perf/$i > /dev/null
     done
 fi
 
