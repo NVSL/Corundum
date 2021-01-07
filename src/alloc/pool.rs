@@ -1142,6 +1142,9 @@ where
         let _perf = crate::stat::Measure::<Self>::Logging(std::time::Instant::now());
 
         unsafe {
+            #[cfg(any(feature = "use_clflushopt", feature = "use_clwb"))]
+            crate::ll::sfence();
+            
             if let Ok(res) = res {
                 if !chaperoned {
                     Self::commit();

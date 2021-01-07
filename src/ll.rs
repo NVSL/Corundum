@@ -85,18 +85,10 @@ pub fn clflush<T: ?Sized>(ptr: &T, len: usize) {
                 #[cfg(all(feature = "use_clflushopt", not(feature = "use_clwb")))]
                 {
                     llvm_asm!("clflushopt ($0)" :: "r"(start as *const u8));
-                    #[cfg(feature = "use_sfence")]
-                    {
-                        llvm_asm!("sfence");
-                    }
                 }
                 #[cfg(all(feature = "use_clwb", not(feature = "use_clflushopt")))]
                 {
                     llvm_asm!("clwb ($0)" :: "r"(start as *const u8));
-                    #[cfg(feature = "use_sfence")]
-                    {
-                        llvm_asm!("sfence");
-                    }
                 }
                 #[cfg(all(feature = "use_clwb", feature = "use_clflushopt"))]
                 {
@@ -122,7 +114,7 @@ pub fn clflush_obj<T: ?Sized>(obj: &T) {
 #[inline]
 pub fn sfence() {
     unsafe {
-        _mm_sfence();
+        llvm_asm!("sfence");
     }
 }
 

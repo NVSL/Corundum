@@ -238,6 +238,9 @@ impl<A: MemPool> BuddyAlg<A> {
     /// [`alloc_impl`]: #method.alloc_impl
     /// [`dealloc_impl`]: #method.dealloc_impl
     pub fn drain_aux(&mut self) {
+        #[cfg(any(feature = "use_clflushopt", feature = "use_clwb"))]
+        sfence();
+
         self.aux_valid = true;
         self.aux.foreach(|(off, next)| {
             let n = Self::buddy(off);
@@ -250,7 +253,6 @@ impl<A: MemPool> BuddyAlg<A> {
         });
         self.log64.clear();
         self.available = self.available_log;
-        sfence();
         self.aux_valid = false;
     }
 
@@ -258,6 +260,9 @@ impl<A: MemPool> BuddyAlg<A> {
     /// Materializes the changes in the auxiliary list and clears the drop log
     /// records
     pub unsafe fn perform(&mut self) {
+        #[cfg(any(feature = "use_clflushopt", feature = "use_clwb"))]
+        sfence();
+
         self.drain_aux();
         self.drop_log.clear();
         self.unlock();
