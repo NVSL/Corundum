@@ -1271,7 +1271,6 @@ macro_rules! pool {
                     unsafe { BUDDY_INNER.is_some() }
                 }
 
-                #[cfg(any(feature = "concurrent_pools", test))]
                 #[allow(unused_unsafe)]
                 #[track_caller]
                 fn open_no_root(path: &str, flags: u32) -> Result<Self> {
@@ -1292,45 +1291,6 @@ macro_rules! pool {
                             OPEN.store(false, Ordering::Release);
                             Err("Could not open a pool inside a transaction of its own kind"
                                 .to_string())
-                        }
-                    }
-                }
-
-                #[cfg(not(any(feature = "concurrent_pools", test)))]
-                #[allow(unused_unsafe)]
-                #[track_caller]
-                fn open_no_root(path: &str, flags: u32) -> Result<Self> {
-                    unsafe {
-                        if OPEN.compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed).is_ok() {
-                            if !Self::running_transaction() {
-                                if let Ok(_) = Self::apply_flags(path, flags) {
-                                    let res = mem::ManuallyDrop::new(Self::open_impl(path));
-                                    if res.is_ok() {
-                                        Self::recover();
-                                    }
-                                    mem::ManuallyDrop::into_inner(res)
-                                } else {
-                                    OPEN.store(false, Ordering::Release);
-                                    Err("Could not open file".to_string())
-                                }
-                            } else {
-                                OPEN.store(false, Ordering::Release);
-                                Err("Could not open a pool inside a transaction of its own kind"
-                                    .to_string())
-                            }
-                        } else {
-                            let vdata = match VDATA.lock() {
-                                Ok(g) => g,
-                                Err(p) => p.into_inner()
-                            };
-                            if let Some(vdata) = &*vdata {
-                                Err(format!(
-                                    "The pool was already opened (`{}')",
-                                    vdata.filename
-                                ))
-                            } else {
-                                Err("The pool was already opened".to_string())
-                            }
                         }
                     }
                 }

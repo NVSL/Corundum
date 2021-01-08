@@ -13,7 +13,6 @@ categories = ["development-tools", "memory-management", "hardware-support"]
 
 [features]
 verbose = []
-concurrent_pools = []          
 capture_footprint = []
 use_clflushopt = []
 use_clwb = []
