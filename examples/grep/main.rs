@@ -16,6 +16,8 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::thread;
 
+
+pub static mut PRINT: bool = true;
 type P = BuddyAlloc;
 
 fn help() {
@@ -26,6 +28,7 @@ fn help() {
     println!("  -r num        Number of reader threads (Default 1)");
     println!("  -c num        Number of consumer threads (Default 1)");
     println!("  -f file       Pool filename (Default ./wc.pool)");
+    println!("  -N            Do not print output (perf test)");
     println!("  -C            Continue from the previous run");
     println!("  -P            Prepare only (do not run threads)");
     println!("  -h            Display help");
@@ -86,6 +89,8 @@ fn main() {
             pool = args[i].clone();
         } else if s == "-C" {
             cont = true;
+        } else if s == "-N" {
+            unsafe {PRINT = false;}
         } else if s == "-P" {
             prep = true;
         } else if filename.is_empty() {
@@ -205,8 +210,10 @@ fn main() {
             for c in &*consumers {
                 c.collect(root.words.pclone(j), j);
             }
-            let words = root.words.lock(j);
-            println!("{}", words);
+            if unsafe {PRINT} {
+                let words = root.words.lock(j);
+                println!("{}", words);
+            }
         }).unwrap();
     }
     println!("Memory usage = {} bytes", P::used());

@@ -49,11 +49,13 @@ impl Consumer {
                     if this.buf.is_empty() {
                         let mut lines = slf.lines.lock(j);
                         let line = lines.pop(j);
-                        eprint!(
-                            "\r\x1b[?25lRemaining: {:<12} Memory usage: {:<9} bytes \x1b[?25h",
-                            lines.len(),
-                            P::used()
-                        );
+                        if unsafe { crate::PRINT } {
+                            eprint!(
+                                "\r\x1b[?25lRemaining: {:<12} Memory usage: {:<9} bytes \x1b[?25h",
+                                lines.len(),
+                                P::used()
+                            );
+                        }
                         if let Some(line) = line {
                             this.buf = line;
                             true // Still working
