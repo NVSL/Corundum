@@ -1,9 +1,8 @@
-use crate::as_mut;
 use crate::alloc::MemPool;
 use crate::cell::VCell;
 use crate::ptr::Ptr;
 use crate::stm::{Journal, Log, Notifier, Logger};
-use crate::{PSafe, RootObj, TxInSafe, TxOutSafe};
+use crate::*;
 use std::cell::UnsafeCell;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
@@ -141,6 +140,7 @@ unsafe impl<T, A: MemPool> TxInSafe for Mutex<T, A> {}
 unsafe impl<T, A: MemPool> PSafe for Mutex<T, A> {}
 unsafe impl<T: Send, A: MemPool> Send for Mutex<T, A> {}
 unsafe impl<T: Send, A: MemPool> Sync for Mutex<T, A> {}
+unsafe impl<T, A: MemPool> PSend for Mutex<T, A> {}
 
 impl<T, A: MemPool> Mutex<T, A> {
     /// Creates a new `Mutex`
@@ -242,10 +242,10 @@ impl<T, A: MemPool> Mutex<T, A> {
     /// // pool type, as follows:
     /// // let obj = P::open::<Parc<PMutex<i32>>>("foo.pool", O_CF).unwrap();
     /// 
-    /// let obj = Parc::volatile(&obj);
+    /// let obj = Parc::demote(&obj);
     /// thread::spawn(move || {
     ///     transaction(move |j| {
-    ///         if let Some(obj) = obj.upgrade(j) {
+    ///         if let Some(obj) = obj.promote(j) {
     ///             *obj.lock(j) += 1;
     ///         }
     ///     }).unwrap();
@@ -317,10 +317,10 @@ impl<T, A: MemPool> Mutex<T, A> {
     /// 
     /// let obj = P::open::<Parc<PMutex<i32>>>("foo.pool", O_CF).unwrap();
     ///
-    /// let a = Parc::volatile(&obj);
+    /// let a = Parc::demote(&obj);
     /// thread::spawn(move || {
     ///     transaction(|j| {
-    ///         if let Some(obj) = a.upgrade(j) {
+    ///         if let Some(obj) = a.promote(j) {
     ///             let mut lock = obj.try_lock(j);
     ///             if let Ok(ref mut mutex) = lock {
     ///                 **mutex = 10;

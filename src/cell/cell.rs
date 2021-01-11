@@ -1,13 +1,12 @@
 use crate::clone::PClone;
+use crate::alloc::MemPool;
+use crate::ptr::Ptr;
+use crate::stm::{Journal, Notifier, Logger};
+use crate::*;
 use std::cell::UnsafeCell;
 use std::cmp::Ordering;
 use std::marker::PhantomData;
 use std::panic::{RefUnwindSafe, UnwindSafe};
-// use std::ops::{DerefMut,Deref};
-use crate::alloc::MemPool;
-use crate::ptr::Ptr;
-use crate::stm::{Journal, Notifier, Logger};
-use crate::{PSafe,TxInSafe,TxOutSafe};
 use std::{fmt, mem, ptr};
 
 /// A persistent mutable memory location with recoverability
@@ -44,6 +43,7 @@ unsafe impl<T: PSafe + ?Sized, A: MemPool> PSafe for LogCell<T, A> {}
 
 impl<T: ?Sized, A: MemPool> !TxOutSafe for LogCell<T, A> {}
 impl<T: ?Sized, A: MemPool> !Sync for LogCell<T, A> {}
+impl<T: ?Sized, A: MemPool> !PSend for LogCell<T, A> {}
 
 impl<T: PSafe + Default, A: MemPool> Default for LogCell<T, A> {
     fn default() -> Self {

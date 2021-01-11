@@ -40,6 +40,7 @@ unsafe impl<T: ?Sized, A: MemPool> TxInSafe for PrcBox<T, A> {}
 impl<T: ?Sized, A: MemPool> UnwindSafe for PrcBox<T, A> {}
 impl<T: ?Sized, A: MemPool> RefUnwindSafe for PrcBox<T, A> {}
 impl<T: ?Sized, A: MemPool> !VSafe for PrcBox<T, A> {}
+impl<T: ?Sized, A: MemPool> !PSend for PrcBox<T, A> {}
 
 unsafe fn set_data_ptr<T: ?Sized, U>(mut ptr: *mut T, data: *mut U) -> *mut T {
     std::ptr::write(&mut ptr as *mut _ as *mut *mut u8, data as *mut u8);
@@ -61,7 +62,7 @@ unsafe fn set_data_ptr<T: ?Sized, U>(mut ptr: *mut T, data: *mut U) -> *mut T {
 /// [`Weak`] references for reference cycles.
 /// 
 /// References to data can be strong (using [`pclone`]), weak (using [`downgrade`]),
-/// or volatile weak (using [`volatile`]). The first two generate NV-to-NV
+/// or demote weak (using [`demote`]). The first two generate NV-to-NV
 /// pointers, while the last on is a V-to-NV pointer. Please see [`Weak`] and
 /// [`VWeak`] for more details on their implementation and safety.
 ///
@@ -90,7 +91,7 @@ unsafe fn set_data_ptr<T: ?Sized, U>(mut ptr: *mut T, data: *mut U) -> *mut T {
 ///     assert_eq!(1, Prc::weak_count(&p));
 /// 
 ///     // Create a new volatile weak reference
-///     let v = Prc::volatile(&p);
+///     let v = Prc::demote(&p);
 ///     assert_eq!(2, Prc::strong_count(&p));
 ///     assert_eq!(1, Prc::weak_count(&p));
 /// 
@@ -99,7 +100,7 @@ unsafe fn set_data_ptr<T: ?Sized, U>(mut ptr: *mut T, data: *mut U) -> *mut T {
 ///     assert_eq!(3, Prc::strong_count(&p));
 ///     assert_eq!(1, Prc::weak_count(&p));
 /// 
-///     // Upgrade the volatile weak ref to a strong ref
+///     // Upgrade the demote weak ref to a strong ref
 ///     let vs = w.upgrade(j).unwrap();
 ///     assert_eq!(4, Prc::strong_count(&p));
 ///     assert_eq!(1, Prc::weak_count(&p));
@@ -108,8 +109,9 @@ unsafe fn set_data_ptr<T: ?Sized, U>(mut ptr: *mut T, data: *mut U) -> *mut T {
 /// 
 /// [`pclone`]: #method.pclone
 /// [`downgrade`]: #method.downgrade
-/// [`volatile`]: #method.volatile
+/// [`demote`]: #method.demote
 /// [`upgrade`]: ./struct.Weak.html#method.upgrade
+/// [`promote`]: ./struct.Weak.html#method.promote
 /// [`Journal`]: ../stm/journal/struct.Journal.html
 /// [`transaction`]: ../stm/fn.transaction.html
 pub struct Prc<T: PSafe + ?Sized, A: MemPool> {
@@ -121,6 +123,7 @@ impl<T: ?Sized, A: MemPool> !TxOutSafe for Prc<T, A> {}
 impl<T: ?Sized, A: MemPool> !Send for Prc<T, A> {}
 impl<T: ?Sized, A: MemPool> !Sync for Prc<T, A> {}
 impl<T: ?Sized, A: MemPool> !VSafe for Prc<T, A> {}
+impl<T: ?Sized, A: MemPool> !PSend for Prc<T, A> {}
 
 impl<T: PSafe, A: MemPool> Prc<T, A> {
     /// Constructs a new `Prc<T>`.
@@ -408,7 +411,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Prc<T, A> {
     }
 
     /// Creates a new `VWeak` pointer to this allocation.
-    pub fn volatile(this: &Self) -> VWeak<T, A> {
+    pub fn demote(this: &Self) -> VWeak<T, A> {
         debug_assert!(!this.ptr.is_dangling());
         VWeak::new(this)
     }
@@ -723,6 +726,7 @@ impl<T: ?Sized, A: MemPool> !TxOutSafe for Weak<T, A> {}
 impl<T: ?Sized, A: MemPool> !Send for Weak<T, A> {}
 impl<T: ?Sized, A: MemPool> !Sync for Weak<T, A> {}
 impl<T: ?Sized, A: MemPool> !VSafe for Weak<T, A> {}
+impl<T: ?Sized, A: MemPool> !PSend for Weak<T, A> {}
 
 impl<T: PSafe, A: MemPool> Weak<T, A> {
     pub fn as_raw(&self) -> *const T {
@@ -976,14 +980,14 @@ pub fn ws<T: PSafe, A: MemPool>(ptr: &Prc<T, A>) -> (usize, usize) {
 }
 
 /// `VWeak` is a version of [`Prc`] that holds a non-owning reference to the
-/// managed allocation in the volatile heap. The allocation is accessed by
-/// calling [`upgrade`] on the `VWeak` pointer, which returns an
+/// managed allocation in the demote heap. The allocation is accessed by
+/// calling [`promote`] on the `VWeak` pointer, which returns an
 /// [`Option`]`<`[`Prc`]`<T>>`.
 ///
 /// Since a `VWeak` reference does not count towards ownership, it will not
 /// prevent the value stored in the allocation from being dropped, and `VWeak`
 /// itself makes no guarantees about the value still being present. Thus it may
-/// return [`None`] when [`upgrade`]d. Note however that a `VWeak` reference,
+/// return [`None`] when [`promote`]d. Note however that a `VWeak` reference,
 /// unlike [`Weak`], *does NOT* prevent the allocation itself (the backing
 /// store) from being deallocated.
 ///
@@ -995,12 +999,12 @@ pub fn ws<T: PSafe, A: MemPool>(ptr: &Prc<T, A>) -> (usize, usize) {
 /// have strong [`Prc`] pointers from parent nodes to children, and `Weak`
 /// pointers from children back to their parents.
 ///
-/// The typical way to obtain a `VWeak` pointer is to call [`Prc::volatile`].
+/// The typical way to obtain a `VWeak` pointer is to call [`Prc::demote`].
 ///
 /// [`Prc`]: struct.Prc.html
 /// [`Weak`]: struct.Weak.html
 /// [`Prc::downgrade`]: ./struct.Prc.html#method.downgrade
-/// [`upgrade`]: #method.upgrade
+/// [`promote`]: #method.promote
 /// [`Option`]: std::option::Option
 /// [`None`]: std::option::Option::None
 pub struct VWeak<T: ?Sized, A: MemPool> {
@@ -1011,6 +1015,7 @@ pub struct VWeak<T: ?Sized, A: MemPool> {
 
 impl<T: ?Sized, A: MemPool> !Send for VWeak<T, A> {}
 impl<T: ?Sized, A: MemPool> !Sync for VWeak<T, A> {}
+impl<T: ?Sized, A: MemPool> !PSend for VWeak<T, A> {}
 impl<T: ?Sized, A: MemPool> UnwindSafe for VWeak<T, A> {}
 impl<T: ?Sized, A: MemPool> RefUnwindSafe for VWeak<T, A> {}
 unsafe impl<T: ?Sized, A: MemPool> TxInSafe for VWeak<T, A> {}

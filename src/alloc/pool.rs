@@ -1,7 +1,7 @@
 use crate::cell::{RootCell, RootObj};
 use crate::result::Result;
 use crate::stm::{journal::*, Chaperon, Log};
-use crate::{as_mut, PSafe, TxInSafe, TxOutSafe};
+use crate::*;
 use std::collections::HashMap;
 use std::fs::OpenOptions;
 use std::ops::Range;
@@ -96,7 +96,7 @@ macro_rules! static_inner {
             if let Some($inner) = &mut $id {
                 $body
             } else {
-                panic!("No memory pool is open");
+                panic!("No memory pool is open or the root object is moved to a transaction. Try cloning the root object instead of moving it to a transaction.");
             }
         }
     };
@@ -170,6 +170,11 @@ pub unsafe trait MemPool
 where
     Self: 'static + Sized,
 {
+    /// Returns the name of the pool type
+    fn name() -> &'static str {
+        std::any::type_name::<Self>()
+    }
+
     /// Opens a new pool without any root object. This function is for testing 
     /// and is not useful in real applications as none of the allocated
     /// objects in persistent region is durable. The reason is that they are not
@@ -271,10 +276,10 @@ where
     /// let mut threads = vec!();
     ///
     /// for _ in 0..10 {
-    ///     let root = Parc::volatile(&root);
+    ///     let root = Parc::demote(&root);
     ///     threads.push(thread::spawn(move || {
     ///         transaction(|j| {
-    ///             if let Some(root) = root.upgrade(j) {
+    ///             if let Some(root) = root.promote(j) {
     ///                 let mut root = root.lock(j);
     ///                 *root += 10;
     ///             }
@@ -294,7 +299,7 @@ where
     ///
     /// # Errors
     ///
-    /// * A volatile memory pool (e.g. `Heap`) doesn't have a root object.
+    /// * A demote memory pool (e.g. `Heap`) doesn't have a root object.
     /// * The pool should be open before accessing the root object.
     ///
     /// [`RootObj`]: ../stm/trait.RootObj.html
@@ -489,10 +494,10 @@ where
     /// Translates raw pointers to memory offsets
     #[inline]
     fn off<T: ?Sized>(x: *const T) -> Result<u64> {
-        if Self::valid(unsafe { &*x }) {
+        if Self::valid(x) {
             Ok(x as *const u8 as u64 - Self::start())
         } else {
-            Err("out of valid range".to_string())
+            Err(format!("out of valid range ({:p})", x).to_string())
         }
     }
 
@@ -530,9 +535,9 @@ where
 
     /// Checks if the reference `p` belongs to this pool
     #[inline]
-    fn valid<T: ?Sized>(p: &T) -> bool {
+    fn valid<T: ?Sized>(p: *const T) -> bool {
         let rng = Self::rng();
-        let start = p as *const T as *const u8 as u64;
+        let start = p as *const u8 as u64;
         // let end = start + std::mem::size_of_val(p) as u64;
         start >= rng.start && start < rng.end
         // && end >= rng.start && end < rng.end
@@ -609,7 +614,7 @@ where
     /// ```
     /// # use corundum::default::*;
     /// # type P = BuddyAlloc;
-    /// # let _=P::open_no_root("foo.pool", O_CF).unwrap();
+    /// # let _p = P::open_no_root("foo.pool", O_CF).unwrap();
     /// unsafe {
     ///     let (ptr, _, _, z) = P::pre_alloc(8);
     ///     *ptr = 10;
@@ -633,7 +638,7 @@ where
     /// ```
     /// # use corundum::default::*;
     /// # type P = BuddyAlloc;
-    /// # let _=P::open_no_root("foo.pool", O_CF).unwrap();
+    /// # let _p = P::open_no_root("foo.pool", O_CF).unwrap();
     /// unsafe {
     ///     let (ptr, _, _) = P::alloc(8);
     ///     *ptr = 10;
@@ -667,7 +672,7 @@ where
     /// ```
     /// # use corundum::default::*;
     /// # type P = BuddyAlloc;
-    /// # let _ = P::open_no_root("foo.pool", O_CF).unwrap();
+    /// # let _p = P::open_no_root("foo.pool", O_CF).unwrap();
     /// unsafe {
     ///     // Prepare an allocation. The allocation is not durable yet. In case
     ///     // of a crash, the prepared allocated space is gone. It is fine
@@ -781,8 +786,7 @@ where
             rf: &'b mut K,
         }
 
-        #[cfg(feature = "verbose")]
-        println!("          ALLOC      TYPE: {}", std::any::type_name::<T>());
+        log!(Self, White, "ALLOC", "TYPE: {}", std::any::type_name::<T>());
 
         let size = mem::size_of::<T>();
         let (raw, off, len, z) = Self::pre_alloc(size);
@@ -797,12 +801,7 @@ where
 
     /// Allocates new memory and then places `x` into it without realizing the allocation
     unsafe fn atomic_new_slice<'a, T: 'a + PSafe>(x: &'a [T]) -> (&'a mut [T], u64, usize, usize) {
-        #[cfg(feature = "verbose")]
-        println!(
-            "          ALLOC      TYPE: [{}; {}]",
-            std::any::type_name::<T>(),
-            x.len()
-        );
+        log!(Self, White, "ALLOC", "TYPE: [{}; {}]", std::any::type_name::<T>(), x.len());
 
         let (ptr, off, size, z) = Self::pre_alloc(Layout::for_value(x).size());
         if ptr.is_null() {
@@ -833,8 +832,7 @@ where
 
     /// Allocates new memory without copying data
     unsafe fn new_uninit_for_layout(size: usize, journal: &Journal<Self>) -> *mut u8 {
-        #[cfg(feature = "verbose")]
-        println!("          ALLOC      {:?}", size);
+        log!(Self, White, "ALLOC", "{:?}", size);
 
         let mut log = Log::drop_on_abort(u64::MAX, 1, journal);
         let (p, off, len, z) = Self::pre_alloc(size);
@@ -933,14 +931,14 @@ where
     /// This function is for internal use and should not be called elsewhere.
     ///
     #[inline]
+    #[track_caller]
     unsafe fn commit() {
         // Self::discard(crate::ll::cpu());
         if let Some(journal) = Journal::<Self>::current(false) {
             *journal.1 -= 1;
 
             if *journal.1 == 0 {
-                #[cfg(feature = "verbose")]
-                println!("{:?}", journal.0);
+                log!(Self, White, "COMMIT", "JRNL: {:?}", journal.0);
 
                 let journal = as_mut(journal.0);
                 journal.commit();
@@ -962,9 +960,10 @@ where
     unsafe fn commit_no_clear() {
         // Self::discard(crate::ll::cpu());
         if let Some(journal) = Journal::<Self>::current(false) {
-            if *journal.1 == 1 {
-                #[cfg(feature = "verbose")]
-                println!("{:?}", journal.0);
+            *journal.1 -= 1;
+
+            if *journal.1 == 0 {
+                log!(Self, White, "COMMIT_NC", "JRNL: {:?}", journal.0);
 
                 as_mut(journal.0).commit();
             }
@@ -985,9 +984,8 @@ where
         if let Some(journal) = Journal::<Self>::current(false) {
             *journal.1 -= 1;
 
-            if *journal.1 == 0 {
-                #[cfg(feature = "verbose")]
-                println!("{:?}", journal.0);
+            if *journal.1 == -1 {
+                log!(Self, White, "CLEAR", "JRNL: {:?}", journal.0);
 
                 as_mut(journal.0).clear();
             }
@@ -1010,8 +1008,7 @@ where
             *journal.1 -= 1;
 
             if *journal.1 == 0 {
-                #[cfg(feature = "verbose")]
-                println!("{:?}", journal.0);
+                log!(Self, White, "ROLLBACK", "JRNL: {:?}", journal.0);
 
                 let journal = as_mut(journal.0);
                 journal.rollback();
@@ -1035,14 +1032,12 @@ where
     ///
     unsafe fn rollback_no_clear() {
         if let Some(journal) = Journal::<Self>::current(false) {
-            if *journal.1 == 1 {
-                #[cfg(feature = "verbose")]
-                println!("{:?}", journal.0);
+            *journal.1 -= 1;
+
+            if *journal.1 == 0 {
+                log!(Self, White, "ROLLBACK_NC", "JRNL: {:?}", journal.0);
 
                 as_mut(journal.0).rollback();
-            } else {
-                // Propagate the panic to the upper transactions
-                panic!("Unsuccessful nested transaction");
             }
         }
     }
@@ -1058,7 +1053,7 @@ where
     /// 
     /// The captured types are bounded to be [`TxInSafe`], unless explicitly
     /// asserted otherwise using [`AssertTxInSafe`] type wrapper. This
-    /// guarantees the volatile state consistency, as well as the persistent
+    /// guarantees the demote state consistency, as well as the persistent
     /// state.
     /// 
     /// The returned type should be [`TxOutSafe`]. This prevents sending out
@@ -1089,6 +1084,7 @@ where
     /// [`AssertTxInSafe`]: ../struct.AssertTxInSafe.html
     /// 
     #[inline]
+    #[track_caller]
     fn transaction<T, F: FnOnce(&Journal<Self>) -> T>(body: F) -> Result<T>
     where
         F: TxInSafe + UnwindSafe,
@@ -1119,7 +1115,7 @@ where
                         *j.1 += 1;
                         let journal = as_mut(j.0);
                         journal.start_session(&mut chaperon);
-                        journal.reset(JOURNAL_COMMITTED);
+                        journal.unset(JOURNAL_COMMITTED);
                         journal
                     })
                 }
@@ -1131,7 +1127,7 @@ where
                     let j = Journal::<Self>::current(true).unwrap();
                     unsafe {
                         *j.1 += 1;
-                        as_mut(j.0).reset(JOURNAL_COMMITTED);
+                        as_mut(j.0).unset(JOURNAL_COMMITTED);
                         &*j.0
                     }
                 })
@@ -1144,7 +1140,7 @@ where
         unsafe {
             #[cfg(any(feature = "use_clflushopt", feature = "use_clwb"))]
             crate::ll::sfence();
-            
+
             if let Ok(res) = res {
                 if !chaperoned {
                     Self::commit();

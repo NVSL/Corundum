@@ -34,7 +34,7 @@ use std::ptr::{self, NonNull};
 ///
 /// type P = BuddyAlloc;
 ///
-/// let _ = P::open_no_root("foo.pool", O_CF).unwrap();
+/// let _p = P::open_no_root("foo.pool", O_CF).unwrap();
 /// 
 /// transaction(|j| {
 ///     let five = Pbox::new(5, j);
@@ -49,7 +49,7 @@ use std::ptr::{self, NonNull};
 /// ```
 /// # use corundum::default::*;
 /// # type P = BuddyAlloc;
-/// # let _ = P::open_no_root("foo.pool", O_CF).unwrap();
+/// # let _p = P::open_no_root("foo.pool", O_CF).unwrap();
 /// transaction(|j| {
 ///     let val: u8 = 5;
 ///     let boxed: Pbox<u8> = Pbox::new(val, j);
@@ -61,7 +61,7 @@ use std::ptr::{self, NonNull};
 /// ```
 /// # use corundum::default::*;
 /// # type P = BuddyAlloc;
-/// # let _ = P::open_no_root("foo.pool", O_CF).unwrap();
+/// # let _p = P::open_no_root("foo.pool", O_CF).unwrap();
 /// transaction(|j| {
 ///     let boxed: Pbox<u8> = Pbox::new(5, j);
 ///     let val: u8 = *boxed;
@@ -79,7 +79,7 @@ use std::ptr::{self, NonNull};
 ///     Nil,
 /// }
 ///
-/// # let _ = P::open_no_root("foo.pool", O_CF).unwrap();
+/// # let _p = P::open_no_root("foo.pool", O_CF).unwrap();
 /// transaction(|j| {
 ///     let list: List<i32> = List::Cons(1, Pbox::new(List::Cons(2, Pbox::new(List::Nil, j)), j));
 ///     println!("{:?}", list);
@@ -149,7 +149,7 @@ impl<T: PSafe, A: MemPool> Pbox<T, A> {
     /// ```
     /// # use corundum::default::*;
     /// # type P = BuddyAlloc;
-    /// # let _ = P::open_no_root("foo.pool", O_CF).unwrap();
+    /// # let _p = P::open_no_root("foo.pool", O_CF).unwrap();
     /// P::transaction(|j| {
     ///     let mut five = Pbox::<u32>::new_uninit(j);
     ///     
@@ -179,7 +179,7 @@ impl<T: PSafe, A: MemPool> Pbox<T, A> {
     /// ```
     /// # use corundum::default::*;
     /// # type P = BuddyAlloc;
-    /// # let _ = P::open_no_root("foo.pool", O_CF).unwrap();
+    /// # let _p = P::open_no_root("foo.pool", O_CF).unwrap();
     /// P::transaction(|j| {
     ///     let zero = Pbox::<u32>::new_zeroed(j);
     ///     let zero = unsafe { zero.assume_init() };
@@ -621,7 +621,7 @@ impl<T: PSafe, A: MemPool> DerefMut for Pbox<T, A> {
         let d = self.0.as_mut();
         if self.1 == 0 && A::valid(&self.1) {
             let journal = Journal::<A>::try_current()
-                .expect("Unloggable data modification").0;
+                .expect("Unrecoverable data modification").0;
             unsafe {
                 d.take_log(&*journal, Notifier::NonAtomic(Ptr::from_ref(&self.1)));
             }

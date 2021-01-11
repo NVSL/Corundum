@@ -17,7 +17,7 @@ Corundum guarantees that the implementation is free of common persistent memory
 related bugs. Corundum leaves the software implementation with zero persistent
 memory related problems of the following types:
 
-* A persistent pointer pointing to the volatile heap,
+* A persistent pointer pointing to the demote heap,
 * Cross pool pointers,
 * Unrecoverable modification to data,
 * Data inconsistency due to power-failure,

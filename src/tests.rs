@@ -27,11 +27,11 @@ pub(crate) mod problems {
 
         std::thread::spawn(|| {
             let root = P::open::<Root>("challenge_mt1.pool", O_CFNE).unwrap();
-            let v1 = root.v1.volatile();
+            let v1 = root.v1.demote();
             std::thread::spawn(move || {
                 std::thread::sleep(std::time::Duration::from_secs(1));
                 P::transaction(|j| {
-                    if let Some(r) = v1.upgrade(j) {
+                    if let Some(r) = v1.promote(j) {
                         let mut r = r.lock(j);
                         *r += 1;
                         println!("root = {}", *r);
@@ -73,10 +73,10 @@ pub(crate) mod problems {
         })
         .unwrap();
         for i in 0..1 {
-            let v1 = root.v1.volatile();
+            let v1 = root.v1.demote();
             threads.push(thread::spawn(move || {
                 P::transaction(move |j| {
-                    if let Some(v1) = v1.upgrade(j) {
+                    if let Some(v1) = v1.promote(j) {
                         let mut v = v1.lock(j);
                         println!("{:?} old value = {:#?}", thread::current().id(), v);
                         v.push(
@@ -111,11 +111,11 @@ pub(crate) mod problems {
 
         let _ = P::transaction(|j| {
             let a = Parc::new(42, j);
-            let b = a.volatile();
+            let b = a.demote();
             std::thread::spawn(move || {
                 let _ = P::transaction(|j| {
                     std::thread::sleep(Duration::from_millis(900));
-                    if let Some(b) = b.upgrade(j) {
+                    if let Some(b) = b.promote(j) {
                         println!("Exit {}", *b);
                         std::process::exit(0); // Memory leak may happen here
                     }
@@ -152,11 +152,11 @@ pub(crate) mod problems {
         let root = P::open::<Root>("test_pack.pool", O_CFNE).unwrap();
         crate::tests::test::print_usage(0);
 
-        let b = root.data.volatile();
+        let b = root.data.demote();
         std::thread::spawn(move || {
             P::transaction(|j| {
                 std::thread::sleep(Duration::from_millis(900));
-                if let Some(b) = b.upgrade(j) {
+                if let Some(b) = b.promote(j) {
                     let mut b = b.lock(j);
                     *b = Parc::new(**b + 1, j);
                     println!("data1 {}", *b);
@@ -168,12 +168,12 @@ pub(crate) mod problems {
         std::thread::sleep(Duration::from_millis(1000));
         crate::tests::test::print_usage(1);
 
-        let b = root.data.volatile();
+        let b = root.data.demote();
         P::transaction(|_| {
             std::thread::spawn(move || {
                 P::transaction(|j| {
                     std::thread::sleep(Duration::from_millis(900));
-                    if let Some(b) = b.upgrade(j) {
+                    if let Some(b) = b.promote(j) {
                         let mut b = b.lock(j);
                         *b = Parc::new(**b + 1, j);
                         println!("data2 {}", *b);
@@ -201,12 +201,12 @@ pub(crate) mod problems {
 
         P::transaction(|j| {
             let root = Parc::new(10, j);
-            let b = root.volatile(); // Panics here because `pack` should be called
+            let b = root.demote(); // Panics here because `pack` should be called
                                  // outside transaction
             std::thread::spawn(move || {
                 std::thread::sleep(Duration::from_millis(900));
                 P::transaction(|j| {
-                    if let Some(b) = b.upgrade(j) {
+                    if let Some(b) = b.promote(j) {
                         println!("data1 {}", *b);
                         std::thread::sleep(Duration::from_millis(2000));
                         std::process::exit(0); // Memory leak may happen here
@@ -286,18 +286,18 @@ pub(crate) mod problems {
 
         let ovp = {
             let root = P::open::<Root>("test_vweak.pool", O_CFNE).unwrap();
-            let vp = Prc::volatile(&root.v.borrow());
+            let vp = Prc::demote(&root.v.borrow());
             P::transaction(|j| {
                 if let Some(p) = vp.upgrade(j) {
 
-                    let _vp2 = Prc::volatile(&p);
-                    // drop a recently created volatile reference
-                    let _vp2 = Prc::volatile(&p);
-                    // drop a recently created volatile reference
-                    let _vp2 = Prc::volatile(&p);
-                    // drop a recently created volatile reference
-                    let _vp2 = Prc::volatile(&p);
-                // drop a recently created volatile reference
+                    let _vp2 = Prc::demote(&p);
+                    // drop a recently created demote reference
+                    let _vp2 = Prc::demote(&p);
+                    // drop a recently created demote reference
+                    let _vp2 = Prc::demote(&p);
+                    // drop a recently created demote reference
+                    let _vp2 = Prc::demote(&p);
+                // drop a recently created demote reference
                 } else {
                     println!("no data");
                 }
@@ -314,9 +314,9 @@ pub(crate) mod problems {
             })
             .unwrap();
 
-            let x = Prc::volatile(&root.v.borrow());
+            let x = Prc::demote(&root.v.borrow());
             P::transaction(|j| {
-                // Trying to access a volatile pointer from the current session
+                // Trying to access a demote pointer from the current session
                 if let Some(p) = x.upgrade(j) {
                     println!("data = {}", p);
                 } else {
@@ -330,7 +330,7 @@ pub(crate) mod problems {
         // Reopening the pool
         let _root = P::open::<Root>("test_vweak.pool", O_CFNE).unwrap();
         P::transaction(|j| {
-            // Trying to access a volatile pointer from previous session
+            // Trying to access a demote pointer from previous session
             if let Some(p) = ovp.upgrade(j) {
                 println!("data = {}", p);
             } else {
@@ -353,28 +353,28 @@ pub(crate) mod problems {
                 let mut root = root.borrow_mut(j);
                 *root = v;
                 *root
-            })
-            .unwrap()
+            }).unwrap()
         }
 
         let root1 = P1::open::<Pbox<LogRefCell<i32, P1>, P1>>("pool5.pool", O_CFNE).unwrap();
         let root2 = P2::open::<Pbox<LogRefCell<i32, P2>, P2>>("pool6.pool", O_CFNE).unwrap();
-        Chaperon::session("foo1.pool", || {
+        let _res = Chaperon::session("foo1.pool", || {
             let other = foo::<P2>(&root2, 10); // <-- foo commits here
             P1::transaction(|j| {
                 let mut root = root1.borrow_mut(j);
                 *root = other
-            })
-            .unwrap();
+            }).unwrap();
             P2::transaction(|j| {
                 // <-- Creates a Journal<P2>
                 let mut root = root2.borrow_mut(j);
                 *root = other;
-            })
-            .unwrap();
+                // std::process::exit(0);
+            }).unwrap();
             let _other = foo::<P1>(&root1, 20); // <-- foo dose not commit here (postponed) because a trans is open
-        })
-        .unwrap();
+        });
+
+        println!("P1: {}", P1::used());
+        println!("P2: {}", P2::used());
     }
 
     #[test]
@@ -543,10 +543,10 @@ pub(crate) mod test {
 
         let mut threads = vec![];
         for i in 0..10 {
-            let root = root.volatile();
+            let root = root.demote();
             threads.push(thread::spawn(move || {
                 A::transaction(|j| {
-                    if let Some(data) = root.upgrade(j) {
+                    if let Some(data) = root.promote(j) {
                         let mut data = data.data.lock(j);
                         let r = rand().to_string();
                         println!("Old persisted data: `{}`", data);
@@ -1338,7 +1338,7 @@ pub(crate) mod test {
             let data = Parc::new(Mutex::new(0, j), j);
             let (tx, rx) = channel();
             for _ in 0..N {
-                let (data, tx) = (data.volatile(), tx.clone());
+                let (data, tx) = (data.demote(), tx.clone());
                 thread::spawn(move || {
                     // The shared state can only be accessed once the lock is held.
                     // Our non-atomic increment is safe because we're the only thread
@@ -1347,7 +1347,7 @@ pub(crate) mod test {
                     // We unwrap() the return value to assert that we are not expecting
                     // threads to ever fail while holding the lock.
                     let res = Heap::transaction(|j| {
-                        let data = data.upgrade(j).unwrap();
+                        let data = data.promote(j).unwrap();
                         let mut data = data.lock(j);
                         *data += 1;
                         *data
@@ -1370,14 +1370,14 @@ pub(crate) mod test {
         let mut threads = vec![];
         struct Node {
             id: i32,
-            next: Option<Pbox<Node, A>>,
+            next: Option<Parc<Node, A>>,
         }
         struct Root {
-            root: Parc<Mutex<Option<Pbox<Node, A>>, A>, A>,
+            root: Parc<Mutex<Option<Node>, A>, A>,
         }
         impl RootObj<A> for Root {
             fn init(j: &Journal<A>) -> Self {
-                let node = Pbox::new(Node { id: 0, next: None }, j);
+                let node = Node { id: 0, next: None };
                 Self {
                     root: Parc::new(Mutex::new(Some(node), j), j),
                 }
@@ -1387,11 +1387,11 @@ pub(crate) mod test {
         print_usage(0);
         // let prev = A::used();
         for i in 0..5 {
-            let root = root.root.volatile();
+            let root = root.root.demote();
             threads.push(thread::spawn(move || {
                 A::transaction(|j| {
-                    if let Some(root) = root.upgrade(j) {
-                        let node = Pbox::new(Node { id: i, next: None }, j);
+                    if let Some(root) = root.promote(j) {
+                        let node = Node { id: i, next: None };
                         let mut root = root.lock(j);
                         *root = Some(node);
                     }
@@ -1459,13 +1459,13 @@ pub(crate) mod test {
             let v = v.clone();
             sum += v[i] + v[5 + i];
             let sb = sb.clone();
-            let value = sb.value.volatile();
+            let value = sb.value.demote();
             threads.push(std::thread::spawn(move || {
                 // let _lock = mutex.lock();
                 let delta1 = v[i];
                 let delta2 = v[5 + i];
                 let res = A::transaction(|j| {
-                    if let Some(val) = value.upgrade(j) {
+                    if let Some(val) = value.promote(j) {
                         {
                             // use std::io::Write;
                             // std::io::stdout().flush().unwrap();
@@ -1549,13 +1549,13 @@ pub(crate) mod test {
             let v = v.clone();
             sum += v[i] + v[5 + i];
             let sb = sb.clone();
-            let value = sb.value.volatile();
+            let value = sb.value.demote();
             threads.push(std::thread::spawn(move || {
                 // let _lock = mutex.lock();
                 let delta1 = v[i];
                 let delta2 = v[5 + i];
                 let res = A::transaction(|j| {
-                    if let Some(val) = value.upgrade(j) {
+                    if let Some(val) = value.promote(j) {
                         {
                             // use std::io::Write;
                             // std::io::stdout().flush().unwrap();
@@ -1623,8 +1623,8 @@ pub(crate) mod test {
 
     //     type Root = Pbox<LogRefCell<Option<Pbox<i32,P2>>,P1>,P1>;
     //     let root = P1::open::<Root>("interpool.pool", O_CFNE).unwrap();
-    //     let _ = P2::open_no_root("interpool2.pool", O_CFNE).unwrap();
-    //     let _=P2::transaction(|j2| {
+    //     let _p = P2::open_no_root("interpool2.pool", O_CFNE).unwrap();
+    //     let _ = P2::transaction(|j2| {
     //         let mut root = root.borrow_mut(j2);
     //         let b: Pbox<LogRefCell<Option<Pbox<i32,P2>>,P1>,P1>;
     //         b = Pbox::new(LogRefCell::new(None, j1), j1);
@@ -2009,17 +2009,17 @@ mod temp_test {
             }
         }
 
-        let vweak_obj = obj.0.borrow().as_ref().unwrap().volatile();
+        let vweak_obj = obj.0.borrow().as_ref().unwrap().demote();
         
         P::transaction(|j| {
-            let strong_obj = vweak_obj.upgrade(j);
+            let strong_obj = vweak_obj.promote(j);
             assert!(strong_obj.is_some());
             
             // Destroy all strong pointers.
             drop(strong_obj);
             *obj.0.borrow_mut(j) = None;
         
-            assert!(vweak_obj.upgrade(j).is_none());
+            assert!(vweak_obj.promote(j).is_none());
         }).unwrap();
     }
 }

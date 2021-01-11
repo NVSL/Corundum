@@ -145,7 +145,7 @@ impl<T, const N: usize> Ring<T, N> {
     }
 
     #[inline]
-    pub fn empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.head == self.tail
     }
 
@@ -241,4 +241,17 @@ mod test {
             println!("{}", x);
         });
     }
+}
+
+#[macro_export]
+macro_rules! log {
+    ($p:tt, $c:tt, $tag:expr, $msg:expr, $($args:tt)*) => {
+        #[cfg(feature = "verbose")] {
+            use term_painter::Color::*;
+            use term_painter::ToStyle;
+
+            println!("{:<8} {}", $p::name().to_owned() + ":",
+                $c.paint(format!("{:>10}  {}", $tag, format!($msg, $($args)*))));
+        }
+    };
 }

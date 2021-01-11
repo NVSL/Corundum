@@ -4,14 +4,14 @@ use crate::convert::PFrom;
 use crate::alloc::get_idx;
 use crate::alloc::MemPool;
 use crate::clone::PClone;
-use crate::ptr::FatPtr;
-use crate::stm::Journal;
-use crate::{PSafe, VSafe};
+use crate::ptr::*;
+use crate::stm::*;
+use crate::*;
 use std::alloc::Layout;
 use std::cmp::Ordering;
 use std::fmt::{Debug, Display, Formatter};
 use std::marker::PhantomData;
-use std::ops::{Index,IndexMut};
+use std::ops::Index;
 use std::slice::SliceIndex;
 use std::vec::Vec as StdVec;
 use std::{mem, ptr, slice};
@@ -39,15 +39,12 @@ use std::{mem, ptr, slice};
 ///     assert_eq!(vec.pop(), Some(2));
 ///     assert_eq!(vec.len(), 1);
 ///
-///     vec[0] = 7;
-///     assert_eq!(vec[0], 7);
-///
 ///     vec.extend_from_slice(&[1, 2, 3], j);
 ///
 ///     for x in vec.as_slice() {
 ///         println!("{}", x);
 ///     }
-///     assert_eq!(vec, [7, 1, 2, 3]);
+///     assert_eq!(vec, [1, 1, 2, 3]);
 ///
 /// }).unwrap();
 /// ```
@@ -84,16 +81,13 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///     assert_eq!(vec.pop(), Some(2));
     ///     assert_eq!(vec.len(), 1);
     ///
-    ///     vec[0] = 7;
-    ///     assert_eq!(vec[0], 7);
-    ///
     ///     vec.extend_from_slice(&[1, 2, 3], j);
     ///
     ///     for x in &*vec {
     ///         println!("{}", x);
     ///     }
     ///
-    ///     assert_eq!(vec, [7, 1, 2, 3]);
+    ///     assert_eq!(vec, [1, 1, 2, 3]);
     /// }).unwrap();
     /// ```
     pub fn from_slice(x: &[T], journal: &Journal<A>) -> Self {
@@ -105,13 +99,12 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
         }
     }
 
-    pub(crate) unsafe fn from_slice_nolog(x: &[T]) -> Self {
+    pub(crate) unsafe fn from_slice_nolog(x: &[T]) -> (Self, usize) {
         if x.len() == 0 {
-            Self::empty()
+            (Self::empty(), 0)
         } else {
             let (buf, off, _, z) = A::atomic_new_slice(x);
-            A::perform(z);
-            Self::from_off_len(off, buf.len(), buf.len())
+            (Self::from_off_len(off, buf.len(), buf.len()), z)
         }
     }
 
@@ -329,7 +322,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
 
     #[inline]
     fn to_slice_mut<'a>(off: u64, len: usize) -> &'a mut [T] {
-        if len == 0 {
+        if len == 0 || off == u64::MAX {
             &mut []
         } else {
             unsafe { A::deref_slice_unchecked_mut(off, len) }
@@ -370,6 +363,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     #[inline]
     pub fn shrink_to(&mut self, new_cap: usize, j: &Journal<A>) {
         let cap = self.capacity();
+        eprintln!("shrink_to");
 
         // Prevent shrinking to smaller than data
         let new_cap = usize::max(new_cap, self.len);
@@ -378,7 +372,9 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
                 let buf = self.as_slice_mut();
                 let (rem, left) = buf.split_at_mut(usize::min(buf.len(), new_cap));
                 if !left.is_empty() {
-                    drop(left);
+                    ptr::drop_in_place(left);
+                    // FIXME: use power of 2 sizes padding to be able to free memory
+                    // of each individual item
                 }
                 if rem.is_empty() {
                     self.buf = FatPtr::empty();
@@ -450,9 +446,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
                 let layout = Layout::array::<T>(new_cap).unwrap();
                 let new = A::new_uninit_for_layout(layout.size(), j).cast();
                 ptr::copy(old.as_ptr(), new, len);
-                if !old.is_empty() {
-                    A::free_slice(self.buf.as_slice_mut());
-                }
+                A::free_slice(Self::to_slice_mut(self.off(), self.capacity()));
                 self.buf = FatPtr::new(slice::from_raw_parts(new, new_cap));
             }
         }
@@ -883,8 +877,8 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     /// Drops content without logging
     #[inline]
     pub(crate) unsafe fn free_nolog(&mut self) {
-        if !self.buf.is_empty() {
-            A::free_nolog(self.as_slice_mut());
+        if A::valid(self) && self.capacity() > 0 {
+            A::free_nolog(Self::to_slice_mut(self.off(), self.capacity()));
         }
         self.buf.set_cap(0);
         self.len = 0;
@@ -902,9 +896,9 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
 impl<T: PSafe, A: MemPool> Drop for Vec<T, A> {
     fn drop(&mut self) {
         unsafe {
-            let s = self.as_slice_mut();
+            let s = self.buf.as_slice_mut();
             ptr::drop_in_place(s);
-            A::free_slice(self.buf.as_slice_mut());
+            A::free_slice(Self::to_slice_mut(self.off(), self.capacity()));
         }
     }
 }
@@ -918,13 +912,13 @@ impl<A: MemPool, T: PSafe, I: SliceIndex<[T]>> Index<I> for Vec<T, A> {
     }
 }
 
-impl<A: MemPool, T: PSafe, I: SliceIndex<[T]>> IndexMut<I> for Vec<T, A> {
-    #[inline]
-    fn index_mut(&mut self, index: I) -> &mut Self::Output {
-        let self_mut = self.as_slice() as *const [T] as *mut [T];
-        IndexMut::index_mut(unsafe { &mut *self_mut }, index)
-    }
-}
+// impl<A: MemPool, T: PSafe, I: SliceIndex<[T]>> IndexMut<I> for Vec<T, A> {
+//     #[inline]
+//     fn index_mut(&mut self, index: I) -> &mut Self::Output {
+//         let self_mut = self.as_slice() as *const [T] as *mut [T];
+//         IndexMut::index_mut(unsafe { &mut *self_mut }, index)
+//     }
+// }
 
 // impl<T: PSafe, A: MemPool> Index<usize> for Vec<T, A> {
 //     fn index(&self, i: usize) -> &T {
@@ -946,11 +940,11 @@ impl<T: PSafe, A: MemPool> std::ops::Deref for Vec<T, A> {
     }
 }
 
-impl<T: PSafe, A: MemPool> std::ops::DerefMut for Vec<T, A> {
-    fn deref_mut(&mut self) -> &mut [T] {
-        self.as_slice_mut()
-    }
-}
+// impl<T: PSafe, A: MemPool> std::ops::DerefMut for Vec<T, A> {
+//     fn deref_mut(&mut self) -> &mut [T] {
+//         self.as_slice_mut()
+//     }
+// }
 
 impl<T: PSafe + Debug, A: MemPool> Debug for Vec<T, A> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
@@ -1117,11 +1111,11 @@ impl<T: PSafe, A: MemPool> AsRef<Vec<T, A>> for Vec<T, A> {
     }
 }
 
-impl<T: PSafe, A: MemPool> AsMut<Vec<T, A>> for Vec<T, A> {
-    fn as_mut(&mut self) -> &mut Vec<T, A> {
-        self
-    }
-}
+// impl<T: PSafe, A: MemPool> AsMut<Vec<T, A>> for Vec<T, A> {
+//     fn as_mut(&mut self) -> &mut Vec<T, A> {
+//         self
+//     }
+// }
 
 impl<T: PSafe, A: MemPool> AsRef<[T]> for Vec<T, A> {
     fn as_ref(&self) -> &[T] {
@@ -1129,11 +1123,11 @@ impl<T: PSafe, A: MemPool> AsRef<[T]> for Vec<T, A> {
     }
 }
 
-impl<T: PSafe, A: MemPool> AsMut<[T]> for Vec<T, A> {
-    fn as_mut(&mut self) -> &mut [T] {
-        self
-    }
-}
+// impl<T: PSafe, A: MemPool> AsMut<[T]> for Vec<T, A> {
+//     fn as_mut(&mut self) -> &mut [T] {
+//         self
+//     }
+// }
 
 impl<T: Clone + PSafe, A: MemPool> PFrom<&[T], A> for Vec<T, A> {
     fn pfrom(s: &[T], j: &Journal<A>) -> Vec<T, A> {

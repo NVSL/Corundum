@@ -1,11 +1,10 @@
-use crate::RootObj;
 use crate::ptr::{LogNonNull,NonNull};
 use crate::convert::PFrom;
 use crate::alloc::MemPool;
 use crate::cell::VCell;
 use crate::ptr::Ptr;
 use crate::stm::{Journal, Notifier, Logger};
-use crate::{PSafe, TxInSafe, TxOutSafe};
+use crate::*;
 use std::cell::UnsafeCell;
 use std::fmt::{self, Debug, Display};
 use std::marker::PhantomData;
@@ -58,6 +57,8 @@ unsafe impl<T: PSafe + ?Sized, A: MemPool> Send for LogRefCell<T, A> {}
 
 /// Not safe for thread data sharing
 impl<T: ?Sized, A: MemPool> !Sync for LogRefCell<T, A> {}
+
+impl<T: ?Sized, A: MemPool> !PSend for LogRefCell<T, A> {}
 
 impl<T: PSafe, A: MemPool> LogRefCell<T, A> {
     /// Creates a new instance of `LogRefCell` with the given value

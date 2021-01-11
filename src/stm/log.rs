@@ -2,16 +2,10 @@ use crate::alloc::MemPool;
 use crate::ll::*;
 use crate::ptr::Ptr;
 use crate::stm::*;
-use crate::PSafe;
+use crate::*;
 use std::clone::Clone;
 use std::fmt::{self, Debug};
 use std::ptr;
-
-#[cfg(feature = "verbose")]
-use term_painter::Color::*;
-
-#[cfg(feature = "verbose")]
-use term_painter::ToStyle;
 
 type Offset = u64;
 
@@ -199,7 +193,7 @@ impl<A: MemPool> Log<A> {
     /// # use corundum::default::*;
     /// # use corundum::stm::Log;
     /// # type P = BuddyAlloc;
-    /// # let _ = P::open_no_root("foo.pool", O_CF).unwrap();
+    /// # let _p = P::open_no_root("foo.pool", O_CF).unwrap();
     /// P::transaction(|j| unsafe {
     ///     // Create a neutral high-level log to drop the allocation on failure.
     ///     // It is different from the low-level drop log which is inside the
@@ -241,16 +235,9 @@ impl<A: MemPool> Log<A> {
     pub fn set(&mut self, off: u64, len: usize, zone: usize) {
         debug_assert_ne!(len, 0);
 
-        #[cfg(feature = "verbose")]
-        println!(
-            "{}",
-            Yellow.paint(format!(
-                "        CHNGE LOG     TO:         ({:>4}..{:<4}) = {:<5} {:?}",
-                offset_to_str(off),
-                offset_to_str((off as usize + (len - 1)) as u64),
-                len,
-                self.0
-            ))
+        log!(A, Yellow, "CHNGE LOG", "TO:          ({:>4}..{:<4}) = {:<5} {:?}",
+            offset_to_str(off), offset_to_str((off as usize + (len - 1)) as u64),
+            len, self.0
         );
 
         match &self.0 {
@@ -267,37 +254,21 @@ impl<A: MemPool> Log<A> {
 
 use LogEnum::*;
 
-/// Print traces verbosely
-#[allow(unused_macros)]
-macro_rules! print_log {
-    ($x:expr,$off:expr,$len:expr) => {
-        #[cfg(feature = "verbose")] {
-            println!(
-                "{}",
-                Yellow.paint(format!(
-                    "              LOG    FOR:         ({:>4}..{:<4}) = {:<5} DataLog  TYPE: {}",
-                    offset_to_str($off),
-                    offset_to_str(($off as usize + ($len - 1)) as u64),
-                    $len,
-                    std::any::type_name_of_val($x)
-                ))
-            );
-            dump_data::<A>("DATA", $off, $len);
-        }
-    };
-}
-
 #[cfg(feature = "verbose")]
 fn dump_data<A: MemPool>(tag: &str, off: u64, len: usize) {
-    print!("{}", BrightBlue.paint(format!("             {}    ", tag)));
+    use term_painter::Color::*;
+    use term_painter::ToStyle;
+
+    print!("{}", BrightBlue.paint(format!("{:>19}  ", tag)));
     for i in 0..len {
         let d = unsafe { A::get_unchecked::<u8>(off + i as u64) };
         print!("{}", BrightBlue.paint(format!("{:02x} ", *d)));
         if i % 16 == 15 && i+1 < len {
             println!();
-            print!("                     ");
+            print!("{:>21}", " ");
         }
     }
+
     println!();
 }
 
@@ -321,39 +292,44 @@ impl<A: MemPool> Log<A> {
 
     /// Takes a log of `x` into `journal` and notifies the owner that log is
     /// taken if `notifier` is specified.
-    pub fn take<T: PSafe + ?Sized>(
+    pub fn take<T: ?Sized>(
         x: &T,
         journal: &Journal<A>,
-        notifier: Notifier<A>,
+        mut notifier: Notifier<A>,
     ) -> Ptr<Log<A>, A> {
         #[cfg(feature = "perf_stat")]
         let _perf = crate::stat::Measure::<A>::DataLog(std::time::Instant::now());
 
         let len = std::mem::size_of_val(x);
         if len == 0 {
+            notifier.update(1);
             Ptr::dangling()
         } else {
             let pointer = unsafe { Ptr::<T, A>::new_unchecked(x) };
 
-            #[cfg(feature = "verbose")]
-            print_log!(x, pointer.off(), len);
+            log!(A, Yellow, "LOG", "FOR:         ({:>4}..{:<4}) = {:<5} DataLog  TYPE: {}",
+                offset_to_str(pointer.off()), offset_to_str((pointer.off() as usize + (len - 1)) as u64),
+                len, std::any::type_name_of_val(x)
+            );
+            #[cfg(feature = "verbose")] {
+                dump_data::<A>("DATA", pointer.off(), len);
+            }
 
             let log = unsafe { pointer.dup() };
-            let _log = log.as_ref();
 
-            if cfg!(feature = "replace_with_log") {
-                pointer.replace(log.replace(pointer.off()));
+            // if cfg!(feature = "replace_with_log") {
+            //     pointer.replace(log.replace(pointer.off()));
 
-                debug_assert_eq!(
-                    crate::utils::as_slice(pointer.as_ref()), 
-                    crate::utils::as_slice(log.as_ref()),
-                    "Log is not the same as the original data");
+            //     debug_assert_eq!(
+            //         crate::utils::as_slice(pointer.as_ref()), 
+            //         crate::utils::as_slice(log.as_ref()),
+            //         "Log is not the same as the original data");
 
-                Self::take_impl(log.off(), pointer.off(), len, journal, notifier)
-            } else {
+            //     Self::take_impl(log.off(), pointer.off(), len, journal, notifier)
+            // } else {
                 crate::ll::msync_obj(log.as_ref());
                 Self::take_impl(pointer.off(), log.off(), len, journal, notifier)
-            }
+            // }
         }
     }
 
@@ -378,15 +354,10 @@ impl<A: MemPool> Log<A> {
         #[cfg(feature = "perf_stat")]
         let _perf = crate::stat::Measure::<A>::DropLog(std::time::Instant::now());
 
-        #[cfg(feature = "verbose")]
-        println!(
-            "{}",
-            Yellow.paint(format!(
-                "          NEW LOG    FOR:         ({:>4}..{:<4}) = {:<5} DropOnCommit",
-                offset_to_str(offset),
-                offset_to_str((offset as usize + (len - 1)) as u64),
-                len
-            ))
+        log!(A, Yellow, "NEW LOG", "FOR:         ({:>4}..{:<4}) = {:<5} DropOnCommit",
+            offset_to_str(offset),
+            offset_to_str((offset as usize + (len - 1)) as u64),
+            len
         );
         Self::write_on_journal(DropOnCommit(offset, len), journal, Notifier::None)
     }
@@ -401,16 +372,12 @@ impl<A: MemPool> Log<A> {
         #[cfg(feature = "perf_stat")]
         let _perf = crate::stat::Measure::<A>::DropLog(std::time::Instant::now());
 
-        #[cfg(feature = "verbose")]
-        println!(
-            "{}",
-            Yellow.paint(format!(
-                "          NEW LOG    FOR:         ({:>4}..{:<4}) = {:<5} DropOnAbort",
-                offset_to_str(offset),
-                offset_to_str((offset as usize + (len - 1)) as u64),
-                len
-            ))
+        log!(A, Yellow, "NEW LOG", "FOR:         ({:>4}..{:<4}) = {:<5} DropOnAbort",
+            offset_to_str(offset),
+            offset_to_str((offset as usize + (len - 1)) as u64),
+            len
         );
+
         Self::write_on_journal(DropOnAbort(offset, len), journal, Notifier::None)
     }
 
@@ -424,15 +391,10 @@ impl<A: MemPool> Log<A> {
         #[cfg(feature = "perf_stat")]
         let _perf = crate::stat::Measure::<A>::DropLog(std::time::Instant::now());
 
-        #[cfg(feature = "verbose")]
-        println!(
-            "{}",
-            Yellow.paint(format!(
-                "          NEW LOG    FOR:         ({:>4}..{:<4}) = {:<5} DropOnFailure",
-                offset_to_str(offset),
-                offset_to_str((offset as usize + (len - 1)) as u64),
-                len
-            ))
+        log!(A, Yellow, "NEW LOG", "FOR:         ({:>4}..{:<4}) = {:<5} DropOnFailure",
+            offset_to_str(offset),
+            offset_to_str((offset as usize + (len - 1)) as u64),
+            len
         );
 
         Self::write_on_journal(DropOnFailure(offset, len), journal, Notifier::None)
@@ -449,16 +411,7 @@ impl<A: MemPool> Log<A> {
         #[cfg(feature = "perf_stat")]
         let _perf = crate::stat::Measure::<A>::MutexLog(std::time::Instant::now());
 
-        #[cfg(feature = "verbose")]
-        {
-            println!(
-                "{}",
-                Yellow.paint(format!(
-                    "          NEW LOG    FOR:         v@{:<18} UnlockOnCommit",
-                    virt_addr
-                ))
-            );
-        }
+        log!(A, Yellow, "NEW LOG", "FOR:         v@{:<18} UnlockOnCommit", virt_addr);
         
         if cfg!(feature = "pthread") {
             unsafe {
@@ -480,17 +433,10 @@ impl<A: MemPool> Log<A> {
         debug_assert_ne!(*len, 0);
 
         if *log != u64::MAX && *src != u64::MAX {
+            log!(A, Magenta, "ROLLBACK", "FOR:         ({:>4}..{:<4}) = {:<5} DataLog({})",
+                *src, *src as usize + (len - 1), len, log   
+            );
             #[cfg(feature = "verbose")] {
-                println!(
-                    "{}",
-                    Magenta.paint(format!(
-                        "         ROLLBACK    FOR:         ({:>4}..{:<4}) = {:<5} DataLog({})",
-                        *src,
-                        *src as usize + (len - 1),
-                        len,
-                        log
-                    ))
-                );
                 dump_data::<A>(" ORG", *src, *len);
                 dump_data::<A>(" LOG", *log, *len);
             }
@@ -598,16 +544,8 @@ impl<A: MemPool> Log<A> {
         match &mut self.0 {
             DataLog(_src, log, len) => {
                 if *log != u64::MAX {
-                    #[cfg(feature = "verbose")]
-                    println!(
-                        "{}",
-                        Magenta.paint(format!(
-                            "          DEL LOG    FOR:         ({:>4}..{:<4}) = {:<5} DataLog({})",
-                            *_src,
-                            *_src as usize + (*len - 1),
-                            *len,
-                            log
-                        ))
+                    log!(A, Magenta, "DEL LOG", "FOR:         ({:>4}..{:<4}) = {:<5} DataLog({})",
+                        *_src, *_src as usize + (*len - 1), *len, log
                     );
                     unsafe {
                         debug_assert!(A::allocated(*log, 1), "Access Violation at address 0x{:x}", *log);
@@ -619,14 +557,7 @@ impl<A: MemPool> Log<A> {
             }
             UnlockOnCommit(src) => {
                 if *src != u64::MAX {
-                    #[cfg(feature = "verbose")]
-                    {
-                        println!(
-                            "{}",
-                            Magenta
-                                .paint(format!("           UNLOCK    FOR:          v@{}", *src,))
-                        );
-                    }
+                    log!(A, Magenta, "UNLOCK", "FOR:          v@{}", *src);
                     unsafe {
                         #[cfg(feature = "pthread")] {
                             let b = &mut *(*src as *mut (bool, libc::pthread_mutex_t, libc::pthread_mutexattr_t));

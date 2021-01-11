@@ -1,12 +1,12 @@
 //! Persistent unicode string slices
 
 use crate::convert::PFrom;
-use std::string::FromUtf8Error;
 use crate::alloc::MemPool;
 use crate::cell::RootObj;
 use crate::clone::PClone;
-use crate::stm::Journal;
+use crate::stm::*;
 use crate::vec::Vec;
+use std::string::FromUtf8Error;
 use std::borrow::{Cow, ToOwned};
 use std::char::decode_utf16;
 use std::ops::{self, Index, IndexMut, RangeBounds};
@@ -207,7 +207,7 @@ impl<A: MemPool> String<A> {
 
     /// Creates a `String` from `&str`
     ///
-    /// `s` may be in the volatile heap. `PStrong::from_str` will allocate enough
+    /// `s` may be in the demote heap. `PStrong::from_str` will allocate enough
     /// space in pool `A` and places `s` into it an make a `String` out of it.
     ///
     /// # Example
@@ -228,10 +228,9 @@ impl<A: MemPool> String<A> {
         }
     }
 
-    pub(crate) unsafe fn from_str_nolog(s: &str) -> String<A> {
-        Self {
-            vec: Vec::from_slice_nolog(s.as_bytes()),
-        }
+    pub(crate) unsafe fn from_str_nolog(s: &str) -> (String<A>, usize) {
+        let (vec, z) = Vec::from_slice_nolog(s.as_bytes());
+        (Self { vec }, z)
     }
 
     pub(crate) unsafe fn off(&self) -> u64 {
@@ -1038,40 +1037,6 @@ impl<A: MemPool> String<A> {
         }
     }
 
-    /// Returns a mutable reference to the contents of this `String`.
-    ///
-    /// # Safety
-    ///
-    /// This function is unsafe because it does not check that the bytes passed
-    /// to it are valid UTF-8. If this constraint is violated, it may cause
-    /// memory unsafety issues with future users of the `String`, as the rest of
-    /// the standard library assumes that `String`s are valid UTF-8.
-    ///
-    /// # Examples
-    ///
-    /// Basic usage:
-    ///
-    /// ```
-    /// # use corundum::alloc::*;
-    /// # use corundum::convert::PFrom;
-    /// # use corundum::str::*;
-    /// # Heap::transaction(|j| {
-    /// let mut s = String::pfrom("hello", j);
-    ///
-    /// unsafe {
-    ///     let mut vec = s.as_mut_vec();
-    ///     assert_eq!(&[104, 101, 108, 108, 111][..], &vec[..]);
-    ///
-    ///     vec.reverse();
-    /// }
-    /// assert_eq!(s, "olleh");
-    /// # }).unwrap();
-    /// ```
-    #[inline]
-    pub unsafe fn as_mut_vec(&mut self) -> &mut Vec<u8, A> {
-        &mut self.vec
-    }
-
     /// Returns the length of this `String`, in bytes, not [`char`]s or
     /// graphemes. In other words, it may not be what a human considers the
     /// length of the string.
@@ -1220,7 +1185,7 @@ impl<A: MemPool> String<A> {
         if s.len() > self.len() {
             self.vec.reserve(s.len()-self.len(), j);
         }
-        let slice: &mut [u8] = self.vec.as_mut();
+        let slice: &mut [u8] = self.vec.as_slice_mut();
         unsafe {
             ptr::copy_nonoverlapping(
                 s.as_bytes() as *const _ as *const u8, 
@@ -1669,7 +1634,7 @@ impl<A: MemPool> ToStringSlice<A> for StdVec<&str> {
     }
 }
 
-pub trait ToString<A: MemPool> {
+pub trait ToPString<A: MemPool> {
     /// Converts the given value to a `String`.
     ///
     /// # Examples
@@ -1696,7 +1661,7 @@ pub trait ToString<A: MemPool> {
 /// if the `Display` implementation returns an error.
 /// This indicates an incorrect `Display` implementation
 /// since `fmt::Write for String` never returns an error itself.
-impl<T: fmt::Display + ?Sized, A: MemPool> ToString<A> for T {
+impl<T: fmt::Display + ?Sized, A: MemPool> ToPString<A> for T {
     #[inline]
     default fn to_pstring(&self, journal: &Journal<A>) -> String<A> {
         use fmt::Write;
@@ -1708,34 +1673,34 @@ impl<T: fmt::Display + ?Sized, A: MemPool> ToString<A> for T {
     }
 }
 
-impl<A: MemPool> ToString<A> for str {
+impl<A: MemPool> ToPString<A> for str {
     #[inline]
     fn to_pstring(&self, journal: &Journal<A>) -> String<A> {
         String::from_str(self, journal)
     }
 }
 
-impl<A: MemPool> ToString<A> for Cow<'_, str> {
+impl<A: MemPool> ToPString<A> for Cow<'_, str> {
     #[inline]
     fn to_pstring(&self, journal: &Journal<A>) -> String<A> {
         String::from_str(&self[..].to_owned(), journal)
     }
 }
 
-impl<A: MemPool> ToString<A> for StdString {
+impl<A: MemPool> ToPString<A> for StdString {
     #[inline]
     fn to_pstring(&self, journal: &Journal<A>) -> String<A> {
         String::from_str(self, journal)
     }
 }
 
-// impl<A: MemPool> ToString for String<A> {
+// impl<A: MemPool> ToPString for String<A> {
 //     #[inline]
 //     fn to_string(&self) -> String<A> {
 //         String::from(self)
 //     }
 // }
-// impl<A: MemPool> ToString for Cow<'_, str> {
+// impl<A: MemPool> ToPString for Cow<'_, str> {
 //     #[inline]
 //     fn to_string(&self) -> String<A> {
 //         self[..].to_owned()

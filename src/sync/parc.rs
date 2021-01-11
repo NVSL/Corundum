@@ -31,7 +31,7 @@ unsafe impl PSafe for Counter {}
 
 /// The [`Parc`]'s inner data type
 /// 
-/// It contains the atomic counters, a list of volatile references, and the
+/// It contains the atomic counters, a list of demote references, and the
 /// actual value.
 /// 
 /// [`Parc`]: #
@@ -72,11 +72,11 @@ unsafe fn set_data_ptr<T, U>(mut ptr: *mut T, data: *mut U) -> *mut T {
 /// 
 /// To allow sharing, `Parc` provides a safe mechanism to cross the thread
 /// boundaries. When you need to share it, you can obtain a [`VWeak`]
-/// object by calling [`volatile()`] function. The [`VWeak`] object is both
-/// [`Sync`] and [`Send`] and acts like a volatile reference. Calling
-/// [`VWeak`]`::`[`upgrade()`] gives access to data by creating a new reference
+/// object by calling [`demote()`] function. The [`VWeak`] object is both
+/// [`Sync`] and [`Send`] and acts like a demote reference. Calling
+/// [`VWeak`]`::`[`promote()`] gives access to data by creating a new reference
 /// of type `Parc` inside the other thread, if the referent is still available.
-/// Calling [`volatile()`] is dynamically prohibited to be inside a transaction.
+/// Calling [`demote()`] is dynamically prohibited to be inside a transaction.
 /// Therefore, the `Parc` should be already reachable from the root object and
 /// packed outside a transaction.
 ///
@@ -89,14 +89,14 @@ unsafe fn set_data_ptr<T, U>(mut ptr: *mut T, data: *mut U) -> *mut T {
 /// type P = BuddyAlloc;
 /// 
 /// let p = P::open::<Parc<i32>>("foo.pool", O_CF).unwrap();
-/// let v = p.volatile();
+/// let v = p.demote();
 /// let mut threads = vec![];
 /// 
 /// for i in 0..10 {
 ///     let p = v.clone();
 ///     threads.push(thread::spawn(move || {
 ///         transaction(|j| {
-///             if let Some(p) = p.upgrade(j) {
+///             if let Some(p) = p.promote(j) {
 ///                 println!("access {} from thread {}", *p, i);
 ///             }
 ///         }).unwrap();
@@ -121,14 +121,14 @@ unsafe fn set_data_ptr<T, U>(mut ptr: *mut T, data: *mut U) -> *mut T {
 /// type P = BuddyAlloc;
 /// 
 /// let p = P::open::<Parc<PMutex<i32>>>("foo.pool", O_CF).unwrap();
-/// let v = p.volatile();
+/// let v = p.demote();
 /// let mut threads = vec![];
 /// 
 /// for i in 0..10 {
 ///     let p = v.clone();
 ///     threads.push(thread::spawn(move || {
 ///         transaction(|j| {
-///             if let Some(p) = p.upgrade(j) {
+///             if let Some(p) = p.promote(j) {
 ///                 let mut p = p.lock(j);
 ///                 *p += 1;
 ///                 println!("thread {} makes it {}", i, *p);
@@ -156,8 +156,8 @@ unsafe fn set_data_ptr<T, U>(mut ptr: *mut T, data: *mut U) -> *mut T {
 /// [`Mutex`]: ./struct.Mutex.html
 /// [`PMutex`]: ../alloc/default/type.PMutex.html
 /// [`pclone`]: #impl-PClone
-/// [`volatile()`]: #method.volatile
-/// [`upgrade()`]: ./struct.VWeak.html#method.upgrade
+/// [`demote()`]: #method.demote
+/// [`promote()`]: ./struct.VWeak.html#method.promote
 pub struct Parc<T: PSafe + ?Sized, A: MemPool> {
     ptr: Ptr<ParcInner<T, A>, A>,
     phantom: PhantomData<T>,
@@ -512,22 +512,22 @@ impl<T: PSafe + ?Sized, A: MemPool> Parc<T, A> {
     /// 
     /// let obj = P::open::<Parc<i32>>("foo.pool", O_CF).unwrap();
     /// 
-    /// let v = obj.volatile();
+    /// let v = obj.demote();
     /// assert_eq!(Parc::strong_count(&obj), 1);
     /// 
     /// P::transaction(|j| {
-    ///     if let Some(obj) = v.upgrade(j) {
+    ///     if let Some(obj) = v.promote(j) {
     ///         assert_eq!(Parc::strong_count(&obj), 2);
     ///     }
     /// }).unwrap();
     /// 
     /// assert_eq!(Parc::strong_count(&obj), 1);
     /// ```
-    pub fn volatile(&self) -> VWeak<T, A> {
+    pub fn demote(&self) -> VWeak<T, A> {
         debug_assert!(!self.ptr.is_dangling());
         assert!(
             !Journal::<A>::is_running(),
-            "Parc::volatile() cannot be used inside a transaction"
+            "Parc::demote() cannot be called from a transaction"
         );
         VWeak::new(self)
     }
@@ -1147,7 +1147,7 @@ fn data_offset_align<A: MemPool>(align: usize) -> isize {
 }
 
 /// `VWeak` is a version of [`Parc`] that holds a non-owning thread-safe 
-/// reference to the managed allocation in the volatile heap. The allocation is
+/// reference to the managed allocation in the demote heap. The allocation is
 /// accessed by calling [`upgrade`] on the `VWeak` pointer, which returns an
 /// [`Option`]`<`[`Parc`]`<T>>`.
 ///
@@ -1162,9 +1162,9 @@ fn data_offset_align<A: MemPool>(align: usize) -> isize {
 /// the persistent allocation managed by [`Parc`] without preventing its inner
 /// value from being dropped.
 ///
-/// The typical way to obtain a `VWeak` pointer is to call [`Parc::volatile`].
+/// The typical way to obtain a `VWeak` pointer is to call [`Parc::demote`].
 ///
-/// [`Parc::volatile`]: ./struct.Parc.html#method.volatile
+/// [`Parc::demote`]: ./struct.Parc.html#method.demote
 /// [`upgrade`]: #method.upgrade
 pub struct VWeak<T: ?Sized, A: MemPool> {
     ptr: *const ParcInner<T, A>,
@@ -1174,8 +1174,8 @@ pub struct VWeak<T: ?Sized, A: MemPool> {
 
 impl<T: ?Sized, A: MemPool> UnwindSafe for VWeak<T, A> {}
 impl<T: ?Sized, A: MemPool> RefUnwindSafe for VWeak<T, A> {}
-unsafe impl<T: ?Sized, A: MemPool> Send for VWeak<T, A> {}
-unsafe impl<T: ?Sized, A: MemPool> Sync for VWeak<T, A> {}
+unsafe impl<T: PSend + ?Sized, A: MemPool> Send for VWeak<T, A> {}
+unsafe impl<T: PSend + ?Sized, A: MemPool> Sync for VWeak<T, A> {}
 unsafe impl<T: ?Sized, A: MemPool> TxInSafe for VWeak<T, A> {}
 unsafe impl<T: ?Sized, A: MemPool> TxOutSafe for VWeak<T, A> {}
 unsafe impl<T: ?Sized, A: MemPool> PSafe for VWeak<T, A> {}
@@ -1190,7 +1190,7 @@ impl<T: PSafe + ?Sized, A: MemPool> VWeak<T, A> {
         }
     }
 
-    /// Attempts to upgrade the `VWeak` pointer to an [`Parc`], delaying
+    /// Attempts to promote the `VWeak` pointer to an [`Parc`], delaying
     /// dropping of the inner value if successful.
     ///
     /// Returns [`None`] if the inner value has since been dropped.
@@ -1211,20 +1211,20 @@ impl<T: PSafe + ?Sized, A: MemPool> VWeak<T, A> {
     ///     }
     /// }
     ///
-    /// let vweak_obj = obj.0.borrow().as_ref().unwrap().volatile();
+    /// let vweak_obj = obj.0.borrow().as_ref().unwrap().demote();
     /// 
     /// P::transaction(|j| {
-    ///     let strong_obj = vweak_obj.upgrade(j);
+    ///     let strong_obj = vweak_obj.promote(j);
     ///     assert!(strong_obj.is_some());
     ///     
     ///     // Destroy all strong pointers.
     ///     drop(strong_obj);
     ///     *obj.0.borrow_mut(j) = None; // RootCell does not drop, so make it None
     /// 
-    ///     assert!(vweak_obj.upgrade(j).is_none());
+    ///     assert!(vweak_obj.promote(j).is_none());
     /// }).unwrap();
     /// ```
-    pub fn upgrade(&self, _journal: &Journal<A>) -> Option<Parc<T, A>> {
+    pub fn promote(&self, _journal: &Journal<A>) -> Option<Parc<T, A>> {
         // We use a CAS loop to increment the strong count instead of a
         // fetch_add as this function should never take the reference count
         // from zero to one.

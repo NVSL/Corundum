@@ -5,12 +5,6 @@ use std::ops::{Index,IndexMut};
 use std::marker::PhantomData;
 use std::mem;
 
-#[cfg(feature = "verbose")]
-use term_painter::Color::*;
-
-#[cfg(feature = "verbose")]
-use term_painter::ToStyle;
-
 #[repr(transparent)]
 #[derive(Clone, Debug)]
 /// Buddy memory block
@@ -156,16 +150,14 @@ impl<A: MemPool> BuddyAlg<A> {
     #[inline]
     #[track_caller]
     fn buddy<'a>(off: u64) -> &'a mut Buddy {
-        debug_assert!(off < u64::MAX - A::start(), "off({}) out of range", off);
-        debug_assert!(off + A::start() < A::end(), "off({}) out of range", off);
+        debug_assert!(off < u64::MAX - A::start(), "off(0x{:x}) out of range", off);
+        debug_assert!(off + A::start() < A::end(), "off(0x{:x}) out of range", off);
         union U<'a> {
             off: u64,
             raw: &'a mut Buddy,
         }
         unsafe {
-            U {
-                off: A::start() + off,
-            }.raw
+            U {off: A::start() + off}.raw
         }
     }
 
@@ -247,9 +239,9 @@ impl<A: MemPool> BuddyAlg<A> {
             n.next = next;
         });
         self.aux.clear();
-        self.log64.foreach(|(off, data)| {
+        self.log64.foreach(|(off, data)| unsafe {
             let n = Self::buddy(off);
-            n.next = data;
+            std::intrinsics::atomic_store_rel(&mut n.next, data);
         });
         self.log64.clear();
         self.available = self.available_log;
@@ -336,18 +328,17 @@ impl<A: MemPool> BuddyAlg<A> {
         let len = 1 << idx;
 
         if len > self.available {
-            eprintln!(
-                "No space left (requested = {}, avilable= {})",
-                len,
-                self.available()
-            );
+            let a = self.available();
             self.discard();
-            u64::MAX
+            panic!(
+                "No space left (requested = {}, available= {})",
+                len, a
+            );
         } else {
             match self.find_free_memory(idx, false) {
                 Some(off) => {
                     #[cfg(feature = "verbose")]
-                    debug_alloc(off, len, self.used(), self.used() + (1 << idx));
+                    debug_alloc::<A>(off, len, self.used(), self.used() + (1 << idx));
 
                     self.available_log = self.available - len;
 
@@ -390,7 +381,7 @@ impl<A: MemPool> BuddyAlg<A> {
         let len = 1 << idx;
 
         #[cfg(feature = "verbose")]
-        debug_dealloc(off, len, self.used(), self.used() - len);
+        debug_dealloc::<A>(off, len, self.used(), self.used() - len);
 
         self.available_log = self.available;
         self.free_impl(off, len);
@@ -450,7 +441,7 @@ impl<A: MemPool> BuddyAlg<A> {
     pub fn is_allocated(&mut self, off: u64, _len: usize) -> bool {
         self.lock();
 
-        if !self.aux.empty() {
+        if !self.aux.is_empty() {
             self.discard();
             return true;
         }
@@ -531,24 +522,29 @@ impl<A: MemPool> BuddyAlg<A> {
             // continue draining
             self.drain_aux();
 
+
+            // drop unnecessary allocations
+            if !self.drop_log.is_empty() {
+                eprintln!("Dropping unnecessary allocations");
+                unsafe {
+                    let self_mut = self as *mut Self;
+                    self.drop_log.drain_atomic(|(off, len)| {
+                        (*self_mut).dealloc_impl(off, len, false);
+                    }, || {
+                        (*self_mut).drain_aux();
+                        (*self_mut).discard();
+                    });
+                }
+                self.drop_log.clear();
+            }
+
             #[cfg(debug_assertions)]
             self.check(module_path!());
         } else {
             self.aux.clear();
             self.log64.clear();
+            self.drop_log.clear();
         }
-
-        // drop unnecessary allocations
-        unsafe {
-            let self_mut = self as *mut Self;
-            self.drop_log.drain_atomic(|(off, len)| {
-                (*self_mut).dealloc_impl(off, len, false);
-            }, || {
-                (*self_mut).drain_aux();
-                (*self_mut).discard();
-            });
-        }
-        self.drop_log.clear();
     }
 
     #[inline]
@@ -686,19 +682,83 @@ impl<T, A: MemPool> IndexMut<usize> for Zones<T, A> {
 #[cfg(test)]
 mod test {
     use crate::default::*;
-    use crate::boxed::Pbox;
+    // use crate::boxed::Pbox;
     type P = BuddyAlloc;
 
     #[test]
     fn buddy_alg_test() {
-        let _pool = P::open_no_root("buddy.pool", O_CFNE).unwrap();
-        crate::utils::allow_crash(true);
+        use rand::distributions::Alphanumeric;
+        use rand::Rng;
+
+        struct Root {
+            vec: PRefCell<PVec<Parc<(i32, PMutex<PString>)>>>
+        }
+        impl RootObj<P> for Root {
+            fn init(j: &Journal) -> Self {
+                Root {
+                    vec: PRefCell::new(PVec::new(j), j)
+                }
+            }
+        }
+        let root = P::open::<Root>("buddy.pool", O_CFNE).unwrap();
+        let u = P::used();
         P::transaction(|j| {
             let _b = Pbox::new(1, j);
-            println!("done");
-        })
-        .unwrap();
-        println!("{}", P::used());
+            let _b = Pbox::new([0;8], j);
+            let _b = Pbox::new([0;64], j);
+            let _b = Pbox::new([0;1024], j);
+            let _b = Pbox::new([0;4096], j);
+            let _b = Pbox::new([0;10000], j);
+        }).unwrap();
+
+        P::transaction(|j| {
+            let _b = Pbox::new([0;10000], j);
+            let _b = Pbox::new([0;8], j);
+            let _b = Pbox::new([0;1024], j);
+            let _b = Pbox::new([0;64], j);
+            let _b = Pbox::new(1, j);
+            let _b = Pbox::new([0;4096], j);
+        }).unwrap();
+
+        P::transaction(|j| {
+            let mut b = root.vec.borrow_mut(j);
+            for i in 0..2 {
+                b.push(Parc::new((i, PMutex::new(format!("item {}", i).to_pstring(j), j)), j), j);
+            }
+        }).unwrap();
+
+        let mut ts = vec![];
+        for i in 0..2 {
+            let m = root.vec.borrow()[i].demote();
+            ts.push(std::thread::spawn(move || {
+                P::transaction(|j| {
+                    if let Some(m) = m.promote(j) {
+                        let mut m = m.1.lock(j);
+                        let l = (rand::random::<usize>() % 100) + 1;
+                        let s: String = //String::from_utf8(
+                            rand::thread_rng()
+                                .sample_iter(&Alphanumeric)
+                                .take(l)
+                                .collect();
+                            //).unwrap();
+                        *m = s.to_pstring(j);
+                    }
+                }).unwrap();
+            }));
+        }
+
+        for t in ts {
+            t.join().unwrap();
+        }
+
+        P::transaction(|j| {
+            let mut vec = root.vec.borrow_mut(j);
+            if vec.len() > 10 {
+                vec.clear();
+            }
+        }).unwrap();
+
+        println!("{} -> {}", u, P::used());
     }
 }
 
@@ -731,7 +791,7 @@ mod test {
 /// 
 /// type P = BuddyAlloc;
 /// 
-/// let _ = P::open_no_root("p.pool", O_CF).unwrap();
+/// let _pool = P::open_no_root("p.pool", O_CF).unwrap();
 /// 
 /// P::transaction(|j| {
 ///     let temp = Pbox::new(10, j);
@@ -750,8 +810,8 @@ mod test {
 /// type P1 = pool1::BuddyAlloc;
 /// type P2 = pool2::BuddyAlloc;
 /// 
-/// let _ = P1::open_no_root("p1.pool", O_CF).unwrap();
-/// let _ = P2::open_no_root("p2.pool", O_CF).unwrap();
+/// let _p1 = P1::open_no_root("p1.pool", O_CF).unwrap();
+/// let _p2 = P2::open_no_root("p2.pool", O_CF).unwrap();
 /// 
 /// P1::transaction(|j1| {
 ///     let temp = pool1::Pbox::new(10, j1);
@@ -794,7 +854,7 @@ macro_rules! pool {
             pub use $crate::cell::{RootCell, RootObj};
             pub use $crate::clone::PClone;
             pub use $crate::convert::PFrom;
-            pub use $crate::str::ToString;
+            pub use $crate::str::ToPString;
             pub use $crate::stm::transaction;
             pub use $crate::ptr::Ptr;
 
@@ -977,6 +1037,11 @@ macro_rules! pool {
             }
 
             unsafe impl MemPool for BuddyAlloc {
+                #[inline]
+                fn name() -> &'static str {
+                    stringify!($name)
+                }
+
                 /// Formats the image file
                 unsafe fn format(filename: &str) -> Result<()> {
                     if Path::new(filename).exists() {
@@ -1177,20 +1242,32 @@ macro_rules! pool {
                 #[allow(unused_unsafe)]
                 #[track_caller]
                 unsafe fn drop_journal(journal: &mut Journal) {
+                    let _vdata = match VDATA.lock() {
+                        Ok(g) => g,
+                        Err(p) => p.into_inner()
+                    };
                     static_inner!(BUDDY_INNER, inner, {
                         let off = Self::off(journal).unwrap();
-                        if inner.logs == off {
-                            inner.logs = journal.next_off();
-                        }
-
+                    
                         #[cfg(feature = "pin_journals")]
                         journal.drop_pages();
 
-                        Self::free_nolog(journal);
-                    })
+                        let z = Self::pre_dealloc(journal as *mut _ as *mut u8, mem::size_of::<Journal>());
+                        if inner.logs == off {
+                            Self::log64(Self::off_unchecked(&inner.logs), journal.next_off(), z);
+                        }
+                        if let Ok(prev) = Self::deref_mut::<Journal>(journal.prev_off()) {
+                            Self::log64(Self::off_unchecked(prev.next_off_ref()), journal.next_off(), z);
+                        }
+                        if let Ok(next) = Self::deref_mut::<Journal>(journal.next_off()) {
+                            Self::log64(Self::off_unchecked(next.prev_off_ref()), journal.prev_off(), z);
+                        }
+                        Self::perform(z);
+                    });
                 }
 
                 #[allow(unused_unsafe)]
+                #[track_caller]
                 unsafe fn journals<T, F: Fn(&mut HashMap<ThreadId, (u64, i32)>)->T>(f: F)->T{
                     let mut vdata = match VDATA.lock() {
                         Ok(g) => g,
@@ -1199,7 +1276,7 @@ macro_rules! pool {
                     if let Some(vdata) = &mut *vdata {
                         f(&mut vdata.journals)
                     } else {
-                        panic!("No memory pool is open");
+                        panic!("No memory pool is open or the root object is moved to a transaction. Try cloning the root object instead of moving it to a transaction.");
                     }
                 }
 
@@ -1402,31 +1479,13 @@ macro_rules! pool {
 crate::pool!(default);
 
 #[cfg(feature = "verbose")]
-pub fn debug_alloc(addr: u64, len: usize, pre: usize, post: usize) {
-    println!(
-        "{}",
-        Green.paint(format!(
-            "                     PRE: {:<6}  ({:>4}..{:<4}) = {:<4}  POST = {:<6}",
-            pre,
-            addr,
-            addr + len as u64 - 1,
-            len,
-            post
-        ))
-    );
+pub fn debug_alloc<A: MemPool>(addr: u64, len: usize, pre: usize, post: usize) {
+    crate::log!(A, Green, "", "PRE: {:<6}  ({:>4}..{:<4}) = {:<4}  POST = {:<6}",
+        pre, addr, addr + len as u64 - 1, len, post);
 }
 
 #[cfg(feature = "verbose")]
-pub fn debug_dealloc(addr: u64, len: usize, pre: usize, post: usize) {
-    println!(
-        "{}",
-        Red.paint(format!(
-            "          DEALLOC    PRE: {:<6}  ({:>4}..{:<4}) = {:<4}  POST = {:<6}",
-            pre,
-            addr,
-            addr + len as u64 - 1,
-            len,
-            post
-        ))
-    );
+pub fn debug_dealloc<A: MemPool>(addr: u64, len: usize, pre: usize, post: usize) {
+    crate::log!(A, Red, "DEALLOC", "PRE: {:<6}  ({:>4}..{:<4}) = {:<4}  POST = {:<6}",
+        pre, addr, addr + len as u64 - 1, len, post);
 }

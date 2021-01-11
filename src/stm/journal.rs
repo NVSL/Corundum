@@ -3,7 +3,6 @@ use crate::alloc::MemPool;
 use crate::ll::*;
 use crate::ptr::Ptr;
 use crate::stm::{Chaperon, Log, LogEnum, Notifier};
-use crate::str::String;
 use crate::*;
 use std::fmt::{Debug, Error, Formatter};
 
@@ -56,9 +55,10 @@ pub struct Journal<A: MemPool> {
     sec_id: u64,
     prev_off: u64,
     next_off: u64,
-    chaperon: String<A>,
+    chaperon: [u8;64],
 }
 
+impl<A: MemPool> !PSafe for Journal<A> {}
 impl<A: MemPool> !Send for Journal<A> {}
 impl<A: MemPool> !Sync for Journal<A> {}
 impl<A: MemPool> !TxOutSafe for Journal<A> {}
@@ -155,7 +155,7 @@ impl<A: MemPool> Journal<A> {
             sec_id: 0,
             next_off: u64::MAX,
             prev_off: u64::MAX,
-            chaperon: String::default(),
+            chaperon: [0; 64],
         }
     }
 
@@ -171,7 +171,7 @@ impl<A: MemPool> Journal<A> {
     }
 
     /// Resets a flag
-    pub(crate) fn reset(&mut self, flag: u64) {
+    pub(crate) fn unset(&mut self, flag: u64) {
         self.flags &= !flag;
     }
 
@@ -187,10 +187,8 @@ impl<A: MemPool> Journal<A> {
             self.next_off = *head_off;
             A::log64(A::off_unchecked(head_off), me, zone);
 
-            // FIXME: updating the `prev_off` of the next journal is not atomic.
-            // Therefore, it should relink it during the recovery procedure.
-            if let Ok(j) = A::deref_mut::<Journal<A>>(self.next_off) {
-                j.prev_off = me;
+            if let Ok(j) = A::deref_mut::<Journal<A>>(*head_off) {
+                A::log64(A::off_unchecked(&j.prev_off), me, zone);
             }
         }
     }
@@ -316,42 +314,38 @@ impl<A: MemPool> Journal<A> {
 
     /// Clears all logs and drops itself from the memory pool
     pub fn clear(&mut self) {
-        unsafe {
-            #[cfg(feature = "pin_journals")]
-            {
-                let mut page = self.pages.as_option();
-                while let Some(p) = page {
-                    p.clear();
-                    page = p.next.as_option();
-                }
-                self.current = self.pages;
+        #[cfg(feature = "pin_journals")]
+        {
+            let mut page = self.pages.as_option();
+            while let Some(p) = page {
+                p.clear();
+                page = p.next.as_option();
             }
+            self.current = self.pages;
+        }
 
-            #[cfg(not(feature = "pin_journals"))]
-            {
-                while let Some(page) = self.pages.clone().as_option() {
-                    let nxt = page.next;
-                    page.clear();
-                    let z = A::pre_dealloc(page.as_mut_ptr() as *mut u8, std::mem::size_of::<Page<A>>());
-                    A::log64(A::off_unchecked(self.pages.off_ref()), nxt.off(), z);
-                    A::perform(z);
-                }
+        #[cfg(not(feature = "pin_journals"))] unsafe {
+            while let Some(page) = self.pages.clone().as_option() {
+                let nxt = page.next;
+                page.clear();
+                let z = A::pre_dealloc(page.as_mut_ptr() as *mut u8, std::mem::size_of::<Page<A>>());
+                A::log64(A::off_unchecked(self.pages.off_ref()), nxt.off(), z);
+                A::perform(z);
             }
-            if let Ok(prev) = A::deref_mut::<Self>(self.prev_off) {
-                prev.next_off = self.next_off;
-            }
-            if let Ok(next) = A::deref_mut::<Self>(self.next_off) {
-                next.prev_off = self.prev_off;
-            }
-            self.complete();
+        }
+        // if let Ok(prev) = A::deref_mut::<Self>(self.prev_off) {
+        //     prev.next_off = self.next_off;
+        // }
+        // if let Ok(next) = A::deref_mut::<Self>(self.next_off) {
+        //     next.prev_off = self.prev_off;
+        // }
+        self.complete();
 
-            #[cfg(not(feature = "pin_journals"))]
-            {
-                A::drop_journal(self);
-                A::journals(|journals| {
-                    journals.remove(&std::thread::current().id());
-                });
-            }
+        #[cfg(not(feature = "pin_journals"))] unsafe {
+            A::drop_journal(self);
+            A::journals(|journals| {
+                journals.remove(&std::thread::current().id());
+            });
         }
     }
 
@@ -385,10 +379,9 @@ impl<A: MemPool> Journal<A> {
             false
         } else {
             if self.sec_id != 0 && !self.chaperon.is_empty() {
-                let c = unsafe { Chaperon::load(self.chaperon.as_str().to_string())
-                    .expect(&format!("Missing chaperon file `{}`",
-                    self.chaperon.as_str()
-                )) };
+                let s = String::from_utf8(self.chaperon.to_vec()).unwrap();
+                let c = unsafe { Chaperon::load(&s)
+                    .expect(&format!("Missing chaperon file `{}`", s)) };
                 if c.completed() {
                     true
                 } else {
@@ -401,34 +394,36 @@ impl<A: MemPool> Journal<A> {
     }
 
     pub(crate) fn start_session(&mut self, chaperon: &mut Chaperon) {
-        unsafe {
-            let filename = String::<A>::from_str_nolog(chaperon.filename());
-            if self.sec_id != 0 {
-                if self.chaperon != filename {
-                    panic!("Cannot attach to another chaperoned session");
-                }
-                return;
-            }
-            self.chaperon.free_nolog();
-            self.chaperon = filename;
-            self.sec_id = chaperon.new_section() as u64;
+        let mut filename = [0u8; 64]; 
+        let s = chaperon.filename().as_bytes();
+        for i in 0..usize::min(64,s.len()) {
+            filename[i] = s[i];
         }
+        if self.sec_id != 0 {
+            if self.chaperon != filename {
+                panic!("Cannot attach to another chaperoned session");
+            }
+            return;
+        }
+        self.chaperon = filename;
+        self.sec_id = chaperon.new_section() as u64;
     }
 
     pub(crate) fn complete(&mut self) {
         if self.sec_id != 0 && !self.chaperon.is_empty() {
             unsafe {
-                if let Ok(c) = Chaperon::load(self.chaperon.as_str().to_string()) {
+                let s = String::from_utf8(self.chaperon.to_vec()).unwrap();
+                if let Ok(c) = Chaperon::load(&s) {
                     // If file not exists, it is on the normal path on the first
                     // execution. The existence of the file is already checked
                     // earlier in the recovery procedure.
                     let id = self.sec_id;
-                    self.chaperon.free_nolog();
+                    self.chaperon = [0; 64];
                     self.sec_id = 0;
                     msync_obj(&self.sec_id);
                     c.finish(id as usize);
                 } else {
-                    self.chaperon.free_nolog();
+                    self.chaperon = [0; 64];
                     self.sec_id = 0;
                 }
             }
@@ -440,14 +435,28 @@ impl<A: MemPool> Journal<A> {
         unsafe { Ptr::from_off_unchecked(self.next_off) }
     }
 
-    /// Returns the offset of the next journal, if any. Otherwise, returns zero
+    /// Returns the offset of the next journal, if any. Otherwise, returns `u64::MAX`
     pub unsafe fn next_off(&self) -> u64 {
         self.next_off
+    }
+
+    /// Returns the offset of the previous journal, if any. Otherwise, returns `u64::MAX`
+    pub unsafe fn prev_off(&self) -> u64 {
+        self.prev_off
+    }
+
+    pub unsafe fn next_off_ref(&self) -> &u64 {
+        &self.next_off
+    }
+
+    pub unsafe fn prev_off_ref(&self) -> &u64 {
+        &self.prev_off
     }
 
     /// Returns a journal for the current thread. If there is no `Journal`
     /// object for the running thread, it may create a new journal and returns
     /// its mutable reference. Each thread may have only one journal.
+    #[track_caller]
     pub(crate) fn current(create: bool) -> Option<(*const Journal<A>, *mut i32)>
     where
         Self: Sized,

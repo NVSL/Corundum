@@ -21,7 +21,7 @@ use std::ptr::NonNull;
 /// [`Vec<T,P>`]: ../vec/struct.Vec.html
 /// [`String<P>`]: ../str/struct.String.html
 /// 
-pub struct Ptr<T: PSafe + ?Sized, A: MemPool> {
+pub struct Ptr<T: ?Sized, A: MemPool> {
     off: u64,
     marker: PhantomData<(A, T)>,
 }
@@ -60,7 +60,7 @@ impl<A: MemPool, T: PSafe> Ptr<T, A> {
     }
 }
 
-impl<A: MemPool, T: PSafe + ?Sized> Ptr<T, A> {
+impl<A: MemPool, T: ?Sized> Ptr<T, A> {
     #[inline]
     /// Creates new `Ptr` if `p` is valid
     pub(crate) fn new(p: &T) -> Option<Ptr<T, A>> {
@@ -165,7 +165,6 @@ impl<A: MemPool, T: PSafe + ?Sized> Ptr<T, A> {
     pub(crate) unsafe fn new_unchecked(ptr: *const T) -> Self {
         Self {
             off: A::off_unchecked(ptr),
-
             marker: PhantomData,
         }
     }
@@ -193,6 +192,7 @@ impl<A: MemPool, T: PSafe + ?Sized> Ptr<T, A> {
     }
 
     #[inline]
+    #[track_caller]
     /// Consumes self as converts in to `Option<Self>` considering it whether
     /// points to a valid address or not.
     pub(crate) fn as_option(&mut self) -> Option<&mut Self> {
@@ -319,7 +319,7 @@ impl<A: MemPool, T: PSafe + ?Sized> Ptr<T, A> {
 //     }
 // }
 
-impl<A: MemPool, T: PSafe + ?Sized> PartialEq for Ptr<T, A> {
+impl<A: MemPool, T: ?Sized> PartialEq for Ptr<T, A> {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
         self.off == other.off

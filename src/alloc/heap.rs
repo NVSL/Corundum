@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use crate::cell::RootCell;
-use crate::utils::Ring;
+use crate::utils::*;
 use crate::alloc::MemPool;
 use crate::result::Result;
 use crate::stm::{Chaperon, Journal};
@@ -11,13 +11,7 @@ use std::ops::Range;
 use std::sync::Mutex;
 use std::thread::ThreadId;
 
-#[cfg(feature = "verbose")]
-use term_painter::Color::*;
-
-#[cfg(feature = "verbose")]
-use term_painter::ToStyle;
-
-/// A pass-through allocator for volatile memory
+/// A pass-through allocator for demote memory
 pub struct Heap {}
 
 static mut JOURNALS: Option<HashMap<ThreadId, (u64, i32)>> = None;
@@ -29,6 +23,10 @@ lazy_static! {
 }
 
 unsafe impl MemPool for Heap {
+    fn name() -> &'static str {
+        "heap"
+    }
+
     #[inline]
     fn rng() -> Range<u64> {
         0..u64::MAX
@@ -55,17 +53,8 @@ unsafe impl MemPool for Heap {
         let r = alloc(Layout::from_size_align_unchecked(size, 1));
         let addr = r as u64;
         let len = size as u64;
-        println!(
-            "{}",
-            Green.paint(format!(
-                "                     PRE: {:<6}  ({:>4}..{:<4}) = {:<4}  POST = {:<6}",
-                0,
-                addr,
-                addr + len - 1,
-                len,
-                0
-            ))
-        );
+        log!(Self, Green, "", "PRE: {:<6}  ({:>4}..{:<4}) = {:<4}  POST = {:<6}",
+            0, addr, addr + len - 1, len, 0);
         (r, addr, size, 0)
     }
 
@@ -74,17 +63,8 @@ unsafe impl MemPool for Heap {
         Self::discard(0);
         let start = ptr as u64;
         let end = start + size as u64;
-        println!(
-            "{}",
-            Red.paint(format!(
-                "          DEALLOC    PRE: {:<6}  ({:>4}..{:<4}) = {:<4}  POST = {:<6}",
-                0,
-                start,
-                end,
-                end - start + 1,
-                0
-            ))
-        );
+        log!(Self, Red, "DEALLOC", "PRE: {:<6}  ({:>4}..{:<4}) = {:<4}  POST = {:<6}",
+            0, start, end, end - start + 1, 0);
         dealloc(ptr, Layout::from_size_align_unchecked(size, 1));
         0
     }

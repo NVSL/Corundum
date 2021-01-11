@@ -1,3 +1,4 @@
+use std::fmt::Display;
 use crate::hashmap::HashMap;
 use crate::stack::Stack;
 use corundum::default::*;
@@ -46,7 +47,7 @@ impl Consumer {
         loop {
             // Read from global buffer to the local buffer
             if !P::transaction(|j| {
-                if let Some(slf) = slf.upgrade(j) {
+                if let Some(slf) = slf.promote(j) {
                     let mut this = slf.data.lock(j);
                     if this.buf.is_empty() {
                         let mut lines = slf.lines.lock(j);
@@ -68,15 +69,13 @@ impl Consumer {
                 } else {
                     false
                 }
-            })
-            .unwrap()
-            {
+            }).unwrap() {
                 return;
             }
 
             // counting words
             P::transaction(|j| {
-                if let Some(slf) = slf.upgrade(j) {
+                if let Some(slf) = slf.promote(j) {
                     let mut this = slf.data.lock(j);
                     if !this.buf.is_empty() {
                         let buf = this.buf.to_string();
@@ -89,12 +88,11 @@ impl Consumer {
                         this.buf.clear();
                     }
                 }
-            })
-            .unwrap();
+            }).unwrap();
 
             // Updating global `words` buffer with the local buffer
             P::transaction(|j| {
-                if let Some(slf) = slf.upgrade(j) {
+                if let Some(slf) = slf.promote(j) {
                     let mut this = slf.data.lock(j);
                     let mut words = slf.words.lock(j);
                     this.local.foreach(|k, v| {
@@ -102,8 +100,7 @@ impl Consumer {
                     });
                     this.local.clear(j);
                 }
-            })
-            .unwrap();
+            }).unwrap();
         }
     }
 
@@ -111,7 +108,17 @@ impl Consumer {
         P::transaction(|j| {
             let mut this = self.data.lock(j);
             this.active = false;
-        })
-        .unwrap();
+        }).unwrap();
+    }
+}
+
+impl Display for Consumer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        let s = P::transaction(move |j| {
+            let data = self.data.lock(j);
+            format!("buf=\x1b[0;31m{}\x1b[0m\nlocal:\n\x1b[0;31m{}\x1b[0m", data.buf, data.local)
+        }).unwrap();
+        writeln!(f, "{}", s)?;
+        Ok(())
     }
 }

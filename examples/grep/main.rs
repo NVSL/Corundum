@@ -113,8 +113,19 @@ fn main() {
             }
         }
     }
-
+    
     let root = P::open::<Root>(&pool, O_CFNE | O_8GB).unwrap();
+    // P::transaction(|j| {
+    //     let b = Pbox::new(PRefCell::new(
+    //         ("test".to_pstring(j), 12)
+    //         , j), j);
+    //     let mut k = b.borrow_mut(j);
+    //     for _ in 0..4 {
+    //         k.0.pop();
+    //     }
+    // }).unwrap();
+
+    // return;
 
     P::transaction(|j| {
         let mut producers = root.producers.borrow_mut(j);
@@ -162,8 +173,7 @@ fn main() {
                 );
             }
         }
-    })
-    .unwrap();
+    }).unwrap();
 
     eprintln!(
         "Total remaining from previous run: {} ",
@@ -178,12 +188,12 @@ fn main() {
         let mut c_threads = vec![];
 
         for i in 0..producers.len() {
-            let producer = producers[i].volatile();
+            let producer = producers[i].demote();
             p_threads.push(thread::spawn(move || Producer::start(producer)))
         }
 
         for i in 0..consumers.len() {
-            let consumer = consumers[i].volatile();
+            let consumer = consumers[i].demote();
             c_threads.push(thread::spawn(move || Consumer::start(consumer)))
         }
 
@@ -204,16 +214,8 @@ fn main() {
         // Display results
         P::transaction(|j| {
             let words = root.words.lock(j);
-            let mut vec = vec![];
-            words.foreach(|word, freq| {
-                vec.push((word.to_string(), freq.clone()));
-            });
-            vec.sort_by(|x, y| x.0.cmp(&y.0));
-            for (word, freq) in vec {
-                println!("{:>32}: {}", word, freq);
-            }
-        })
-        .unwrap();
+            println!("{}", words);
+        }).unwrap();
     }
     println!("Memory usage = {} bytes", P::used());
 }

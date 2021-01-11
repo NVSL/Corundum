@@ -152,7 +152,7 @@ impl Chaperon {
             a.filename[i] = bytes[i];
         }
         file.write_all(a.as_bytes()).unwrap();
-        unsafe { Self::load(filename) }
+        unsafe { Self::load(&filename) }
     }
 
     fn deref(raw: *mut u8) -> &'static mut Self {
@@ -170,7 +170,7 @@ impl Chaperon {
     }
 
     /// Loads a chaperon file
-    pub unsafe fn load(filename: String) -> io::Result<&'static mut Self> {
+    pub unsafe fn load(filename: &str) -> io::Result<&'static mut Self> {
         if Path::new(&filename).exists() {
             let file = OpenOptions::new().read(true).write(true).open(&filename)?;
             let mut mmap = memmap::MmapOptions::new().map_mut(&file).unwrap();
