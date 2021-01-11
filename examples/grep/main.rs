@@ -115,17 +115,6 @@ fn main() {
     }
     
     let root = P::open::<Root>(&pool, O_CFNE | O_8GB).unwrap();
-    // P::transaction(|j| {
-    //     let b = Pbox::new(PRefCell::new(
-    //         ("test".to_pstring(j), 12)
-    //         , j), j);
-    //     let mut k = b.borrow_mut(j);
-    //     for _ in 0..4 {
-    //         k.0.pop();
-    //     }
-    // }).unwrap();
-
-    // return;
 
     P::transaction(|j| {
         let mut producers = root.producers.borrow_mut(j);
@@ -166,7 +155,7 @@ fn main() {
             for _ in 0..c {
                 consumers.push(
                     Parc::new(
-                        Consumer::new(&pattern, root.lines.pclone(j), root.words.pclone(j), j),
+                        Consumer::new(&pattern, root.lines.pclone(j), j),
                         j,
                     ),
                     j,
@@ -187,14 +176,14 @@ fn main() {
         let mut p_threads = vec![];
         let mut c_threads = vec![];
 
-        for i in 0..producers.len() {
-            let producer = producers[i].demote();
-            p_threads.push(thread::spawn(move || Producer::start(producer)))
+        for p in &*producers {
+            let p = p.demote();
+            p_threads.push(thread::spawn(move || Producer::start(p)))
         }
 
-        for i in 0..consumers.len() {
-            let consumer = consumers[i].demote();
-            c_threads.push(thread::spawn(move || Consumer::start(consumer)))
+        for c in &*consumers {
+            let c = c.demote();
+            c_threads.push(thread::spawn(move || Consumer::start(c)))
         }
 
         for thread in p_threads {
@@ -213,6 +202,9 @@ fn main() {
 
         // Display results
         P::transaction(|j| {
+            for c in &*consumers {
+                c.collect(root.words.pclone(j), j);
+            }
             let words = root.words.lock(j);
             println!("{}", words);
         }).unwrap();

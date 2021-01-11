@@ -17,20 +17,17 @@ pub struct Consumer {
     pattern: PString,
     data: PMutex<ConsumerData>,
     lines: Parc<PMutex<Stack<PString>>>,
-    words: Parc<PMutex<HashMap<PString, u64>>>,
 }
 
 impl Consumer {
     pub fn new(
         pattern: &str,
         lines: Parc<PMutex<Stack<PString>>>,
-        words: Parc<PMutex<HashMap<PString, u64>>>,
         j: &Journal,
     ) -> Self {
         Self {
             pattern: PString::from_str(pattern, j),
             lines,
-            words,
             data: PMutex::new(
                 ConsumerData {
                     buf: PString::new(j),
@@ -89,19 +86,16 @@ impl Consumer {
                     }
                 }
             }).unwrap();
-
-            // Updating global `words` buffer with the local buffer
-            P::transaction(|j| {
-                if let Some(slf) = slf.promote(j) {
-                    let mut this = slf.data.lock(j);
-                    let mut words = slf.words.lock(j);
-                    this.local.foreach(|k, v| {
-                        words.update_with(k, j, |v0| v0 + v);
-                    });
-                    this.local.clear(j);
-                }
-            }).unwrap();
         }
+    }
+
+    pub fn collect(&self, words: Parc<PMutex<HashMap<PString, u64>>>, j: &Journal) {
+        let mut this = self.data.lock(j);
+        let mut words = words.lock(j);
+        this.local.foreach(|k, v| {
+            words.update_with(k, j, |v0| v0 + v);
+        });
+        this.local.clear(j);
     }
 
     pub fn stop_when_finished(&self) {
