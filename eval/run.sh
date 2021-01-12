@@ -128,23 +128,24 @@ if $all || $atlas; then
 fi
 
 if $all || $mnemosyne; then
-    d=$dir_path/mnemosyne/mnemosyne-gcc/usermode/build/examples
+    cd $dir_path/mnemosyne/mnemosyne-gcc/usermode
     rm -rf /mnt/pmem0/psegments
     echo "Running performance test (Mnemosyne-BST:INS)..."
-    perf stat -C 0 -o $dir_path/outputs/perf/mnemosyne-bst-INS.out -d $d/btree/btree s 30000
+    perf stat -C 0 -o $dir_path/outputs/perf/mnemosyne-bst-INS.out -d ./build/examples/btree/btree s 30000
     echo "Running performance test (Mnemosyne-BST:CHK)..."
-    perf stat -C 0 -o $dir_path/outputs/perf/mnemosyne-bst-CHK.out -d $d/btree/btree r 30000
+    perf stat -C 0 -o $dir_path/outputs/perf/mnemosyne-bst-CHK.out -d ./build/examples/btree/btree r 30000
 
     echo "Running performance test (Mnemosyne-KVStore:PUT)..."
-    perf stat -C 0 -o $dir_path/outputs/perf/mnemosyne-kv-PUT.out -d $d/simplekv/simplekv burst put 100000
+    perf stat -C 0 -o $dir_path/outputs/perf/mnemosyne-kv-PUT.out -d ./build/examples/simplekv/simplekv burst put 100000
     echo "Running performance test (Mnemosyne-KVStore:GET)..."
-    perf stat -C 0 -o $dir_path/outputs/perf/mnemosyne-kv-GET.out -d $d/simplekv/simplekv burst get 100000
+    perf stat -C 0 -o $dir_path/outputs/perf/mnemosyne-kv-GET.out -d ./build/examples/simplekv/simplekv burst get 100000
 
     rm -rf /mnt/pmem0/psegments
     for i in ${ins[@]}; do
         echo "Running performance test (Mnemosyne-B+Tree:$i)..."
-        perf stat -C 0-4 -o $dir_path/outputs/perf/mnemosyne-$i.out -d $d/btree_map/btree_map < $dir_path/inputs/perf/$i > /dev/null
+        perf stat -C 0-4 -o $dir_path/outputs/perf/mnemosyne-$i.out -d ./build/examples/btree_map/btree_map < $dir_path/inputs/perf/$i > /dev/null
     done
+    cd $dir_path
 fi
 
 if $all || $go; then
