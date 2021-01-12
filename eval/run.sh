@@ -70,9 +70,11 @@ cargo build --release --example grep --features="$clflushopt"
 ls -1 $dir_path/inputs/wc/* > $dir_path/files.list
 mkdir -p $dir_path/outputs/wc
 
+rs=(1)
+cs=`seq 15`
 if $all || $scale; then
-    for r in 1; do
-        for c in 1 2 3 4 7 11 15; do
+    for r in ${rs[@]}; do
+        for c in ${cs[@]}; do
             rm -f $pool
             echo -e "\nRunning scalability test $r:$c ..."
             perf stat -o $dir_path/outputs/wc/$r-$c.out -C 0-$(($r+$c-1)) $dir_path/../target/release/examples/grep -r $r -c $c -f $pool $dir_path/files.list > $dir_path/outputs/wc/$r-$c.res
@@ -96,9 +98,9 @@ if $all || $pmdk; then
     rm -f $pool
     pmempool create obj --layout=simplekv -s 1G $pool
     echo "Running performance test (PMDK-KVStore:PUT)..."
-    CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=$nofopt PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-kv-PUT.out -d $dir_path/pmdk/simplekv $pool burst put 100000
+    CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=$nofopt PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-kv-PUT.out -d $dir_path/pmdk/simplekv $pool burst put 65536
     echo "Running performance test (PMDK-KVStore:GET)..."
-    CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=$nofopt PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-kv-GET.out -d $dir_path/pmdk/simplekv $pool burst get 100000
+    CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=$nofopt PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-kv-GET.out -d $dir_path/pmdk/simplekv $pool burst get 65536
 
 
     rm -f $pool
@@ -116,9 +118,9 @@ if $all || $atlas; then
     perf stat -C 0 -o $dir_path/outputs/perf/atlas-bst-CHK.out -d $dir_path/atlas/Atlas/runtime/build/tests/data_structures/btree r 30000
 
     echo "Running performance test (Atlas-KVStore:PUT)..."
-    perf stat -C 0 -o $dir_path/outputs/perf/atlas-kv-PUT.out -d $dir_path/atlas/Atlas/runtime/build/tests/data_structures/simplekv burst put 100000
+    perf stat -C 0 -o $dir_path/outputs/perf/atlas-kv-PUT.out -d $dir_path/atlas/Atlas/runtime/build/tests/data_structures/simplekv burst put 65536
     echo "Running performance test (Atlas-KVStore:GET)..."
-    perf stat -C 0 -o $dir_path/outputs/perf/atlas-kv-GET.out -d $dir_path/atlas/Atlas/runtime/build/tests/data_structures/simplekv burst get 100000
+    perf stat -C 0 -o $dir_path/outputs/perf/atlas-kv-GET.out -d $dir_path/atlas/Atlas/runtime/build/tests/data_structures/simplekv burst get 65536
 
     rm -rf /mnt/pmem0/`whoami`  # Static in the code
     for i in ${ins[@]}; do
@@ -136,9 +138,9 @@ if $all || $mnemosyne; then
     perf stat -C 0 -o $dir_path/outputs/perf/mnemosyne-bst-CHK.out -d ./build/examples/btree/btree r 30000
 
     echo "Running performance test (Mnemosyne-KVStore:PUT)..."
-    perf stat -C 0 -o $dir_path/outputs/perf/mnemosyne-kv-PUT.out -d ./build/examples/simplekv/simplekv burst put 100000
+    perf stat -C 0 -o $dir_path/outputs/perf/mnemosyne-kv-PUT.out -d ./build/examples/simplekv/simplekv burst put 65536
     echo "Running performance test (Mnemosyne-KVStore:GET)..."
-    perf stat -C 0 -o $dir_path/outputs/perf/mnemosyne-kv-GET.out -d ./build/examples/simplekv/simplekv burst get 100000
+    perf stat -C 0 -o $dir_path/outputs/perf/mnemosyne-kv-GET.out -d ./build/examples/simplekv/simplekv burst get 65536
 
     rm -rf /mnt/pmem0/psegments
     for i in ${ins[@]}; do
@@ -157,9 +159,9 @@ if $all || $go; then
 
     rm -f $pool
     echo "Running performance test (go-pmem-KVStore:PUT)..."
-    perf stat -C 0 -o $dir_path/outputs/perf/go-kv-PUT.out -d $dir_path/go/simplekv $pool burst put 100000
+    perf stat -C 0 -o $dir_path/outputs/perf/go-kv-PUT.out -d $dir_path/go/simplekv $pool burst put 65536
     echo "Running performance test (go-pmem-KVStore:GET)..."
-    perf stat -C 0 -o $dir_path/outputs/perf/go-kv-GET.out -d $dir_path/go/simplekv $pool burst get 100000
+    perf stat -C 0 -o $dir_path/outputs/perf/go-kv-GET.out -d $dir_path/go/simplekv $pool burst get 65536
 
     rm -f $pool
     for i in ${ins[@]}; do
@@ -177,9 +179,9 @@ if $all || $crndm; then
 
     rm -f $pool
     echo "Running performance test (Corundum-KVStore:PUT)..."
-    CPUS=1 perf stat -C 0 -o $dir_path/outputs/perf/crndm-kv-PUT.out -d $dir_path/../target/release/examples/simplekv $pool burst put 100000
+    CPUS=1 perf stat -C 0 -o $dir_path/outputs/perf/crndm-kv-PUT.out -d $dir_path/../target/release/examples/simplekv $pool burst put 65536
     echo "Running performance test (Corundum-KVStore:GET)..."
-    CPUS=1 perf stat -C 0 -o $dir_path/outputs/perf/crndm-kv-GET.out -d $dir_path/../target/release/examples/simplekv $pool burst get 100000
+    CPUS=1 perf stat -C 0 -o $dir_path/outputs/perf/crndm-kv-GET.out -d $dir_path/../target/release/examples/simplekv $pool burst get 65536
 
     cd $dir_path/..
     cargo build --release --example mapcli --features="pin_journals,$clflushopt"
@@ -240,12 +242,16 @@ echo -n      $(read_time "$dir_path/outputs/perf/crndm-REM.out"),              >
 echo -n      $(read_time "$dir_path/outputs/perf/crndm-RAND.out")              >> $dir_path/outputs/perf.csv
 echo                                                                           >> $dir_path/outputs/perf.csv
 
-echo "p/c,1,2,3,4,7,11,15," > $dir_path/outputs/scale.csv
 
-for r in 1; do
-  echo -n "p=$r,"
-  for c in 1 2 3 4 7 11 15; do
-     echo -n $(read_time "$dir_path/outputs/wc/$r-$c.out"),
-  done
-  echo
+echo "p/c," > $dir_path/outputs/scale.csv
+(for c in ${cs[@]}; do
+    echo -n "$c,"
+done; echo) >> $dir_path/outputs/scale.csv
+
+for r in ${rs[@]}; do
+    echo -n "p=$r,"
+    for c in ${cs[@]}; do
+        echo -n $(read_time "$dir_path/outputs/wc/$r-$c.out"),
+    done
+    echo
 done >> $dir_path/outputs/scale.csv

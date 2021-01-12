@@ -44,5 +44,4 @@ scons build --build-example=btree_map
 scons build --build-example=simplekv
 
 echo "export PYTHONPATH=$dir_path/mnemosyne-gcc/usermode/library/configuration:\$PYTHONPATH
-export LD_LIBRARY_PATH=/usr/local/lib:\$LD_LIBRARY_PATH
-export PYTHONPATH=`pwd`/library/configuration:\$PYTHONPATH" >> $HOME/.corundum/env
+export LD_LIBRARY_PATH=/usr/local/lib:\$LD_LIBRARY_PATH" >> $HOME/.corundum/env

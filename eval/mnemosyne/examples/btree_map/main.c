@@ -314,7 +314,7 @@ btree_map_merge(struct btree_map *map, node_t *rn,
 
 	node->n += rn->n;
 
-	pfree(rn); /* right node is now empty */
+	// pfree(rn); /* right node is now empty */ It Is A BUG
 
 	parent->n -= 1;
 
