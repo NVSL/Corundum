@@ -217,15 +217,6 @@ btree_map_insert_item(node_t *node, int p,
 }
 
 /*
- * btree_map_is_empty -- checks whether the tree map is empty
- */
-int
-btree_map_is_empty(btree_map *map)
-{
-    return map->root == NULL || map->root->n == 0;
-}
-
-/*
  * btree_map_insert -- inserts a new key-value pair into the map
  */
 int
@@ -234,7 +225,7 @@ btree_map_insert(uint64_t key, void *value)
     PTx {
 	    struct tree_map_node_item item = {key, value};
         btree_map *m = PGET(map);
-        if (btree_map_is_empty(m)) {
+        if (m->root == NULL || m->root->n == 0) {
             btree_map_insert_empty(m, item);
         } else {
             int p; /* position at the dest node to insert */

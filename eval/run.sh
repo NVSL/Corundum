@@ -7,6 +7,7 @@ scale=false
 pmdk=false
 atlas=false
 go=false
+mnemosyne=false
 crndm=false
 nofopt=1
 
@@ -18,6 +19,7 @@ function help() {
     echo "    -a, --atlas      Run Atlas performance tests"
     echo "    -g, --go-pmem    Run go-pmem performance tests"
     echo "    -c, --corundum   Run Corundum performance tests"
+    echo "    -m, --mnemosyne  Run Corundum performance tests"
     echo "    -n, --no-run     Do not run the experiments"
     echo "    -h, --help       Display this information"
 }
@@ -123,6 +125,26 @@ if $all || $atlas; then
     done
 fi
 
+if $all || $mnemosyne; then
+    d=$dir_path/mnemosyne/mnemosyne-gcc/usermode/build/examples
+    rm -rf /mnt/pmem0/psegments
+    echo "Running performance test (Mnemosyne-BST:INS)..."
+    perf stat -C 0 -o $dir_path/outputs/perf/mnemosyne-bst-INS.out -d $d/btree/btree s 30000
+    echo "Running performance test (Mnemosyne-BST:CHK)..."
+    perf stat -C 0 -o $dir_path/outputs/perf/mnemosyne-bst-CHK.out -d $d/btree/btree r 30000
+
+    echo "Running performance test (Mnemosyne-KVStore:PUT)..."
+    perf stat -C 0 -o $dir_path/outputs/perf/mnemosyne-kv-PUT.out -d $d/simplekv/simplekv burst put 100000
+    echo "Running performance test (Mnemosyne-KVStore:GET)..."
+    perf stat -C 0 -o $dir_path/outputs/perf/mnemosyne-kv-GET.out -d $d/simplekv/simplekv burst get 100000
+
+    rm -rf /mnt/pmem0/psegments
+    for i in ${ins[@]}; do
+        echo "Running performance test (Mnemosyne-B+Tree:$i)..."
+        perf stat -C 0-4 -o $dir_path/outputs/perf/mnemosyne-$i.out -d $d/btree_map/btree_map < $dir_path/inputs/perf/$i > /dev/null
+    done
+fi
+
 if $all || $go; then
     rm -f $pool
     echo "Running performance test (go-pmem-BST:INS)..."
@@ -166,47 +188,56 @@ if $all || $crndm; then
     done
 fi
 
-echo ",Execution Time (s),,,,,,,,"                                         > $dir_path/outputs/perf.csv
-echo ",BST,,KVStore,,B+Tree,,,,"                                          >> $dir_path/outputs/perf.csv
-echo ",INS,CHK,PUT,GET,INS,CHK,REM,RAND"                                  >> $dir_path/outputs/perf.csv
-echo -n PMDK,$(read_time "$dir_path/outputs/perf/pmdk-bst-INS.out"),      >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/perf/pmdk-bst-CHK.out"),      >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/perf/pmdk-kv-PUT.out"),       >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/perf/pmdk-kv-GET.out"),       >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/perf/pmdk-INS.out"),          >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/perf/pmdk-CHK.out"),          >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/perf/pmdk-REM.out"),          >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/perf/pmdk-RAND.out")          >> $dir_path/outputs/perf.csv
-echo                                                                      >> $dir_path/outputs/perf.csv
-echo -n Atlas,$(read_time "$dir_path/outputs/perf/atlas-bst-INS.out"),    >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/perf/atlas-bst-CHK.out"),     >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/perf/atlas-kv-PUT.out"),      >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/perf/atlas-kv-GET.out"),      >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/perf/atlas-INS.out"),         >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/perf/atlas-CHK.out"),         >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/perf/atlas-REM.out"),         >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/perf/atlas-RAND.out")         >> $dir_path/outputs/perf.csv
-echo                                                                      >> $dir_path/outputs/perf.csv
-echo -n go-pmem,$(read_time "$dir_path/outputs/perf/go-bst-INS.out"),     >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/perf/go-bst-CHK.out"),        >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/perf/go-kv-PUT.out"),         >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/perf/go-kv-GET.out"),         >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/perf/go-INS.out"),            >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/perf/go-CHK.out"),            >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/perf/go-REM.out"),            >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/perf/go-RAND.out")            >> $dir_path/outputs/perf.csv
-echo                                                                      >> $dir_path/outputs/perf.csv
-echo -n Corundum,$(read_time "$dir_path/outputs/perf/crndm-bst-INS.out"), >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/perf/crndm-bst-CHK.out"),     >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/perf/crndm-kv-PUT.out"),      >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/perf/crndm-kv-GET.out"),      >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/perf/crndm-INS.out"),         >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/perf/crndm-CHK.out"),         >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/perf/crndm-REM.out"),         >> $dir_path/outputs/perf.csv
-echo -n      $(read_time "$dir_path/outputs/perf/crndm-RAND.out")         >> $dir_path/outputs/perf.csv
-echo                                                                      >> $dir_path/outputs/perf.csv
+echo ",Execution Time (s),,,,,,,,"                                              > $dir_path/outputs/perf.csv
+echo ",BST,,KVStore,,B+Tree,,,,"                                               >> $dir_path/outputs/perf.csv
+echo ",INS,CHK,PUT,GET,INS,CHK,REM,RAND"                                       >> $dir_path/outputs/perf.csv
+echo -n PMDK,$(read_time "$dir_path/outputs/perf/pmdk-bst-INS.out"),           >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/pmdk-bst-CHK.out"),           >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/pmdk-kv-PUT.out"),            >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/pmdk-kv-GET.out"),            >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/pmdk-INS.out"),               >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/pmdk-CHK.out"),               >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/pmdk-REM.out"),               >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/pmdk-RAND.out")               >> $dir_path/outputs/perf.csv
+echo                                                                           >> $dir_path/outputs/perf.csv
+echo -n Atlas,$(read_time "$dir_path/outputs/perf/atlas-bst-INS.out"),         >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/atlas-bst-CHK.out"),          >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/atlas-kv-PUT.out"),           >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/atlas-kv-GET.out"),           >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/atlas-INS.out"),              >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/atlas-CHK.out"),              >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/atlas-REM.out"),              >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/atlas-RAND.out")              >> $dir_path/outputs/perf.csv
+echo                                                                           >> $dir_path/outputs/perf.csv
+echo -n Mnemosyne,$(read_time "$dir_path/outputs/perf/mnemosyne-bst-INS.out"), >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/mnemosyne-bst-CHK.out"),      >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/mnemosyne-kv-PUT.out"),       >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/mnemosyne-kv-GET.out"),       >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/mnemosyne-INS.out"),          >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/mnemosyne-CHK.out"),          >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/mnemosyne-REM.out"),          >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/mnemosyne-RAND.out")          >> $dir_path/outputs/perf.csv
+echo                                                                           >> $dir_path/outputs/perf.csv
+echo -n go-pmem,$(read_time "$dir_path/outputs/perf/go-bst-INS.out"),          >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/go-bst-CHK.out"),             >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/go-kv-PUT.out"),              >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/go-kv-GET.out"),              >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/go-INS.out"),                 >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/go-CHK.out"),                 >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/go-REM.out"),                 >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/go-RAND.out")                 >> $dir_path/outputs/perf.csv
+echo                                                                           >> $dir_path/outputs/perf.csv
+echo -n Corundum,$(read_time "$dir_path/outputs/perf/crndm-bst-INS.out"),      >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/crndm-bst-CHK.out"),          >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/crndm-kv-PUT.out"),           >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/crndm-kv-GET.out"),           >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/crndm-INS.out"),              >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/crndm-CHK.out"),              >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/crndm-REM.out"),              >> $dir_path/outputs/perf.csv
+echo -n      $(read_time "$dir_path/outputs/perf/crndm-RAND.out")              >> $dir_path/outputs/perf.csv
+echo                                                                           >> $dir_path/outputs/perf.csv
 
-echo "p/c,c=1,c=2,c=3,c=4,c=7,c=11,c=15," > $dir_path/outputs/scale.csv
+echo "p/c,1,2,3,4,7,11,15," > $dir_path/outputs/scale.csv
 
 for r in 1; do
   echo -n "p=$r,"

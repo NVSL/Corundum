@@ -49,12 +49,13 @@ void btree_insert(int64_t key, const char *value) {
     node_t *btree = NULL;
     PTx { btree = PGET(root); }
     assert(btree);
-
-    PTx { 
+    int len = strlen(value);
+    len = (len < 32) ? len : 32;
+    PTx {
         node_t *node = (node_t *)pmalloc(sizeof(node_t));
         node->key = key;
-        if value {
-            strcpy(node->value, value);
+        if (value) {
+            memcpy(node->value, value, len);
         }
         node->slots[0] = node->slots[1] = NULL;
 

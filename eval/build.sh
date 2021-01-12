@@ -14,6 +14,7 @@ source $HOME/.cargo/env
 rustup default nightly
 rustup update
 
+mkdir $HOME/.corundum
 echo "source \$HOME/.cargo/env" >> $HOME/.corundum/env
 
 cd $dir_path/..
