@@ -27,19 +27,21 @@ function help() {
 while test $# -gt 0
 do
     case "$1" in
-        -h|--help)     help && exit 0
+        -h|--help)      help && exit 0
             ;;
-        -s|--scale)    all=false && scale=true
+        -s|--scale)     all=false && scale=true
             ;;
-        -p|--pmdk)     all=false && pmdk=true
+        -p|--pmdk)      all=false && pmdk=true
             ;;
-        -a|--atlas)    all=false && atlas=true
+        -a|--atlas)     all=false && atlas=true
             ;;
-        -g|--go-pmem)  all=false && go=true
+        -g|--go-pmem)   all=false && go=true
             ;;
-        -c|--corundum) all=false && crndm=true
+        -c|--corundum)  all=false && crndm=true
             ;;
-        -n|--no-run)   all=false
+        -m|--mnemosyne) all=false && mnemosyne=true
+            ;;
+        -n|--no-run)    all=false
             ;;
         --*)           echo "bad option $1"
             ;;
@@ -61,7 +63,7 @@ clflushopt=""
 if [ $nofopt -eq 0 ]; then
     clflushopt="use_clflushopt"
 fi
-cargo build --release --example --features="$clflushopt"
+cargo build --release --example grep --features="$clflushopt"
 
 [ -f $dir_path/inputs.tar.gz ] && tar xzvf $dir_path/inputs.tar.gz -C $dir_path && rm -f $dir_path/inputs.tar.gz
 
