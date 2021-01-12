@@ -192,7 +192,7 @@ impl<T: PSafe, A: MemPool> Pbox<T, A> {
     pub fn new_zeroed(journal: &Journal<A>) -> Pbox<mem::MaybeUninit<T>, A> {
         unsafe {
             let mut uninit = Self::new_uninit(journal);
-            ptr::write_bytes::<T>(uninit.get_mut().as_mut_ptr(), 0, 1);
+            ptr::write_bytes::<T>(uninit.as_mut().as_mut_ptr(), 0, 1);
             uninit
         }
     }
@@ -408,7 +408,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Pbox<T, A> {
         unsafe { Pin::new_unchecked(boxed) }
     }
 
-    fn get_mut(&mut self) -> &mut T {
+    pub unsafe fn as_mut(&mut self) -> &mut T {
         self.0.as_mut()
     }
 
@@ -522,43 +522,43 @@ impl<T: PSafe + Hasher + ?Sized, A: MemPool> Hasher for Pbox<T, A> {
         (**self).finish()
     }
     fn write(&mut self, bytes: &[u8]) {
-        self.get_mut().write(bytes)
+        unsafe { self.as_mut().write(bytes) }
     }
     fn write_u8(&mut self, i: u8) {
-        self.get_mut().write_u8(i)
+        unsafe { self.as_mut().write_u8(i) }
     }
     fn write_u16(&mut self, i: u16) {
-        self.get_mut().write_u16(i)
+        unsafe { self.as_mut().write_u16(i) }
     }
     fn write_u32(&mut self, i: u32) {
-        self.get_mut().write_u32(i)
+        unsafe { self.as_mut().write_u32(i) }
     }
     fn write_u64(&mut self, i: u64) {
-        self.get_mut().write_u64(i)
+        unsafe { self.as_mut().write_u64(i) }
     }
     fn write_u128(&mut self, i: u128) {
-        self.get_mut().write_u128(i)
+        unsafe { self.as_mut().write_u128(i) }
     }
     fn write_usize(&mut self, i: usize) {
-        self.get_mut().write_usize(i)
+        unsafe { self.as_mut().write_usize(i) }
     }
     fn write_i8(&mut self, i: i8) {
-        self.get_mut().write_i8(i)
+        unsafe { self.as_mut().write_i8(i) }
     }
     fn write_i16(&mut self, i: i16) {
-        self.get_mut().write_i16(i)
+        unsafe { self.as_mut().write_i16(i) }
     }
     fn write_i32(&mut self, i: i32) {
-        self.get_mut().write_i32(i)
+        unsafe { self.as_mut().write_i32(i) }
     }
     fn write_i64(&mut self, i: i64) {
-        self.get_mut().write_i64(i)
+        unsafe { self.as_mut().write_i64(i) }
     }
     fn write_i128(&mut self, i: i128) {
-        self.get_mut().write_i128(i)
+        unsafe { self.as_mut().write_i128(i) }
     }
     fn write_isize(&mut self, i: isize) {
-        self.get_mut().write_isize(i)
+        unsafe { self.as_mut().write_isize(i) }
     }
 }
 

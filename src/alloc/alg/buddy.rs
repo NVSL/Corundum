@@ -245,7 +245,6 @@ impl<A: MemPool> BuddyAlg<A> {
         });
         self.log64.clear();
         self.available = self.available_log;
-        self.aux_valid = false;
     }
 
     #[inline]
@@ -257,6 +256,7 @@ impl<A: MemPool> BuddyAlg<A> {
 
         self.drain_aux();
         self.drop_log.clear();
+        self.aux_valid = false;
         self.unlock();
     }
 
@@ -521,7 +521,6 @@ impl<A: MemPool> BuddyAlg<A> {
 
             // continue draining
             self.drain_aux();
-
 
             // drop unnecessary allocations
             if !self.drop_log.is_empty() {

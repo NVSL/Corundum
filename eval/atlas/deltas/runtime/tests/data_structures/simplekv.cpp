@@ -14,7 +14,8 @@ uint32_t kv_rgn_id;
 void show_usage(char *argv[])
 {
     std::cerr << "usage: " << argv[0]
-              << " [get key|put key value]" << std::endl;
+              << " [get key|put key value] |"
+              << " [burst get|put|putget count]" << std::endl;
 }
 
 void initialize()

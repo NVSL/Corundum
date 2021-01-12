@@ -1,3 +1,4 @@
+
 // SPDX-License-Identifier: BSD-3-Clause
 /* Copyright 2015-2019, Intel Corporation */
 
@@ -7,69 +8,34 @@
 
 #include <assert.h>
 #include <errno.h>
-#include <pthread.h>
 #include <stdio.h>
 #include <fcntl.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <inttypes.h>
 #include <string.h>
+#include <pmalloc.h>
 #include <unistd.h>
-
-#include "atlas_alloc.h"
-#include "atlas_api.h"
-
-#define BTREE_ORDER 8 /* can't be odd */
-#define BTREE_MIN ((BTREE_ORDER / 2) - 1) /* min number of keys per node */
-
-struct tree_map_node_item {
-	uint64_t key;
-	void *value;
-};
-
-typedef struct node_t {
-	int n; /* number of occupied slots */
-	struct tree_map_node_item items[BTREE_ORDER - 1];
-	struct node_t *slots[BTREE_ORDER];
-} node_t;
-
-typedef struct btree_map {
-	node_t *root;
-    pthread_mutex_t *root_lock;
-} btree_map;
-
-btree_map *map;
-
-// ID of Atlas persistent region
-uint32_t btree_rgn_id;
+#include "pvar.h"
 
 void initialize() {
-    void *rgn_root = NVM_GetRegionRoot(btree_rgn_id);
-    if (rgn_root) {
-        map = (btree_map *)rgn_root;
-        map->root_lock = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
-        pthread_mutex_init(map->root_lock, NULL);
-
-        fprintf(stderr, "Found btree at %p\n", (void *)map);
+    int found = 0;
+    PTx {
+        if (PGET(map) == NULL) {
+            btree_map *m = (btree_map*)pmalloc(sizeof(btree_map));
+            node_t *node = (node_t*)pmalloc(sizeof(node_t));
+            node->n = 0;
+            m->root = node;
+            PSET(map, m);
+        } else {
+            found = 1;
+        }
+    }
+    if (!found) {
+        fprintf(stderr, "Created the root object.\n");
     } else {
-        node_t *node = (node_t *)nvm_alloc(sizeof(node_t), btree_rgn_id);
-        node->n = 0;
-        map = (btree_map *)nvm_alloc(sizeof(btree_map), btree_rgn_id);
-        fprintf(stderr, "Created map at %p\n", (void *)map);
-
-        map->root_lock = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
-        pthread_mutex_init(map->root_lock, NULL);
-
-        NVM_BEGIN_DURABLE();
-
-        map->root = node;
-
-        // Set the root of the Atlas persistent region
-        NVM_SetRegionRoot(btree_rgn_id, map);
-
-        NVM_END_DURABLE();
+        fprintf(stderr, "Found the root object.\n");
     }
 }
 
@@ -95,7 +61,7 @@ btree_map_clear_node(node_t *node)
 		btree_map_clear_node(node->slots[i]);
 	}
 
-	nvm_free(node);
+	pfree(node);
 }
 
 /*
@@ -104,10 +70,11 @@ btree_map_clear_node(node_t *node)
 int
 btree_map_clear()
 {
-    pthread_mutex_lock(map->root_lock);
-    btree_map_clear_node(map->root);
-    map->root = NULL;
-    pthread_mutex_unlock(map->root_lock);
+    PTx {
+        btree_map *m = PGET(map);
+        btree_map_clear_node(m->root);
+        m->root = NULL;
+    }
 	return 0;
 }
 
@@ -129,7 +96,7 @@ static void
 btree_map_insert_empty(struct btree_map *map,
 	struct tree_map_node_item item)
 {
-	map->root = (node_t*)nvm_alloc(sizeof(node_t), btree_rgn_id);
+	map->root = (node_t*)pmalloc(sizeof(node_t));
     map->root->n = 0;
 
 	btree_map_insert_item_at(map->root, 0, item);
@@ -162,7 +129,7 @@ static node_t*
 btree_map_create_split_node(node_t *node,
 	struct tree_map_node_item *m)
 {
-	node_t *right = (node_t*)nvm_alloc(sizeof(node_t), btree_rgn_id);
+	node_t *right = (node_t*)pmalloc(sizeof(node_t));
     right->n = 0;
 
 	int c = (BTREE_ORDER / 2);
@@ -202,7 +169,7 @@ btree_map_find_dest_node(struct btree_map *map,
 			if (key > m.key) /* select node to continue search */
 				n = right;
 		} else { /* replacing root node, the tree grows in height */
-			node_t *up = (node_t*)nvm_alloc(sizeof(node_t), btree_rgn_id);
+			node_t *up = (node_t*)pmalloc(sizeof(node_t));
 			up->n = 1;
 			up->items[0] = m;
 			up->slots[0] = n;
@@ -253,32 +220,32 @@ btree_map_insert_item(node_t *node, int p,
  * btree_map_is_empty -- checks whether the tree map is empty
  */
 int
-btree_map_is_empty()
+btree_map_is_empty(btree_map *map)
 {
-	return map->root == NULL || map->root->n == 0;
+    return map->root == NULL || map->root->n == 0;
 }
 
 /*
  * btree_map_insert -- inserts a new key-value pair into the map
  */
 int
-btree_map_insert(
-	uint64_t key, void *value)
+btree_map_insert(uint64_t key, void *value)
 {
-	struct tree_map_node_item item = {key, value};
-    pthread_mutex_lock(map->root_lock);
-    if (btree_map_is_empty()) {
-        btree_map_insert_empty(map, item);
-    } else {
-        int p; /* position at the dest node to insert */
-        node_t *parent = NULL;
-        node_t *dest =
-            btree_map_find_dest_node(map, map->root,
-                parent, key, &p);
+    PTx {
+	    struct tree_map_node_item item = {key, value};
+        btree_map *m = PGET(map);
+        if (btree_map_is_empty(m)) {
+            btree_map_insert_empty(m, item);
+        } else {
+            int p; /* position at the dest node to insert */
+            node_t *parent = NULL;
+            node_t *dest =
+                btree_map_find_dest_node(m, m->root,
+                    parent, key, &p);
 
-        btree_map_insert_item(dest, p, item);
+            btree_map_insert_item(dest, p, item);
+        }
     }
-    pthread_mutex_unlock(map->root_lock);
 
 	return 0;
 }
@@ -356,7 +323,7 @@ btree_map_merge(struct btree_map *map, node_t *rn,
 
 	node->n += rn->n;
 
-	nvm_free(rn); /* right node is now empty */
+	pfree(rn); /* right node is now empty */
 
 	parent->n -= 1;
 
@@ -369,7 +336,7 @@ btree_map_merge(struct btree_map *map, node_t *rn,
 
 	/* if the parent is empty then the tree shrinks in height */
 	if (parent->n == 0 && parent == map->root) {
-		nvm_free(map->root);
+		pfree(map->root);
 		map->root = node;
 	}
 }
@@ -378,8 +345,7 @@ btree_map_merge(struct btree_map *map, node_t *rn,
  * btree_map_rebalance -- (internal) performs tree rebalance
  */
 static void
-btree_map_rebalance(struct btree_map *map, node_t *node,
-	node_t *parent, int p)
+btree_map_rebalance(struct btree_map *map, node_t *node, node_t *parent, int p)
 {
 	node_t *rsb = p >= parent->n ?
 		NULL : parent->slots[p + 1];
@@ -400,8 +366,7 @@ btree_map_rebalance(struct btree_map *map, node_t *node,
  * btree_map_get_leftmost_leaf -- (internal) searches for the successor
  */
 static node_t*
-btree_map_get_leftmost_leaf(struct btree_map *map,
-	node_t *n, node_t **p)
+btree_map_get_leftmost_leaf(struct btree_map *map, node_t *n, node_t **p)
 {
 	if (n->slots[0] == NULL)
 		return n;
@@ -491,9 +456,10 @@ btree_map_remove(uint64_t key)
 {
 	void *ret = NULL;
 	
-    pthread_mutex_lock(map->root_lock);
-    ret = btree_map_remove_item(map, map->root, NULL, key, 0);
-    pthread_mutex_unlock(map->root_lock);
+    PTx {
+        btree_map *m = PGET(map);
+        ret = btree_map_remove_item(m, m->root, NULL, key, 0);
+    }
 
 	return ret;
 }
@@ -520,9 +486,13 @@ btree_map_get_in_node(node_t *node, uint64_t key)
 void*
 btree_map_get(uint64_t key)
 {
-	if (map->root == NULL)
-		return NULL;
-	return btree_map_get_in_node(map->root, key);
+    void *res = NULL;
+    PTx {
+        btree_map *m = PGET(map);
+        if (m->root != NULL)
+            res = btree_map_get_in_node(m->root, key);
+    }
+    return res;
 }
 
 /*
@@ -548,9 +518,13 @@ btree_map_lookup_in_node(node_t *node, uint64_t key)
 int
 btree_map_lookup(uint64_t key)
 {
-	if (map->root == NULL)
-		return 0;
-	return btree_map_lookup_in_node(map->root, key);
+    int res = 0;
+    PTx {
+        btree_map *m = PGET(map);
+        if (m->root != NULL)
+            res = btree_map_lookup_in_node(m->root, key);
+    }
+    return res;
 }
 
 /*
@@ -580,10 +554,13 @@ btree_map_foreach_node(const node_t *p,
  * btree_map_foreach -- initiates recursive traversal
  */
 int
-btree_map_foreach(
-	int (*cb)(uint64_t key, void *value, void *arg), void *arg)
+btree_map_foreach(int (*cb)(uint64_t key, void *value, void *arg), void *arg)
 {
-	return btree_map_foreach_node(map->root, cb, arg);
+    btree_map *m = NULL;
+    int res = 0;
+    PTx { m = PGET(map); }
+    res = btree_map_foreach_node(m->root, cb, arg);
+    return res;
 }
 
 /*
@@ -592,7 +569,9 @@ btree_map_foreach(
 int
 btree_map_check()
 {
-	return map == NULL; // || !TOID_VALID(map);
+    btree_map *m = NULL;
+    PTx { m = PGET(map); }
+	return m == NULL; // || !TOID_VALID(map);
 }
 
 /*
@@ -602,10 +581,10 @@ int
 btree_map_remove_free(
 		uint64_t key)
 {
-    pthread_mutex_lock(map->root_lock);
     void *val = btree_map_remove(key);
-    if(val) nvm_free(val);
-    pthread_mutex_unlock(map->root_lock);
+    PTx {
+        if(val) pfree(val);
+    }
 
 	return 0;
 }
@@ -714,11 +693,6 @@ main()
 {
 	char buf[INPUT_BUF_LEN];
 
-    // Initialize Atlas
-    NVM_Initialize();
-    // Create an Atlas persistent region
-    btree_rgn_id = NVM_FindOrCreateRegion("btree_map", O_RDWR, NULL);
-    // This contains the Atlas restart code to find any reusable data
     initialize();
 
 	if (isatty(fileno(stdout)))
@@ -758,11 +732,6 @@ main()
 		if (isatty(fileno(stdout)))
 			printf("$ ");
 	}
-
-    // Close the Atlas persistent region
-    NVM_CloseRegion(btree_rgn_id);
-    // Atlas bookkeeping
-    NVM_Finalize();
 
 	return 0;
 }

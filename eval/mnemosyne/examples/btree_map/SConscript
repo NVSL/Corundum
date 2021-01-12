@@ -1,0 +1,10 @@
+Import('examplesEnv')
+  
+myEnv = examplesEnv.Clone()
+
+if myEnv['BUILD_PVAR'] == True:
+        pvarLibrary = myEnv.SharedLibrary('pvar', 'pvar.c')
+        Return('pvarLibrary')
+else:
+        sources = Split("""main.c""")
+        myEnv.Program('btree_map', sources)
