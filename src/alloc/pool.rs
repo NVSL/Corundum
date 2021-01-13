@@ -373,6 +373,9 @@ where
     /// The offset should be in the valid address range
     #[inline]
     unsafe fn get_unchecked<'a, T: 'a + ?Sized>(off: u64) -> &'a T {
+        #[cfg(feature = "perf_stat")]
+        let _perf = crate::stat::Measure::<Self>::Deref(std::time::Instant::now());
+
         union U<'b, K: 'b + ?Sized> {
             off: u64,
             raw: &'b K,
@@ -392,6 +395,9 @@ where
     #[inline]
     #[track_caller]
     unsafe fn get_mut_unchecked<'a, T: 'a + ?Sized>(off: u64) -> &'a mut T {
+        #[cfg(feature = "perf_stat")]
+        let _perf = crate::stat::Measure::<Self>::Deref(std::time::Instant::now());
+
         union U<'b, K: 'b + ?Sized> {
             off: u64,
             raw: &'b mut K,
@@ -480,9 +486,6 @@ where
     /// Acquires a reference to the object
     #[inline]
     unsafe fn deref<'a, T: 'a>(off: u64) -> Result<&'a T> {
-        #[cfg(feature = "perf_stat")]
-        let _perf = crate::stat::Measure::<Self>::Deref(std::time::Instant::now());
-
         if Self::allocated(off, mem::size_of::<T>()) {
             Ok(Self::get_unchecked(off))
         } else {
@@ -493,9 +496,6 @@ where
     /// Acquires a mutable reference pointer to the object
     #[inline]
     unsafe fn deref_mut<'a, T: 'a>(off: u64) -> Result<&'a mut T> {
-        #[cfg(feature = "perf_stat")]
-        let _perf = crate::stat::Measure::<Self>::Deref(std::time::Instant::now());
-        
         if Self::allocated(off, mem::size_of::<T>()) {
             Ok(Self::get_mut_unchecked(off))
         } else {
