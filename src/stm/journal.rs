@@ -258,11 +258,9 @@ impl<A: MemPool> Journal<A> {
     pub unsafe fn drop_pages(&mut self) {
         while let Some(page) = self.pages.clone().as_option() {
             let nxt = page.next;
-            unsafe {
-                let z = A::pre_dealloc(page.as_mut_ptr() as *mut u8, std::mem::size_of::<Page<A>>());
-                A::log64(A::off_unchecked(self.pages.off_ref()), nxt.off(), z);
-                A::perform(z);
-            }
+            let z = A::pre_dealloc(page.as_mut_ptr() as *mut u8, std::mem::size_of::<Page<A>>());
+            A::log64(A::off_unchecked(self.pages.off_ref()), nxt.off(), z);
+            A::perform(z);
         }
         self.current = Ptr::dangling();
         self.pages = Ptr::dangling();

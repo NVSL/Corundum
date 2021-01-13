@@ -28,6 +28,8 @@ struct Stat {
     cnt_alloc: u128,
     dealloc: u128,
     cnt_dealloc: u128,
+    deref: u128,
+    cnt_deref: u128,
     drop_log: u128,
     cnt_drop_log: u128,
     data_log: u128,
@@ -53,6 +55,7 @@ pub enum Measure<A: Any> {
     Sync(Instant),
     Alloc(Instant),
     Dealloc(Instant),
+    Deref(Instant),
     DropLog(Instant),
     DataLog(Instant),
     MutexLog(Instant),
@@ -136,6 +139,9 @@ impl<A: Any> Drop for Measure<A> {
             Dealloc(s) => {
                 add!(A, s, dealloc, cnt_dealloc);
             }
+            Deref(s) => {
+                add!(A, s, deref, cnt_deref);
+            }
             DropLog(s) => {
                 add!(A, s, drop_log, cnt_drop_log);
             }
@@ -179,6 +185,7 @@ impl AddAssign<&Stat> for Stat {
         self.sync += d.sync;
         self.alloc += d.alloc;
         self.dealloc += d.dealloc;
+        self.deref += d.deref;
         self.drop_log += d.drop_log;
         self.data_log += d.data_log;
         self.mutex_log += d.mutex_log;
@@ -192,6 +199,7 @@ impl AddAssign<&Stat> for Stat {
         self.cnt_sync += d.cnt_sync;
         self.cnt_alloc += d.cnt_alloc;
         self.cnt_dealloc += d.cnt_dealloc;
+        self.cnt_deref += d.cnt_deref;
         self.cnt_drop_log += d.cnt_drop_log;
         self.cnt_data_log += d.cnt_data_log;
         self.cnt_mutex_log += d.cnt_mutex_log;
@@ -233,6 +241,7 @@ impl Display for Stat {
 "Sync          {:>14} us    avg(ns): {:<8}    cnt: {}
 Alloc         {:>14} ns    avg(ns): {:<8}    cnt: {}
 Dealloc       {:>14} ns    avg(ns): {:<8}    cnt: {}
+AdrTrans      {:>14} ns    avg(ns): {:<8}    cnt: {}
 DropLog       {:>14} ns    avg(ns): {:<8}    cnt: {}
 DataLog       {:>14} ns    avg(ns): {:<8}    cnt: {}
 MutexLog      {:>14} ns    avg(ns): {:<8}    cnt: {}
@@ -251,6 +260,9 @@ Logging       {:>14} ns    avg(ns): {:<8}    cnt: {}",
                 self.dealloc,
                 div(self.dealloc, self.cnt_dealloc),
                 self.cnt_dealloc,
+                self.deref,
+                div(self.deref, self.cnt_deref),
+                self.cnt_deref,
                 self.drop_log,
                 div(self.drop_log, self.cnt_drop_log),
                 self.cnt_drop_log,
@@ -326,20 +338,18 @@ pub fn report() -> String {
         if print_all_threads {
             res += &format!(
                 "
-Performance Details {:?}
---------------------------------------------------------------------------------
+{:-^113}
 {}",
-                tid, stat
+                format!("Performance Details {:?}", tid), stat
             );
         }
         total += stat;
     }
     format!(
         "{}
-All Threads and Pool Types
-=================================================================================================================
+{:=^113}
 {}",
-        res, total
+        res, " All Threads and Pool Types ", total
     )
 }
 
