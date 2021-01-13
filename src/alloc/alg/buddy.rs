@@ -328,12 +328,8 @@ impl<A: MemPool> BuddyAlg<A> {
         let len = 1 << idx;
 
         if len > self.available {
-            let a = self.available();
             self.discard();
-            panic!(
-                "No space left (requested = {}, available= {})",
-                len, a
-            );
+            u64::MAX
         } else {
             match self.find_free_memory(idx, false) {
                 Some(off) => {
