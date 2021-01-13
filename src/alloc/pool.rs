@@ -411,7 +411,7 @@ where
     #[inline]
     unsafe fn deref_slice_unchecked<'a, T: 'a>(off: u64, len: usize) -> &'a [T] {
         #[cfg(feature = "perf_stat")]
-        let _perf = crate::stat::Measure::<A>::Deref(std::time::Instant::now());
+        let _perf = crate::stat::Measure::<Self>::Deref(std::time::Instant::now());
 
         if len == 0 {
             &[]
@@ -448,7 +448,7 @@ where
     #[inline]
     unsafe fn deref_slice_unchecked_mut<'a, T: 'a>(off: u64, len: usize) -> &'a mut [T] {
         #[cfg(feature = "perf_stat")]
-        let _perf = crate::stat::Measure::<A>::Deref(std::time::Instant::now());
+        let _perf = crate::stat::Measure::<Self>::Deref(std::time::Instant::now());
 
         if len == 0 {
             &mut []
@@ -481,7 +481,7 @@ where
     #[inline]
     unsafe fn deref<'a, T: 'a>(off: u64) -> Result<&'a T> {
         #[cfg(feature = "perf_stat")]
-        let _perf = crate::stat::Measure::<A>::Deref(std::time::Instant::now());
+        let _perf = crate::stat::Measure::<Self>::Deref(std::time::Instant::now());
 
         if Self::allocated(off, mem::size_of::<T>()) {
             Ok(Self::get_unchecked(off))
@@ -494,7 +494,7 @@ where
     #[inline]
     unsafe fn deref_mut<'a, T: 'a>(off: u64) -> Result<&'a mut T> {
         #[cfg(feature = "perf_stat")]
-        let _perf = crate::stat::Measure::<A>::Deref(std::time::Instant::now());
+        let _perf = crate::stat::Measure::<Self>::Deref(std::time::Instant::now());
         
         if Self::allocated(off, mem::size_of::<T>()) {
             Ok(Self::get_mut_unchecked(off))
