@@ -8,7 +8,19 @@ use std::sync::Mutex;
 use std::thread::{current, ThreadId};
 use std::time::Instant;
 
-#[derive(Default, Copy, Clone)]
+#[derive(Default, Clone)]
+struct Data {
+    sum: u128,
+    cnt: u128,
+    sum2: f64,
+    min: u128,
+    max: u128,
+
+    #[cfg(features="plot_histogram")] 
+    points: HashMap<u128, u128>
+}
+
+#[derive(Default, Clone)]
 struct Stat {
     sync: u128,
     cnt_sync: u128,
@@ -34,6 +46,7 @@ struct Stat {
     cnt_new_jrnl: u128,
     logging: u128,
     cnt_logging: u128,
+    custom: HashMap<String, Data>
 }
 
 pub enum Measure<A: Any> {
@@ -49,6 +62,7 @@ pub enum Measure<A: Any> {
     NewPage(Instant),
     NewJournal(Instant),
     Logging(Instant),
+    Custom(Instant, String),
     Transaction,
     Unknown(PhantomData<A>)
 }
@@ -58,25 +72,42 @@ lazy_static! {
 }
 
 macro_rules! add {
-    ($tp:ty,$s:ident,$id:ident,$cnt:ident) => {
-        let t = $s.elapsed().as_micros();
+    ($tp:ty,$s:ident,custom,$m:expr) => {
+        let t = $s.elapsed().as_nanos();
         let mut stat = match STAT.lock() {
             Ok(g) => g,
             Err(p) => p.into_inner(),
         };
         let tid = current().id();
-        let stat = stat.entry((tid,type_name::<$tp>())).or_insert(Default::default());
+        let stat = stat.entry((tid,type_name::<$tp>())).or_default();
+        let counter = stat.custom.entry($m).or_default();
+        counter.sum += t;
+        counter.cnt += 1;
+        counter.sum2 += f64::powi(t as f64, 2);
+        if counter.max == 0 || counter.max < t { counter.max = t; }
+        if counter.min == 0 || counter.min > t { counter.min = t; }
+        // let p = counter.points.entry(t/10).or_default();
+        // *p += 1;
+    };
+    ($tp:ty,$s:ident,$id:ident,$cnt:ident) => {
+        let t = $s.elapsed().as_nanos();
+        let mut stat = match STAT.lock() {
+            Ok(g) => g,
+            Err(p) => p.into_inner(),
+        };
+        let tid = current().id();
+        let stat = stat.entry((tid,type_name::<$tp>())).or_default();
         stat.$id += t;
         stat.$cnt += 1;
     };
     ($tp:ty,$s:ident,$id:ident) => {
-        let t = $s.elapsed().as_micros();
+        let t = $s.elapsed().as_nanos();
         let mut stat = match STAT.lock() {
             Ok(g) => g,
             Err(p) => p.into_inner(),
         };
         let tid = current().id();
-        let stat = stat.entry((tid,type_name::<$tp>())).or_insert(Default::default());
+        let stat = stat.entry((tid,type_name::<$tp>())).or_default();
         stat.$id += t;
     };
     ($tp:ty,$cnt:ident) => {
@@ -85,7 +116,7 @@ macro_rules! add {
             Err(p) => p.into_inner(),
         };
         let tid = current().id();
-        let stat = stat.entry((tid,type_name::<$tp>())).or_insert(Default::default());
+        let stat = stat.entry((tid,type_name::<$tp>())).or_default();
         stat.$cnt += 1;
     };
 }
@@ -132,6 +163,9 @@ impl<A: Any> Drop for Measure<A> {
             Logging(s) => {
                 add!(A, s, logging);
             }
+            Custom(s, m) => {
+                add!(A, s, custom, m.to_string());
+            }
             Transaction => {
                 add!(A, cnt_logging);
             }
@@ -166,6 +200,20 @@ impl AddAssign<&Stat> for Stat {
         self.cnt_clear += d.cnt_clear;
         self.cnt_new_page += d.cnt_new_page;
         self.cnt_new_jrnl += d.cnt_new_jrnl;
+        for (k,v) in &d.custom {
+            let counter = self.custom.entry(k.to_string()).or_default();
+            counter.cnt += v.cnt;
+            counter.sum += v.sum;
+            counter.sum2 += v.sum2;
+            if counter.max == 0 || counter.max < v.max { counter.max = v.max; }
+            if counter.min == 0 || counter.min > v.min { counter.min = v.min; }
+            #[cfg(features="plot_histogram")] {
+                for (vp,vv) in &v.points {
+                    let p = counter.points.entry(*vp).or_default();
+                    *p += vv;
+                }
+            }
+        }
     }
 }
 
@@ -173,63 +221,96 @@ fn div(a: u128, b: u128) -> u128 {
     if b == 0 {
         0
     } else {
-        (1000 * a) / b
+        a / b
     }
 }
 
 impl Display for Stat {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        writeln!(
-            f,
-            "Sync        {:>10} us    avg(ns): {:<10}    cnt: {}
-Alloc       {:>10} us    avg(ns): {:<10}    cnt: {}
-Dealloc     {:>10} us    avg(ns): {:<10}    cnt: {}
-DropLog     {:>10} us    avg(ns): {:<10}    cnt: {}
-DataLog     {:>10} us    avg(ns): {:<10}    cnt: {}
-MutexLog    {:>10} us    avg(ns): {:<10}    cnt: {}
-Commit      {:>10} us    avg(ns): {:<10}    cnt: {}
-Rollback    {:>10} us    avg(ns): {:<10}    cnt: {}
-Del Log     {:>10} us    avg(ns): {:<10}    cnt: {}
-New Page    {:>10} us    avg(ns): {:<10}    cnt: {}
-New Journal {:>10} us    avg(ns): {:<10}    cnt: {}
-Logging     {:>10} us    avg(ns): {:<10}    cnt: {}",
-            self.sync,
-            div(self.sync, self.cnt_sync),
-            self.cnt_sync,
-            self.alloc,
-            div(self.alloc, self.cnt_alloc),
-            self.cnt_alloc,
-            self.dealloc,
-            div(self.dealloc, self.cnt_dealloc),
-            self.cnt_dealloc,
-            self.drop_log,
-            div(self.drop_log, self.cnt_drop_log),
-            self.cnt_drop_log,
-            self.data_log,
-            div(self.data_log, self.cnt_data_log),
-            self.cnt_data_log,
-            self.mutex_log,
-            div(self.mutex_log, self.cnt_mutex_log),
-            self.cnt_mutex_log,
-            self.commit,
-            div(self.commit, self.cnt_commit),
-            self.cnt_commit,
-            self.rollback,
-            div(self.rollback, self.cnt_rollback),
-            self.cnt_rollback,
-            self.clear,
-            div(self.clear, self.cnt_clear),
-            self.cnt_clear,
-            self.new_page,
-            div(self.new_page, self.cnt_new_page),
-            self.cnt_new_page,
-            self.new_jrnl,
-            div(self.new_jrnl, self.cnt_new_jrnl),
-            self.cnt_new_jrnl,
-            self.logging,
-            div(self.logging, self.cnt_logging),
-            self.cnt_logging
-        )
+        #[cfg(feature = "perf_stat")] {
+            writeln!(
+                f,
+"Sync          {:>14} us    avg(ns): {:<8}    cnt: {}
+Alloc         {:>14} ns    avg(ns): {:<8}    cnt: {}
+Dealloc       {:>14} ns    avg(ns): {:<8}    cnt: {}
+DropLog       {:>14} ns    avg(ns): {:<8}    cnt: {}
+DataLog       {:>14} ns    avg(ns): {:<8}    cnt: {}
+MutexLog      {:>14} ns    avg(ns): {:<8}    cnt: {}
+Commit        {:>14} ns    avg(ns): {:<8}    cnt: {}
+Rollback      {:>14} ns    avg(ns): {:<8}    cnt: {}
+Del Log       {:>14} ns    avg(ns): {:<8}    cnt: {}
+New Page      {:>14} ns    avg(ns): {:<8}    cnt: {}
+New Journal   {:>14} ns    avg(ns): {:<8}    cnt: {}
+Logging       {:>14} ns    avg(ns): {:<8}    cnt: {}",
+                self.sync,
+                div(self.sync, self.cnt_sync),
+                self.cnt_sync,
+                self.alloc,
+                div(self.alloc, self.cnt_alloc),
+                self.cnt_alloc,
+                self.dealloc,
+                div(self.dealloc, self.cnt_dealloc),
+                self.cnt_dealloc,
+                self.drop_log,
+                div(self.drop_log, self.cnt_drop_log),
+                self.cnt_drop_log,
+                self.data_log,
+                div(self.data_log, self.cnt_data_log),
+                self.cnt_data_log,
+                self.mutex_log,
+                div(self.mutex_log, self.cnt_mutex_log),
+                self.cnt_mutex_log,
+                self.commit,
+                div(self.commit, self.cnt_commit),
+                self.cnt_commit,
+                self.rollback,
+                div(self.rollback, self.cnt_rollback),
+                self.cnt_rollback,
+                self.clear,
+                div(self.clear, self.cnt_clear),
+                self.cnt_clear,
+                self.new_page,
+                div(self.new_page, self.cnt_new_page),
+                self.cnt_new_page,
+                self.new_jrnl,
+                div(self.new_jrnl, self.cnt_new_jrnl),
+                self.cnt_new_jrnl,
+                self.logging,
+                div(self.logging, self.cnt_logging),
+                self.cnt_logging
+            )?;
+        }
+        let mut lns = vec!();
+
+        #[cfg(features="plot_histogram")] {
+            let mut plots = String::new();
+        }
+
+        for (k,v) in &self.custom {
+            let avg = div(v.sum, v.cnt);
+            let sd = f64::sqrt(v.sum2/(v.cnt as f64)-f64::powi(avg as f64,2));
+            lns.push(format!("{:<14}{:>10} ns  avg(ns): {:<8} std(ns): {:<8.1} min(ns): {:<8} max(ns): {:<10} cnt: {}",
+                k, v.sum, avg, sd, v.min, v.max, v.cnt));
+            #[cfg(features="plot_histogram")] {
+                if let Some(plt) = plot(&v.points) {
+                    plots += &format!("┌{:─^40}┐\n", format!(" {} ", k));
+                    for ln in plt {
+                        plots += &format!("│{}│\n", ln);
+                    }
+                    plots += "└────────────────────────────────────────┘\n";
+                }
+            }
+        }
+        
+        lns.sort_by(|x, y| x.cmp(&y));
+        for ln in &lns {
+            writeln!(f, "{}", ln)?;
+        }
+
+        #[cfg(features="plot_histogram")] {
+            writeln!(f, "{}", plots)?;
+        }
+        Ok(())
     }
 }
 
@@ -240,21 +321,59 @@ pub fn report() -> String {
     };
     let mut total = Stat::default();
     let mut res = String::new();
+    let print_all_threads = stat.len() > 1;
     for (tid, stat) in stat.iter() {
-        res += &format!(
-            "
+        if print_all_threads {
+            res += &format!(
+                "
 Performance Details {:?}
--------------------------------------------------------------------
+--------------------------------------------------------------------------------
 {}",
-            tid, stat
-        );
+                tid, stat
+            );
+        }
         total += stat;
     }
     format!(
         "{}
 All Threads and Pool Types
-===================================================================
+=================================================================================================================
 {}",
         res, total
     )
+}
+
+
+#[cfg(features="plot_histogram")]
+fn plot(data: &HashMap<u128, u128>) -> Option<Vec<String>> {
+    let mut res = vec!["                                        ".to_string(); 20];
+    let mut freqs = vec![0; 40];
+    let h_min = data.keys().min()?;
+    let h_max = data.keys().max()?;
+    let h_len = h_max - h_min;
+    for (t,freq) in data {
+        let t = ((t - h_min) * 390) / h_len;
+        let t = usize::min(39, t as usize);
+        freqs[t as usize] += freq;
+    }
+    let v_max = freqs.iter().max()?;
+    for i in 0..freqs.len() {
+        let f = (freqs[i] * 19) / v_max;
+        let f = usize::min(19, f as usize);
+        for j in 0..f {
+            unsafe { res[19-j].as_bytes_mut()[i] = b'A'; }
+        }
+    }
+    Some(res)
+}
+
+#[macro_export]
+macro_rules! measure {
+    ($tag:expr,$f:block) => {
+        let __tag = $tag;
+        {
+            let _perf = Measure::<P>::Custom(Instant::now(), __tag);
+            $f
+        }
+    };
 }

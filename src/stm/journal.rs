@@ -94,31 +94,37 @@ impl<A: MemPool> Page<A> {
         self.len == PAGE_SIZE
     }
 
-    fn notify(&mut self) {
+    unsafe fn notify(&mut self) {
         for i in 0..self.len {
             self.logs[i].notify(0);
         }
     }
 
-    fn commit(&mut self) {
+    unsafe fn commit(&mut self) {
         for i in 0..self.len {
             self.logs[i].commit();
         }
     }
 
-    fn rollback(&mut self) {
+    unsafe fn rollback(&mut self) {
         for i in 0..self.len {
             self.logs[i].rollback();
         }
     }
 
-    fn recover(&mut self, rollback: bool) {
+    unsafe fn recover(&mut self, rollback: bool) {
         for i in 0..self.len {
             self.logs[self.len - i - 1].recover(rollback);
         }
     }
 
-    fn clear(&mut self) {
+    unsafe fn ignore(&mut self) {
+        self.len = 0;
+        self.head = 0;
+        self.logs = [Default::default(); PAGE_SIZE];
+    }
+
+    unsafe fn clear(&mut self) {
         for i in self.head..self.len {
             self.logs[i].clear();
             self.head += 1;
@@ -181,15 +187,13 @@ impl<A: MemPool> Journal<A> {
     }
 
     /// Atomically enters into the list journals of the owner pool
-    pub fn enter_into(&mut self, head_off: &u64, zone: usize) {
-        unsafe {
-            let me = A::off_unchecked(self);
-            self.next_off = *head_off;
-            A::log64(A::off_unchecked(head_off), me, zone);
+    pub unsafe fn enter_into(&mut self, head_off: &u64, zone: usize) {
+        let me = A::off_unchecked(self);
+        self.next_off = *head_off;
+        A::log64(A::off_unchecked(head_off), me, zone);
 
-            if let Ok(j) = A::deref_mut::<Journal<A>>(*head_off) {
-                A::log64(A::off_unchecked(&j.prev_off), me, zone);
-            }
+        if let Ok(j) = A::deref_mut::<Journal<A>>(*head_off) {
+            A::log64(A::off_unchecked(&j.prev_off), me, zone);
         }
     }
 
@@ -251,7 +255,7 @@ impl<A: MemPool> Journal<A> {
 
     /// Writes a new log to the journal
     #[cfg(feature = "pin_journals")]
-    pub fn drop_pages(&mut self) {
+    pub unsafe fn drop_pages(&mut self) {
         while let Some(page) = self.pages.clone().as_option() {
             let nxt = page.next;
             unsafe {
@@ -265,7 +269,7 @@ impl<A: MemPool> Journal<A> {
     }
 
     /// Commits all logs in the journal
-    pub fn commit(&mut self) {
+    pub unsafe fn commit(&mut self) {
         let mut curr = self.pages;
         while let Some(page) = curr.as_option() {
             page.notify();
@@ -280,7 +284,7 @@ impl<A: MemPool> Journal<A> {
     }
 
     /// Reverts all changes
-    pub fn rollback(&mut self) {
+    pub unsafe fn rollback(&mut self) {
         let mut curr = self.pages;
         while let Some(page) = curr.as_option() {
             page.notify();
@@ -295,7 +299,7 @@ impl<A: MemPool> Journal<A> {
     }
 
     /// Recovers from a crash or power failure
-    pub fn recover(&mut self) {
+    pub unsafe fn recover(&mut self) {
         let mut curr = self.pages;
         while let Some(page) = curr.as_option() {
             page.notify();
@@ -313,7 +317,7 @@ impl<A: MemPool> Journal<A> {
     }
 
     /// Clears all logs and drops itself from the memory pool
-    pub fn clear(&mut self) {
+    pub unsafe fn clear(&mut self) {
         #[cfg(feature = "pin_journals")]
         {
             let mut page = self.pages.as_option();
@@ -324,7 +328,7 @@ impl<A: MemPool> Journal<A> {
             self.current = self.pages;
         }
 
-        #[cfg(not(feature = "pin_journals"))] unsafe {
+        #[cfg(not(feature = "pin_journals"))] {
             while let Some(page) = self.pages.clone().as_option() {
                 let nxt = page.next;
                 page.clear();
@@ -341,7 +345,7 @@ impl<A: MemPool> Journal<A> {
         // }
         self.complete();
 
-        #[cfg(not(feature = "pin_journals"))] unsafe {
+        #[cfg(not(feature = "pin_journals"))] {
             A::drop_journal(self);
             A::journals(|journals| {
                 journals.remove(&std::thread::current().id());
@@ -511,6 +515,17 @@ impl<A: MemPool> Journal<A> {
                     }
                 }
             })
+        }
+    }
+
+    /// Ignores all logs
+    /// 
+    /// This function is only for measuring some properties such as log latency.
+    pub unsafe fn ignore(&self) {
+        let mut page = as_mut(self).pages.as_option();
+        while let Some(p) = page {
+            p.ignore();
+            page = p.next.as_option();
         }
     }
 }

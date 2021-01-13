@@ -385,7 +385,7 @@ impl<A: MemPool> Log<A> {
     /// log and writes it on `journal`
     #[inline]
     #[track_caller]
-    pub fn drop_on_failure(offset: u64, len: usize, journal: &Journal<A>) -> Ptr<Log<A>, A> {
+    pub unsafe fn drop_on_failure(offset: u64, len: usize, journal: &Journal<A>) -> Ptr<Log<A>, A> {
         debug_assert_ne!(len, 0);
 
         #[cfg(feature = "perf_stat")]
@@ -404,7 +404,7 @@ impl<A: MemPool> Log<A> {
     /// for locking data in a thread
     #[inline]
     #[track_caller]
-    pub fn unlock_on_commit(
+    pub unsafe fn unlock_on_commit(
         virt_addr: u64,
         journal: &Journal<A>,
     ) {
@@ -414,16 +414,12 @@ impl<A: MemPool> Log<A> {
         log!(A, Yellow, "NEW LOG", "FOR:         v@{:<18} UnlockOnCommit", virt_addr);
         
         if cfg!(feature = "pthread") {
-            unsafe {
-                let b = &mut *(virt_addr as *mut (bool, libc::pthread_mutex_t, 
-                    libc::pthread_mutexattr_t));
-                if b.0 { return; }
-            }
+            let b = &mut *(virt_addr as *mut (bool, libc::pthread_mutex_t, 
+                libc::pthread_mutexattr_t));
+            if b.0 { return; }
         } else {
-            unsafe {
-                let b = &mut *(virt_addr as *mut (bool, u64));
-                if b.0 { return; }
-            }
+            let b = &mut *(virt_addr as *mut (bool, u64));
+            if b.0 { return; }
         };
 
         Self::write_on_journal(UnlockOnCommit(virt_addr), journal, Notifier::None);
@@ -449,7 +445,7 @@ impl<A: MemPool> Log<A> {
         }
     }
 
-    pub(crate) fn rollback(&mut self) {
+    pub(crate) unsafe fn rollback(&mut self) {
         #[cfg(feature = "perf_stat")]
         let _perf = crate::stat::Measure::<A>::RollbackLog(std::time::Instant::now());
 
@@ -461,11 +457,9 @@ impl<A: MemPool> Log<A> {
             }
             DropOnAbort(src, len) => {
                 if *src != u64::MAX {
-                    unsafe {
-                        let z = A::pre_dealloc(A::get_mut_unchecked(*src), *len);
-                        A::log64(A::off_unchecked(src), u64::MAX, z);
-                        A::perform(z);
-                    }
+                    let z = A::pre_dealloc(A::get_mut_unchecked(*src), *len);
+                    A::log64(A::off_unchecked(src), u64::MAX, z);
+                    A::perform(z);
                 }
             }
             _ => {}
@@ -473,7 +467,7 @@ impl<A: MemPool> Log<A> {
     }
 
     /// Recovers from the crash or power failure
-    pub(crate) fn recover(&mut self, rollback: bool) {
+    pub(crate) unsafe fn recover(&mut self, rollback: bool) {
         match &mut self.0 {
             DataLog(src, log, layout) => {
                 if rollback {
@@ -487,12 +481,10 @@ impl<A: MemPool> Log<A> {
             DropOnFailure(src, len) => {
                 if rollback {
                     if *src != u64::MAX {
-                        unsafe {
-                            debug_assert!(A::allocated(*src, 1), "Access Violation");
-                            let z = A::pre_dealloc(A::get_mut_unchecked(*src), *len);
-                            A::log64(A::off_unchecked(src), u64::MAX, z);
-                            A::perform(z);
-                        }
+                        debug_assert!(A::allocated(*src, 1), "Access Violation");
+                        let z = A::pre_dealloc(A::get_mut_unchecked(*src), *len);
+                        A::log64(A::off_unchecked(src), u64::MAX, z);
+                        A::perform(z);
                     }
                 }
             }
@@ -537,7 +529,7 @@ impl<A: MemPool> Log<A> {
     /// * If it is a [`UnlockOnCommit`](./enum.LogEnum.html#variant.UnlockOnCommit),
     /// it unlocks the mutex.
     /// 
-    pub fn clear(&mut self) {
+    pub unsafe fn clear(&mut self) {
         #[cfg(feature = "perf_stat")]
         let _perf = crate::stat::Measure::<A>::ClearLog(std::time::Instant::now());
 
@@ -547,37 +539,33 @@ impl<A: MemPool> Log<A> {
                     log!(A, Magenta, "DEL LOG", "FOR:         ({:>4}..{:<4}) = {:<5} DataLog({})",
                         *_src, *_src as usize + (*len - 1), *len, log
                     );
-                    unsafe {
-                        debug_assert!(A::allocated(*log, 1), "Access Violation at address 0x{:x}", *log);
-                        let z = A::pre_dealloc(A::get_mut_unchecked(*log), *len);
-                        A::log64(A::off_unchecked(log), u64::MAX, z);
-                        A::perform(z);
-                    }
+                    debug_assert!(A::allocated(*log, 1), "Access Violation at address 0x{:x}", *log);
+                    let z = A::pre_dealloc(A::get_mut_unchecked(*log), *len);
+                    A::log64(A::off_unchecked(log), u64::MAX, z);
+                    A::perform(z);
                 }
             }
             UnlockOnCommit(src) => {
                 if *src != u64::MAX {
                     log!(A, Magenta, "UNLOCK", "FOR:          v@{}", *src);
-                    unsafe {
-                        #[cfg(feature = "pthread")] {
-                            let b = &mut *(*src as *mut (bool, libc::pthread_mutex_t, libc::pthread_mutexattr_t));
-                            b.0 = false;
-                            let lock = &mut b.1;
-                            let attr = &mut b.2;
-                            let result = libc::pthread_mutex_unlock(lock);
-                            if result != 0 {
-                                crate::sync::init_lock(lock, attr);
-                            }
+                    #[cfg(feature = "pthread")] {
+                        let b = &mut *(*src as *mut (bool, libc::pthread_mutex_t, libc::pthread_mutexattr_t));
+                        b.0 = false;
+                        let lock = &mut b.1;
+                        let attr = &mut b.2;
+                        let result = libc::pthread_mutex_unlock(lock);
+                        if result != 0 {
+                            crate::sync::init_lock(lock, attr);
                         }
-                        #[cfg(not(feature = "pthread"))] {
-                            let b = &mut *(*src as *mut (bool, u64));
-                            b.0 = false;
-                            let lock = &mut b.1;
-                            std::intrinsics::atomic_store_rel(lock, 0);
-                        }
-
-                        *src = u64::MAX;
                     }
+                    #[cfg(not(feature = "pthread"))] {
+                        let b = &mut *(*src as *mut (bool, u64));
+                        b.0 = false;
+                        let lock = &mut b.1;
+                        std::intrinsics::atomic_store_rel(lock, 0);
+                    }
+
+                    *src = u64::MAX;
                 }
             }
             _ => {}
@@ -586,7 +574,7 @@ impl<A: MemPool> Log<A> {
 
     /// Notify the owner that the log is taken/cleared according to `v`
     #[inline]
-    pub fn notify(&mut self, v: u8) {
+    pub unsafe fn notify(&mut self, v: u8) {
         if let DataLog(src, _, _) = self.0 {
             if src != u64::MAX {
                 self.1.update(v)

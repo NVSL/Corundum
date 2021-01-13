@@ -65,7 +65,10 @@ if [ $nofopt -eq 0 ]; then
 fi
 cargo build --release --example grep --features="$clflushopt"
 
-[ -f $dir_path/inputs.tar.gz ] && tar xzvf $dir_path/inputs.tar.gz -C $dir_path && rm -f $dir_path/inputs.tar.gz
+[ -f $dir_path/inputs.tar.gz ] && \
+    tar xzvf $dir_path/inputs.tar.gz -C $dir_path && \
+    rm -f $dir_path/inputs.tar.gz && \
+    for i in `ls $dir_path/inputs/wc/*`; do cp $i $i-1; done
 
 ls -1 $dir_path/inputs/wc/* > $dir_path/files.list
 mkdir -p $dir_path/outputs/wc

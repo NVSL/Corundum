@@ -532,6 +532,12 @@ impl<T: PSafe + ?Sized, A: MemPool> Parc<T, A> {
         VWeak::new(self)
     }
 
+    /// Demote without dynamically checking transaction boundaries
+    pub unsafe fn unsafe_demote(&self) -> VWeak<T, A> {
+        debug_assert!(!self.ptr.is_dangling());
+        VWeak::new(self)
+    }
+
     #[inline]
     /// Gets the number of `Weak` pointers to this allocation.
     ///
