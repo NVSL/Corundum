@@ -1136,6 +1136,10 @@ macro_rules! pool {
                                 return (Self::get_mut_unchecked(a), a, size, z);
                             }
                         }
+                        eprintln!(
+                            "No space left (requested = {}, available= {})",
+                            size, Self::available()
+                        );
                         (std::ptr::null_mut(), u64::MAX, 0, 0)
                     })
                 }

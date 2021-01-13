@@ -26,7 +26,7 @@ pub fn msync<T: ?Sized>(ptr: &T, len: usize) {
 
         #[cfg(feature = "use_msync")]
         unsafe {
-            let off = ptr as usize;
+            let off = ptr as *const T as *const u8 as usize;
             let end = off + len;
             let off = (off >> 12) << 12;
             let len = end - off;
@@ -56,9 +56,7 @@ pub fn msync_obj<T: ?Sized>(obj: &T) {
 
         #[cfg(feature = "use_msync")]
         {
-            let ptr = obj as *const T as *const u8 as *mut u8;
-            let len = std::mem::size_of_val(obj);
-            msync(ptr, len);
+            msync(obj, std::mem::size_of_val(obj));
         }
     }
 }
