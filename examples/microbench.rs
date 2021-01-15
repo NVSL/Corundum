@@ -1,3 +1,5 @@
+#![feature(asm)]
+
 use corundum::stm::*;
 use corundum::default::*;
 use corundum::stat::*;
@@ -27,192 +29,221 @@ fn main() {
             unsafe { P::alloc(s); }
         }).unwrap();
     }
-    for _ in 0..cnt {
-        measure!("TxNop".to_string(), {
-            P::transaction(|_| {}).unwrap();
-        });
-    }
-    P::transaction(|_| {
+    measure!("TxNop".to_string(), cnt, {
         for _ in 0..cnt {
-            for s in &sizes {
-                let s = *s * 8;
-                measure!(format!("Alloc({})", s), {
+            P::transaction(|_| {}).unwrap();
+        }
+    });
+    P::transaction(|_| {
+        for s in &sizes {
+            let s = *s * 8;
+            measure!(format!("Alloc({})", s), cnt, {
+                for _ in 0..cnt {
                     unsafe{ P::alloc(s); }
-                });
-            }
+                }
+            });
         }
     }).unwrap();
 
     P::transaction(|_| {
-        let mut blks = vec![];
-        for _ in 0..cnt {
-            for s in &sizes {
+        for s in &sizes {
+            let mut blks = vec![];
+            for _ in 0..cnt {
                 unsafe{ blks.push(P::alloc(*s * 8)); }
             }
-        }
-        for (ptr, _, len) in &blks {
-            measure!(format!("Dealloc({})", len), {
-                unsafe{ P::dealloc(*ptr, *len); }
+            measure!(format!("Dealloc({})^", *s), cnt, {
+                for i in 0..cnt {
+                    unsafe{ P::dealloc(blks[i].0, *s); }
+                }
             });
         }
     }).unwrap();
 
     P::transaction(|j| {
-        for _ in 0..cnt {
-            let mut b = Pbox::new(10, j);
-            let v;
-            measure!("Deref".to_string(), {
+        let mut b = Pbox::new(10, j);
+        let mut v = 0;
+        measure!("Deref".to_string(), cnt, {
+            for _ in 0..cnt {
                 v = *b;
-            });
-            measure!("DerefMut".to_string(), {
-                *b = 20;
-            });
-            if v < 0 {
-                println!("unreachable {}", v);
             }
+        });
+        measure!("DerefMut".to_string(), cnt, {
+            for _ in 0..cnt {
+                *b = 20;
+            }
+        });
+        if v < 0 {
+            println!("unreachable {}", v);
         }
     }).unwrap();
 
     P::transaction(|j| unsafe {
-        for _ in 0..cnt {
-            let b = Pbox::new(0u64, j);
-            measure!("DataLog(8)".to_string(), {
+        let b = Pbox::new(0u64, j);
+        measure!("DataLog(8)".to_string(), cnt, {
+            for _ in 0..cnt {
                 (*b).take_log(j, Notifier::None);
-            });
-            let b = Pbox::new([0u64;8], j);
-            measure!("DataLog(64)".to_string(), {
+            }
+        });
+        let b = Pbox::new([0u64;8], j);
+        measure!("DataLog(64)".to_string(), cnt, {
+            for _ in 0..cnt {
                 (*b).take_log(j, Notifier::None);
-            });
-            let b = Pbox::new([0u64;32], j);
-            measure!("DataLog(2K)".to_string(), {
+            }
+        });
+        let b = Pbox::new([0u64;32], j);
+        measure!("DataLog(2K)".to_string(), cnt, {
+            for _ in 0..cnt {
                 (*b).take_log(j, Notifier::None);
-            });
-            let b = Pbox::new([0u64;128], j);
-            measure!("DataLog(8K)".to_string(), {
+            }
+        });
+        let b = Pbox::new([0u64;128], j);
+        measure!("DataLog(8K)".to_string(), cnt, {
+            for _ in 0..cnt {
                 (*b).take_log(j, Notifier::None);
-            });
-            let b = Pbox::new([0u64;512], j);
-            measure!("DataLog(32K)".to_string(), {
+            }
+        });
+        let b = Pbox::new([0u64;512], j);
+        measure!("DataLog(32K)".to_string(), cnt, {
+            for _ in 0..cnt {
                 (*b).take_log(j, Notifier::None);
-            });
-        }
+            }
+        });
         j.ignore();
     }).unwrap();
 
     P::transaction(|j| unsafe {
-        for _ in 0..cnt {
-            let (_, off, len) = P::alloc(8);
-            measure!("DropLog(8)".to_string(), {
+        let (_, off, len) = P::alloc(8);
+        measure!("DropLog(8)".to_string(), cnt, {
+            for _ in 0..cnt {
                 Log::drop_on_commit(off, len, j);
-            });
-            let (_, off, len) = P::alloc(64);
-            measure!("DropLog(64)".to_string(), {
+            }
+        });
+        let (_, off, len) = P::alloc(64);
+        measure!("DropLog(64)".to_string(), cnt, {
+            for _ in 0..cnt {
                 Log::drop_on_commit(off, len, j);
-            });
-            let (_, off, len) = P::alloc(2048);
-            measure!("DropLog(2K)".to_string(), {
+            }
+        });
+        let (_, off, len) = P::alloc(2048);
+        measure!("DropLog(2K)".to_string(), cnt, {
+            for _ in 0..cnt {
                 Log::drop_on_commit(off, len, j);
-            });
-            let (_, off, len) = P::alloc(8*1024);
-            measure!("DropLog(8K)".to_string(), {
+            }
+        });
+        let (_, off, len) = P::alloc(8*1024);
+        measure!("DropLog(8K)".to_string(), cnt, {
+            for _ in 0..cnt {
                 Log::drop_on_commit(off, len, j);
-            });
-            let (_, off, len) = P::alloc(32*1024);
-            measure!("DropLog(32K)".to_string(), {
+            }
+        });
+        let (_, off, len) = P::alloc(32*1024);
+        measure!("DropLog(32K)".to_string(), cnt, {
+            for _ in 0..cnt {
                 Log::drop_on_commit(off, len, j);
-            });
-        }
+            }
+        });
+        j.ignore();
     }).unwrap();
 
     P::transaction(|j| {
         let b = Pbox::new(0u64, j);
-        for _ in 0..cnt {
-            let cpy;
-            measure!("Pbox:clone".to_string(), {
-                cpy = b.pclone(j);
-            });
-            if *cpy > 10 {
-                println!("unreachable {}", cpy);
+        let mut vec = Vec::<Pbox<u64>>::with_capacity(cnt);
+        measure!("Pbox:clone*".to_string(), cnt, {
+            for _ in 0..cnt {
+                vec.push(b.pclone(j));
             }
-        }
+        });
     }).unwrap();
 
     P::transaction(|j| {
         let b = Prc::new(0u64, j);
-        for _ in 0..cnt {
-            let cpy;
-            measure!("Prc:clone".to_string(), {
-                cpy = b.pclone(j);
-            });
-            if *cpy > 10 {
-                println!("unreachable {}", cpy);
+        let mut vec = Vec::<Prc<u64>>::with_capacity(cnt);
+        measure!("Prc:clone*".to_string(), cnt, {
+            for _ in 0..cnt {
+                vec.push(b.pclone(j));
             }
-        }
+        });
     }).unwrap();
 
     P::transaction(|j| {
         let b = Parc::new(0u64, j);
-        for _ in 0..cnt {
-            let cpy;
-            measure!("Parc:clone".to_string(), {
-                cpy = b.pclone(j);
-            });
-            if *cpy > 10 {
-                println!("unreachable {}", cpy);
+        let mut vec = Vec::<Parc<u64>>::with_capacity(cnt);
+        measure!("Parc:clone*".to_string(), cnt, {
+            for _ in 0..cnt {
+                vec.push(b.pclone(j));
             }
-        }
+        });
     }).unwrap();
 
     P::transaction(|j| {
         let b = Prc::new(0u64, j);
-        for _ in 0..cnt {
-            let dn;
-            measure!("Prc:downgrade".to_string(), {
-                dn = Prc::downgrade(&b, j);
-            });
-            let up;
-            measure!("Prc:upgrade".to_string(), {
-                up = dn.upgrade(j).unwrap();
-            });
-            if *up > 10 {
-                println!("unreachable {}", up);
+        let mut vec = Vec::<prc::PWeak<u64>>::with_capacity(cnt);
+        measure!("Prc:downgrade*".to_string(), cnt, {
+            for _ in 0..cnt {
+                vec.push(Prc::downgrade(&b, j));
             }
-        }
+        });
+        measure!("Prc:upgrade^".to_string(), cnt, {
+            for i in 0..cnt {
+                vec[i].upgrade(j).unwrap();
+            }
+        });
     }).unwrap();
 
     P::transaction(|j| {
         let b = Parc::new(0u64, j);
-        for _ in 0..cnt {
-            let dn;
-            measure!("Parc:downgrade".to_string(), {
-                dn = Parc::downgrade(&b, j);
-            });
-            let up;
-            measure!("Parc:upgrade".to_string(), {
-                up = dn.upgrade(j).unwrap();
-            });
-            let v;
-            measure!("Parc:demote".to_string(), {
-                unsafe { v = Parc::unsafe_demote(&b); }
-            });
-            let p;
-            measure!("Parc:promote".to_string(), {
-                p = v.promote(j).unwrap();
-            });
-            if *up > 10 {
-                println!("unreachable {}", up);
-                println!("unreachable {}", p);
+        let mut pvec = Vec::<parc::PWeak<u64>>::with_capacity(cnt);
+        let mut vvec = Vec::<parc::VWeak<u64>>::with_capacity(cnt);
+        measure!("Parc:downgrade*".to_string(), cnt, {
+            for _ in 0..cnt {
+                pvec.push(Parc::downgrade(&b, j));
             }
-        }
+        });
+        measure!("Parc:upgrade^".to_string(), cnt, {
+            for i in 0..cnt {
+                pvec[i].upgrade(j).unwrap();
+            }
+        });
+        measure!("Parc:demote*".to_string(), cnt, {
+            for _ in 0..cnt {
+                unsafe { vvec.push(Parc::unsafe_demote(&b)); }
+            }
+        });
+        measure!("Parc:promote^".to_string(), cnt, {
+            for i in 0..cnt {
+                let _p = vvec[i].promote(j).unwrap();
+            }
+        });
     }).unwrap();
 
-    for _ in 0..cnt {
-        for s in &sizes {
-            let layout = std::alloc::Layout::from_size_align(*s * 8, 4).unwrap();
-            measure!(format!("malloc({})", *s * 8), {
+    for s in &sizes {
+        let layout = std::alloc::Layout::from_size_align(*s * 8, 4).unwrap();
+        measure!(format!("malloc({})", *s * 8), cnt, {
+            for _ in 0..cnt {
                 unsafe{ std::alloc::alloc(layout); }
-            });
+            }
+        });
+    }
+
+    let mut vec = Vec::with_capacity(cnt);
+    measure!(" *Vec::push".to_string(), cnt, {
+        for i in 0..cnt {
+            vec.push(i as u128);
         }
+    });
+    let mut m = 0;
+    measure!(" ^Vec::deref".to_string(), cnt, {
+        for i in 0..cnt {
+            m = vec[i];
+        }
+    });
+    measure!(" for".to_string(), cnt, {
+        for _ in 0..cnt {
+            unsafe { asm!("nop"); }
+        }
+    });
+    if m == cnt as u128 + 1 {
+        println!("unreachable {}", m);
     }
 
     eprintln!("{}", report());

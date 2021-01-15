@@ -1469,6 +1469,22 @@ macro_rules! pool {
             /// Compact form of [`Journal`](../stm/struct.Journal.html)
             /// `<`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
             pub type Journal = $crate::stm::Journal<BuddyAlloc>;
+
+            pub mod prc {
+                /// Compact form of [`prc::Weak`](../prc/struct.Weak.html)
+                /// `<`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
+                pub type PWeak<T> = $crate::prc::Weak<T, super::BuddyAlloc>;
+            }
+
+            pub mod parc {
+                /// Compact form of [`sync::Weak`](../../sync/struct.Weak.html)
+                /// `<`[`BuddyAlloc`](../struct.BuddyAlloc.html)`>`.
+                pub type PWeak<T> = $crate::sync::Weak<T, super::BuddyAlloc>;
+
+                /// Compact form of [`sync::VWeak`](../../sync/struct.VWeak.html)
+                /// `<`[`BuddyAlloc`](../struct.BuddyAlloc.html)`>`.
+                pub type VWeak<T> = $crate::sync::VWeak<T, super::BuddyAlloc>;
+            }
         }
     };
 }

@@ -48,6 +48,8 @@ struct Stat {
     cnt_new_jrnl: u128,
     logging: u128,
     cnt_logging: u128,
+    nop: u128,
+    cnt_nop: u128,
     custom: HashMap<String, Data>
 }
 
@@ -65,7 +67,9 @@ pub enum Measure<A: Any> {
     NewPage(Instant),
     NewJournal(Instant),
     Logging(Instant),
+    Nop(Instant),
     Custom(Instant, String),
+    Batch(Instant, String, u128),
     Transaction,
     Unknown(PhantomData<A>)
 }
@@ -91,6 +95,21 @@ macro_rules! add {
         if counter.min == 0 || counter.min > t { counter.min = t; }
         // let p = counter.points.entry(t/10).or_default();
         // *p += 1;
+    };
+    ($tp:ty,$s:ident,batch,$m:expr,$cnt:expr) => {
+        let t = $s.elapsed().as_nanos();
+        let mut stat = match STAT.lock() {
+            Ok(g) => g,
+            Err(p) => p.into_inner(),
+        };
+        let tid = current().id();
+        let stat = stat.entry((tid,type_name::<$tp>())).or_default();
+        let counter = stat.custom.entry($m).or_default();
+        counter.sum += t;
+        counter.cnt += $cnt;
+        counter.sum2 += f64::powi(t as f64, 2);
+        if counter.max == 0 || counter.max < t { counter.max = t; }
+        if counter.min == 0 || counter.min > t { counter.min = t; }
     };
     ($tp:ty,$s:ident,$id:ident,$cnt:ident) => {
         let t = $s.elapsed().as_nanos();
@@ -169,8 +188,14 @@ impl<A: Any> Drop for Measure<A> {
             Logging(s) => {
                 add!(A, s, logging);
             }
+            Nop(s) => {
+                add!(A, s, nop, cnt_nop);
+            }
             Custom(s, m) => {
                 add!(A, s, custom, m.to_string());
+            }
+            Batch(s, m, cnt) => {
+                add!(A, s, batch, m.to_string(), *cnt);
             }
             Transaction => {
                 add!(A, cnt_logging);
@@ -301,7 +326,7 @@ Logging       {:>14} ns    avg(ns): {:<8}    cnt: {}",
         for (k,v) in &self.custom {
             let avg = div(v.sum, v.cnt);
             let sd = f64::sqrt(v.sum2/(v.cnt as f64)-f64::powi(avg as f64,2));
-            lns.push(format!("{:<14}{:>10} ns  avg(ns): {:<8} std(ns): {:<8.1} min(ns): {:<8} max(ns): {:<10} cnt: {}",
+            lns.push(format!("{:<15}{:>10} ns  avg(ns): {:<8} std(ns): {:<8.1} min(ns): {:<8} max(ns): {:<10} cnt: {}",
                 k, v.sum, avg, sd, v.min, v.max, v.cnt));
             #[cfg(features="plot_histogram")] {
                 if let Some(plt) = plot(&v.points) {
@@ -379,10 +404,10 @@ fn plot(data: &HashMap<u128, u128>) -> Option<Vec<String>> {
 
 #[macro_export]
 macro_rules! measure {
-    ($tag:expr,$f:block) => {
+    ($tag:expr,$n:expr,$f:block) => {
         let __tag = $tag;
         {
-            let _perf = Measure::<P>::Custom(Instant::now(), __tag);
+            let _perf = Measure::<P>::Batch(Instant::now(), __tag, $n as u128);
             $f
         }
     };
