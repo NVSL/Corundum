@@ -73,155 +73,158 @@ fn main() {
         }
     }).unwrap();
 
-    P::transaction(|j| unsafe {
-        let b = Pbox::new(0u64, j);
-        for _ in 0..cnt {
-            let b = &*b;
-            measure!("DataLog(8)".to_string(), {
-                b.take_log(j, Notifier::None);
-            });
-        }
-        j.ignore();
-    }).unwrap();
-
-    P::transaction(|j| unsafe {
-        let b = Pbox::new([0u64;8], j);
-        for _ in 0..cnt {
-            let b = &*b;
-            measure!("DataLog(64)".to_string(), {
-                b.take_log(j, Notifier::None);
-            });
-        }
-        j.ignore();
-    }).unwrap();
-
-    P::transaction(|j| unsafe {
-        let b = Pbox::new([0u64;32], j);
-        for _ in 0..cnt {
-            let b = &*b;
-            measure!("DataLog(2K)".to_string(), {
-                b.take_log(j, Notifier::None);
-            });
-        }
-        j.ignore();
-    }).unwrap();
-
-    P::transaction(|j| unsafe {
-        let b = Pbox::new([0u64;128], j);
-        for _ in 0..cnt {
-            let b = &*b;
-            measure!("DataLog(8K)".to_string(), {
-                b.take_log(j, Notifier::None);
-            });
-        }
-        j.ignore();
-    }).unwrap();
-
-    P::transaction(|j| unsafe {
-        let b = Pbox::new([0u64;512], j);
-        for _ in 0..cnt {
-            let b = &*b;
-            measure!("DataLog(32K)".to_string(), {
-                b.take_log(j, Notifier::None);
-            });
-        }
-        j.ignore();
-    }).unwrap();
-
-    P::transaction(|j| unsafe {
-        let mut vec = Vec::with_capacity(cnt);
-        for _ in 0..cnt {
-            vec.push(P::alloc(8));
-        }
-        for i in 0..cnt {
-            let (_, off, len) = vec[i];
-            measure!("DropLog(8)".to_string(), {
-                Log::drop_on_commit(off, len, j);
-            });
-        }
-    }).unwrap();
-
-    P::transaction(|j| unsafe {
-        let mut vec = Vec::with_capacity(cnt);
-        for _ in 0..cnt {
-            vec.push(P::alloc(64));
-        }
-        for i in 0..cnt {
-            let (_, off, len) = vec[i];
-            measure!("DropLog(64)".to_string(), {
-                Log::drop_on_commit(off, len, j);
-            });
-        }
-    }).unwrap();
-
-    P::transaction(|j| unsafe {
-        let mut vec = Vec::with_capacity(cnt);
-        for _ in 0..cnt {
-            vec.push(P::alloc(2048));
-        }
-        for i in 0..cnt {
-            let (_, off, len) = vec[i];
-            measure!("DropLog(2K)".to_string(), {
-                Log::drop_on_commit(off, len, j);
-            });
-        }
-    }).unwrap();
-
-    P::transaction(|j| unsafe {
-        let mut vec = Vec::with_capacity(cnt);
-        for _ in 0..cnt {
-            vec.push(P::alloc(8*1024));
-        }
-        for i in 0..cnt {
-            let (_, off, len) = vec[i];
-            measure!("DropLog(8K)".to_string(), {
-                Log::drop_on_commit(off, len, j);
-            });
-        }
-    }).unwrap();
-
-    P::transaction(|j| unsafe {
-        let mut vec = Vec::with_capacity(cnt);
-        for _ in 0..cnt {
-            vec.push(P::alloc(32*1024));
-        }
-        for i in 0..cnt {
-            let (_, off, len) = vec[i];
-            measure!("DropLog(32K)".to_string(), {
-                Log::drop_on_commit(off, len, j);
-            });
-        }
-    }).unwrap();
-
-    P::transaction(|j| {
-        let b = Pbox::new(0u64, j);
-        let mut vec = Vec::<Pbox<u64>>::with_capacity(cnt);
-        for _ in 0..cnt {
-            measure!("Pbox:clone*".to_string(), {
-                vec.push(b.pclone(j));
-            });
-        }
-    }).unwrap();
-
-    P::transaction(|j| {
-        let b = Prc::new(0u64, j);
-        let mut vec = Vec::<Prc<u64>>::with_capacity(cnt);
-        measure!("Prc:clone*".to_string(), cnt, {
+    for _ in 0 .. cnt/50 {
+        let cnt = 50;
+        P::transaction(|j| unsafe {
+            let b = Pbox::new(0u64, j);
             for _ in 0..cnt {
-                vec.push(b.pclone(j));
+                let b = &*b;
+                measure!("DataLog(8)".to_string(), {
+                    b.take_log(j, Notifier::None);
+                });
             }
-        });
-    }).unwrap();
-
-    P::transaction(|j| {
-        let b = Parc::new(0u64, j);
-        let mut vec = Vec::<Parc<u64>>::with_capacity(cnt);
-        measure!("Parc:clone*".to_string(), cnt, {
+            j.ignore();
+        }).unwrap();
+    
+        P::transaction(|j| unsafe {
+            let b = Pbox::new([0u64;8], j);
             for _ in 0..cnt {
-                vec.push(b.pclone(j));
+                let b = &*b;
+                measure!("DataLog(64)".to_string(), {
+                    b.take_log(j, Notifier::None);
+                });
             }
-        });
-    }).unwrap();
+            j.ignore();
+        }).unwrap();
+    
+        P::transaction(|j| unsafe {
+            let b = Pbox::new([0u64;32], j);
+            for _ in 0..cnt {
+                let b = &*b;
+                measure!("DataLog(2K)".to_string(), {
+                    b.take_log(j, Notifier::None);
+                });
+            }
+            j.ignore();
+        }).unwrap();
+    
+        P::transaction(|j| unsafe {
+            let b = Pbox::new([0u64;128], j);
+            for _ in 0..cnt {
+                let b = &*b;
+                measure!("DataLog(8K)".to_string(), {
+                    b.take_log(j, Notifier::None);
+                });
+            }
+            j.ignore();
+        }).unwrap();
+    
+        P::transaction(|j| unsafe {
+            let b = Pbox::new([0u64;512], j);
+            for _ in 0..cnt {
+                let b = &*b;
+                measure!("DataLog(32K)".to_string(), {
+                    b.take_log(j, Notifier::None);
+                });
+            }
+            j.ignore();
+        }).unwrap();
+    
+        P::transaction(|j| unsafe {
+            let mut vec = Vec::with_capacity(cnt);
+            for _ in 0..cnt {
+                vec.push(P::alloc(8));
+            }
+            for i in 0..cnt {
+                let (_, off, len) = vec[i];
+                measure!("DropLog(8)".to_string(), {
+                    Log::drop_on_commit(off, len, j);
+                });
+            }
+        }).unwrap();
+    
+        P::transaction(|j| unsafe {
+            let mut vec = Vec::with_capacity(cnt);
+            for _ in 0..cnt {
+                vec.push(P::alloc(64));
+            }
+            for i in 0..cnt {
+                let (_, off, len) = vec[i];
+                measure!("DropLog(64)".to_string(), {
+                    Log::drop_on_commit(off, len, j);
+                });
+            }
+        }).unwrap();
+    
+        P::transaction(|j| unsafe {
+            let mut vec = Vec::with_capacity(cnt);
+            for _ in 0..cnt {
+                vec.push(P::alloc(2048));
+            }
+            for i in 0..cnt {
+                let (_, off, len) = vec[i];
+                measure!("DropLog(2K)".to_string(), {
+                    Log::drop_on_commit(off, len, j);
+                });
+            }
+        }).unwrap();
+    
+        P::transaction(|j| unsafe {
+            let mut vec = Vec::with_capacity(cnt);
+            for _ in 0..cnt {
+                vec.push(P::alloc(8*1024));
+            }
+            for i in 0..cnt {
+                let (_, off, len) = vec[i];
+                measure!("DropLog(8K)".to_string(), {
+                    Log::drop_on_commit(off, len, j);
+                });
+            }
+        }).unwrap();
+    
+        P::transaction(|j| unsafe {
+            let mut vec = Vec::with_capacity(cnt);
+            for _ in 0..cnt {
+                vec.push(P::alloc(32*1024));
+            }
+            for i in 0..cnt {
+                let (_, off, len) = vec[i];
+                measure!("DropLog(32K)".to_string(), {
+                    Log::drop_on_commit(off, len, j);
+                });
+            }
+        }).unwrap();
+    
+        P::transaction(|j| {
+            let b = Pbox::new(0u64, j);
+            let mut vec = Vec::<Pbox<u64>>::with_capacity(cnt);
+            for _ in 0..cnt {
+                measure!("Pbox:clone*".to_string(), {
+                    vec.push(b.pclone(j));
+                });
+            }
+        }).unwrap();
+    
+        P::transaction(|j| {
+            let b = Prc::new(0u64, j);
+            let mut vec = Vec::<Prc<u64>>::with_capacity(cnt);
+            measure!("Prc:clone*".to_string(), cnt, {
+                for _ in 0..cnt {
+                    vec.push(b.pclone(j));
+                }
+            });
+        }).unwrap();
+    
+        P::transaction(|j| {
+            let b = Parc::new(0u64, j);
+            let mut vec = Vec::<Parc<u64>>::with_capacity(cnt);
+            measure!("Parc:clone*".to_string(), cnt, {
+                for _ in 0..cnt {
+                    vec.push(b.pclone(j));
+                }
+            });
+        }).unwrap();
+    }
 
     P::transaction(|j| {
         let b = Prc::new(0u64, j);
