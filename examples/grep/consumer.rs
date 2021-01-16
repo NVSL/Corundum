@@ -133,6 +133,13 @@ impl Consumer {
             this.active = true;
         }).unwrap();
     }
+
+    pub fn private_buf_size(&self) -> usize {
+        P::transaction(|j| {
+            let this = self.data.lock(j);
+            this.private_lines.len()
+        }).unwrap()
+    }
 }
 
 impl Display for Consumer {

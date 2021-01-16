@@ -215,6 +215,16 @@ fn main() {
             thread.join().unwrap()
         }
 
+        eprintln!();
+        
+        if dist {
+            let mut i=0;
+            for c in &*consumers {
+                i += 1;
+                eprintln!("c#{}.private_buf_size = {}", i, c.private_buf_size());
+            }
+        }
+
         // Display results
         P::transaction(|j| {
             for c in &*consumers {
