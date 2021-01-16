@@ -112,37 +112,57 @@ fn main() {
     }).unwrap();
 
     P::transaction(|j| unsafe {
-        let (_, off, len) = P::alloc(8);
+        let mut vec = Vec::with_capacity(cnt);
+        for _ in 0..cnt {
+            vec.push(P::alloc(8));
+        }
         measure!("DropLog(8)".to_string(), cnt, {
-            for _ in 0..cnt {
+            for i in 0..cnt {
+                let (_, off, len) = vec[i];
                 Log::drop_on_commit(off, len, j);
             }
         });
-        let (_, off, len) = P::alloc(64);
+        vec.clear();
+        for _ in 0..cnt {
+            vec.push(P::alloc(64));
+        }
         measure!("DropLog(64)".to_string(), cnt, {
-            for _ in 0..cnt {
+            for i in 0..cnt {
+                let (_, off, len) = vec[i];
                 Log::drop_on_commit(off, len, j);
             }
         });
-        let (_, off, len) = P::alloc(2048);
+        vec.clear();
+        for _ in 0..cnt {
+            vec.push(P::alloc(2048));
+        }
         measure!("DropLog(2K)".to_string(), cnt, {
-            for _ in 0..cnt {
+            for i in 0..cnt {
+                let (_, off, len) = vec[i];
                 Log::drop_on_commit(off, len, j);
             }
         });
-        let (_, off, len) = P::alloc(8*1024);
+        vec.clear();
+        for _ in 0..cnt {
+            vec.push(P::alloc(8*1024));
+        }
         measure!("DropLog(8K)".to_string(), cnt, {
-            for _ in 0..cnt {
+            for i in 0..cnt {
+                let (_, off, len) = vec[i];
                 Log::drop_on_commit(off, len, j);
             }
         });
-        let (_, off, len) = P::alloc(32*1024);
+        vec.clear();
+        for _ in 0..cnt {
+            vec.push(P::alloc(32*1024));
+        }
         measure!("DropLog(32K)".to_string(), cnt, {
-            for _ in 0..cnt {
+            for i in 0..cnt {
+                let (_, off, len) = vec[i];
                 Log::drop_on_commit(off, len, j);
             }
         });
-        j.ignore();
+        vec.clear();
     }).unwrap();
 
     P::transaction(|j| {
