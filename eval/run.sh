@@ -83,18 +83,18 @@ if $all || $scale; then
     for r in ${rs[@]}; do
         for c in ${cs[@]}; do
             rm -f $pool
-            echo -e "\nRunning scalability test $r:$c (imperfect isolation) ..."
+            echo -e "\nRunning scalability test $r:$c (imperfectly isolation) ..."
             perf stat -o $dir_path/outputs/wc/$r-$c.out -C 0-$(($r+$c-1)) $dir_path/../target/release/examples/grep -r $r -c $c -f $pool $dir_path/files.list > $dir_path/outputs/wc/$r-$c.res
         done
     done
     echo
 fi
 
-if $all || $scale; then
+if $all || $scalei; then
     for r in ${rs[@]}; do
         for c in ${cs[@]}; do
             rm -f $pool
-            echo -e "\nRunning scalability test $r:$c (perfect isolation) ..."
+            echo -e "\nRunning scalability test $r:$c (perfectly isolation) ..."
             $dir_path/../target/release/examples/grep -D -r $r -c $c -f $pool $dir_path/files.list
             perf stat -o $dir_path/outputs/wc/$r-$c.out -C 0-$(($r+$c-1)) $dir_path/../target/release/examples/grep -r $r -c $c -f $pool $dir_path/files.list > $dir_path/outputs/wc/i-$r-$c.res
         done
