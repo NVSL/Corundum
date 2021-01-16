@@ -1062,7 +1062,7 @@ where
         }
     }
 
-    /// Executes commands atomically
+    /// Executes commands atomically with respect to system crashes
     /// 
     /// The `transaction` function takes a closure with one argument of type
     /// `&Journal<Self>`. Before running the closure, it atomically creates a

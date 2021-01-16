@@ -226,15 +226,15 @@ fn main() {
         }
 
         // Display results
-        P::transaction(|j| {
-            for c in &*consumers {
-                c.collect(root.words.pclone(j), j);
-            }
-            if unsafe {PRINT} {
+        if unsafe {PRINT} {
+            P::transaction(|j| {
+                for c in &*consumers {
+                    c.collect(root.words.pclone(j), j);
+                }
                 let words = root.words.lock(j);
                 println!("{}", words);
-            }
-        }).unwrap();
+            }).unwrap();
+        }
     }
     println!("Memory usage = {} bytes", P::used());
 }

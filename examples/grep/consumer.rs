@@ -8,7 +8,6 @@ use regex::Regex;
 type P = BuddyAlloc;
 
 struct ConsumerData {
-    buf: PString,
     local: HashMap<PString, u64>,
     active: bool,
     private_lines: Stack<PString>,
@@ -32,7 +31,6 @@ impl Consumer {
             data: PMutex::new(
                 ConsumerData {
                     private_lines: Stack::new(),
-                    buf: PString::new(j),
                     local: HashMap::new(j),
                     active: true,
                 },
@@ -48,7 +46,6 @@ impl Consumer {
             if !P::transaction(|j| {
                 if let Some(slf) = slf.promote(j) {
                     let mut this = slf.data.lock(j);
-                    if this.buf.is_empty() {
                         let mut rem = 0;
                         let line = if dist || !isolated {
                             let mut lines = slf.lines.lock(j);
@@ -72,42 +69,28 @@ impl Consumer {
                             } 
                         }
                         if let Some(line) = line {
-                            this.buf = line;
+                            if dist {
+                                let b = line.pclone(j);
+                                this.private_lines.push(b, j);
+                            } else {
+                                let buf = line.to_string();
+                                let re = Regex::new(slf.pattern.as_str()).unwrap();
+        
+                                for cap in re.captures_iter(&buf) {
+                                    let w = cap.get(1).unwrap().as_str().to_pstring(j);
+                                    this.local.update_with(&w, j, |v| v + 1);
+                                }
+                            }
                             true // Still working
                         } else {
                             this.active
                         }
-                    } else {
-                        true
-                    }
                 } else {
                     false
                 }
             }).unwrap() {
                 return;
             }
-
-            // counting words
-            P::transaction(|j| {
-                if let Some(slf) = slf.promote(j) {
-                    let mut this = slf.data.lock(j);
-                    if !this.buf.is_empty() {
-                        if dist {
-                            let b = this.buf.pclone(j);
-                            this.private_lines.push(b, j);
-                        } else {
-                            let buf = this.buf.to_string();
-                            let re = Regex::new(slf.pattern.as_str()).unwrap();
-    
-                            for cap in re.captures_iter(&buf) {
-                                let w = cap.get(1).unwrap().as_str().to_pstring(j);
-                                this.local.update_with(&w, j, |v| v + 1);
-                            }
-                        }
-                        this.buf.clear();
-                    }
-                }
-            }).unwrap();
         }
     }
 
@@ -146,7 +129,7 @@ impl Display for Consumer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         let s = P::transaction(move |j| {
             let data = self.data.lock(j);
-            format!("buf=\x1b[0;31m{}\x1b[0m\nlocal:\n\x1b[0;31m{}\x1b[0m", data.buf, data.local)
+            format!("local:\n\x1b[0;31m{}\x1b[0m", data.local)
         }).unwrap();
         writeln!(f, "{}", s)?;
         Ok(())
