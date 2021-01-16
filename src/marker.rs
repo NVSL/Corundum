@@ -147,4 +147,13 @@ impl<F: Future + LooseTxInUnsafe> Future for AssertTxInSafe<F> {
 /// storing persistent pointers in [`VCell`](./cell/struct.VCell.html)
 pub unsafe auto trait VSafe {}
 
+/// Safe to be sent to another thread
+/// 
+/// This marker is used to allow [`Parc`] to be sent to another thread only if
+/// it is wrapped in a [`VWeak`]. The [`Parc`] is not [`Send`] to prevent
+/// escaping a newly allocated instance of it from a transaction.
+/// 
+/// [`Parc`]: ../sync/struct.Parc.html
+/// [`Send`]: ../trait.Send.html
+/// [`VWeak`]: ../sync/struct.VWeak.html
 pub unsafe auto trait PSend {}

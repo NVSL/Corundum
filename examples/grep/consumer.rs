@@ -11,13 +11,13 @@ struct ConsumerData {
     buf: PString,
     local: HashMap<PString, u64>,
     active: bool,
+    private_lines: Stack<PString>,
 }
 
 pub struct Consumer {
     pattern: PString,
     data: PMutex<ConsumerData>,
     lines: Parc<PMutex<Stack<PString>>>,
-    private_lines: PMutex<Stack<PString>>,
 }
 
 impl Consumer {
@@ -29,9 +29,9 @@ impl Consumer {
         Self {
             pattern: PString::from_str(pattern, j),
             lines,
-            private_lines: PMutex::new(Stack::new(), j),
             data: PMutex::new(
                 ConsumerData {
+                    private_lines: Stack::new(),
                     buf: PString::new(j),
                     local: HashMap::new(j),
                     active: true,
@@ -49,17 +49,19 @@ impl Consumer {
                 if let Some(slf) = slf.promote(j) {
                     let mut this = slf.data.lock(j);
                     if this.buf.is_empty() {
-                        let mut lines = if dist || !isolated {
-                            slf.lines.lock(j)
+                        let mut rem = 0;
+                        let line = if dist || !isolated {
+                            let mut lines = slf.lines.lock(j);
+                            rem = lines.len();
+                            lines.pop(j)
                         } else {
-                            slf.private_lines.lock(j)
+                            this.private_lines.pop(j)
                         };
-                        let line = lines.pop(j);
                         if unsafe { crate::PRINT } {
                             if dist || !isolated {
                                 eprint!(
                                     "\r\x1b[?25lRemaining: {:<12} Memory usage: {:<9} bytes \x1b[?25h",
-                                    lines.len(),
+                                    rem,
                                     P::used()
                                 );
                             } else {
@@ -91,8 +93,8 @@ impl Consumer {
                     let mut this = slf.data.lock(j);
                     if !this.buf.is_empty() {
                         if dist {
-                            let mut lines = slf.private_lines.lock(j);
-                            lines.push(this.buf.pclone(j), j);
+                            let b = this.buf.pclone(j);
+                            this.private_lines.push(b, j);
                         } else {
                             let buf = this.buf.to_string();
                             let re = Regex::new(slf.pattern.as_str()).unwrap();

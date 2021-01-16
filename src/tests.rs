@@ -1403,6 +1403,7 @@ pub(crate) mod test {
             thread.join().unwrap();
         }
         print_usage(1);
+
         // assert_eq!(A::used(), prev);
     }
 
