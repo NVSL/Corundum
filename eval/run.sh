@@ -62,12 +62,10 @@ function read_time() {
 source $HOME/.cargo/env
 rustup default nightly
 
-cd $dir_path/..
 clflushopt=""
 if [ $nofopt -eq 0 ]; then
     clflushopt="use_clflushopt"
 fi
-cargo build --release --example grep --features="$clflushopt"
 
 [ -f $dir_path/inputs.tar.gz ] && \
     tar xzvf $dir_path/inputs.tar.gz -C $dir_path && \
@@ -80,23 +78,29 @@ mkdir -p $dir_path/outputs/wc
 rs=(1)
 cs=`seq 15`
 if $all || $scale; then
+    cd $dir_path/..
+    cargo build --release --example grep --features="$clflushopt"
+
     for r in ${rs[@]}; do
         for c in ${cs[@]}; do
             rm -f $pool
             echo -e "\nRunning scalability test $r:$c (imperfectly isolation) ..."
-            CPUS=$(($r+$c)) perf stat -o $dir_path/outputs/wc/$r-$c.out -C 0-$(($r+$c-1)) $dir_path/../target/release/examples/grep -N -r $r -c $c -f $pool $dir_path/files.list > $dir_path/outputs/wc/$r-$c.res
+            CPUS=$(($r+$c)) perf stat -o $dir_path/outputs/wc/$r-$c.out -a -C 0-$(($r+$c-1)) $dir_path/../target/release/examples/grep -N -r $r -c $c -f $pool $dir_path/files.list > $dir_path/outputs/wc/$r-$c.res
         done
     done
     echo
 fi
 
 if $all || $scalei; then
+    cd $dir_path/..
+    cargo build --release --example grep --features="$clflushopt"
+
     for r in ${rs[@]}; do
         for c in ${cs[@]}; do
             rm -f $pool
             echo -e "\nRunning scalability test $r:$c (perfectly isolation) ..."
-            CPUS=$(($r+$c)) perf stat -o $dir_path/outputs/wc/i-$r-$c.out -C 0-$(($r+$c-1)) $dir_path/../target/release/examples/grep -D -r $r -c $c -f $pool $dir_path/files.list
-            CPUS=$(($r+$c)) perf stat -o $dir_path/outputs/wc/i-$r-$c.out -C 0-$(($r+$c-1)) $dir_path/../target/release/examples/grep -I -N -r $r -c $c -f $pool $dir_path/files.list > $dir_path/outputs/wc/i-$r-$c.res
+            CPUS=$(($r+$c)) perf stat -o /dev/null -a -C 0-$(($r+$c-1)) $dir_path/../target/release/examples/grep -D -r $r -c $c -f $pool $dir_path/files.list
+            CPUS=$(($r+$c)) perf stat -o $dir_path/outputs/wc/i-$r-$c.out -a -C 0-$(($r+$c-1)) $dir_path/../target/release/examples/grep -I -N -r $r -c $c -f $pool $dir_path/files.list > $dir_path/outputs/wc/i-$r-$c.res
         done
     done
     echo
