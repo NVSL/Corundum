@@ -16,7 +16,6 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::thread;
 
-
 pub static mut PRINT: bool = true;
 type P = BuddyAlloc;
 
@@ -29,6 +28,7 @@ fn help() {
     println!("  -c num        Number of consumer threads (Default 1)");
     println!("  -f file       Pool filename (Default ./wc.pool)");
     println!("  -N            Do not print output (perf test)");
+    println!("  -D            Distribute text partitions to consumers");
     println!("  -C            Continue from the previous run");
     println!("  -P            Prepare only (do not run threads)");
     println!("  -h            Display help");
@@ -51,6 +51,7 @@ fn main() {
     let mut i = 1;
     let mut cont = false;
     let mut prep = false;
+    let mut dist = false;
     let mut pattern = "(\\w+)".to_string();
     while i < args.len() {
         let s = &args[i];
@@ -91,6 +92,8 @@ fn main() {
             cont = true;
         } else if s == "-N" {
             unsafe {PRINT = false;}
+        } else if s == "-D" {
+            dist = true;
         } else if s == "-P" {
             prep = true;
         } else if filename.is_empty() {
@@ -186,9 +189,11 @@ fn main() {
             p_threads.push(thread::spawn(move || Producer::start(p)))
         }
 
-        for c in &*consumers {
-            let c = c.demote();
-            c_threads.push(thread::spawn(move || Consumer::start(c)))
+        if !dist {
+            for c in &*consumers {
+                let c = c.demote();
+                c_threads.push(thread::spawn(move || Consumer::start(c)))
+            }
         }
 
         for thread in p_threads {

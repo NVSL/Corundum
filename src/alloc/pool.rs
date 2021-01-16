@@ -582,6 +582,14 @@ where
     /// This function is unsafe because undefined behavior can result
     /// if the caller does not ensure that `size` has non-zero.
     /// The allocated block of memory may or may not be initialized.
+    /// Using `alloc` may lead to memory leak if the transaction fails
+    /// after this function successfully returns. To allocate memory in
+    /// a failure-atomic manner, use [`pre_alloc`], [`Log::drop_on_failure`],
+    /// and [`perform`] functions respectively.
+    /// 
+    /// [`pre_alloc`]: #method.pre_alloc
+    /// [`Log::drop_on_failure`]: ../stm/struct.Log.html#method.drop_on_failure
+    /// [`perform`]: #method.pre_alloc
     #[inline]
     #[track_caller]
     unsafe fn alloc(size: usize) -> (*mut u8, u64, usize) {
