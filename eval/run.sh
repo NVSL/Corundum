@@ -4,6 +4,7 @@ dir_path=$(dirname $full_path)
 
 all=true
 scale=false
+scalei=false
 pmdk=false
 atlas=false
 go=false
@@ -14,38 +15,41 @@ nofopt=1
 function help() {
     echo "usage: $0 [OPTIONS]"
     echo "OPTIONS:"
-    echo "    -s, --scale      Test scalability"
-    echo "    -p, --pmdk       Run PMDK performance tests"
-    echo "    -a, --atlas      Run Atlas performance tests"
-    echo "    -g, --go-pmem    Run go-pmem performance tests"
-    echo "    -c, --corundum   Run Corundum performance tests"
-    echo "    -m, --mnemosyne  Run Corundum performance tests"
-    echo "    -n, --no-run     Do not run the experiments"
-    echo "    -h, --help       Display this information"
+    echo "    -s, --scale           Test scalability (imperfect isolation)"
+    echo "    -i, --scale-isolated  Test scalability (perfect isolation)"
+    echo "    -p, --pmdk            Run PMDK performance tests"
+    echo "    -a, --atlas           Run Atlas performance tests"
+    echo "    -g, --go-pmem         Run go-pmem performance tests"
+    echo "    -c, --corundum        Run Corundum performance tests"
+    echo "    -m, --mnemosyne       Run Corundum performance tests"
+    echo "    -n, --no-run          Do not run the experiments"
+    echo "    -h, --help            Display this information"
 }
 
 while test $# -gt 0
 do
     case "$1" in
-        -h|--help)      help && exit 0
+        -h|--help)           help && exit 0
             ;;
-        -s|--scale)     all=false && scale=true
+        -s|--scale)          all=false && scale=true
             ;;
-        -p|--pmdk)      all=false && pmdk=true
+        -i|--scale-isolated) all=false && scalei=true
             ;;
-        -a|--atlas)     all=false && atlas=true
+        -p|--pmdk)           all=false && pmdk=true
             ;;
-        -g|--go-pmem)   all=false && go=true
+        -a|--atlas)          all=false && atlas=true
             ;;
-        -c|--corundum)  all=false && crndm=true
+        -g|--go-pmem)        all=false && go=true
             ;;
-        -m|--mnemosyne) all=false && mnemosyne=true
+        -c|--corundum)       all=false && crndm=true
             ;;
-        -n|--no-run)    all=false
+        -m|--mnemosyne)      all=false && mnemosyne=true
             ;;
-        --*)           echo "bad option $1"
+        -n|--no-run)         all=false
             ;;
-        *)             echo "argument $1"
+        --*)                 echo "bad option $1"
+            ;;
+        *)                   echo "argument $1"
             ;;
     esac
     shift
@@ -79,8 +83,20 @@ if $all || $scale; then
     for r in ${rs[@]}; do
         for c in ${cs[@]}; do
             rm -f $pool
-            echo -e "\nRunning scalability test $r:$c ..."
+            echo -e "\nRunning scalability test $r:$c (imperfect isolation) ..."
             perf stat -o $dir_path/outputs/wc/$r-$c.out -C 0-$(($r+$c-1)) $dir_path/../target/release/examples/grep -r $r -c $c -f $pool $dir_path/files.list > $dir_path/outputs/wc/$r-$c.res
+        done
+    done
+    echo
+fi
+
+if $all || $scale; then
+    for r in ${rs[@]}; do
+        for c in ${cs[@]}; do
+            rm -f $pool
+            echo -e "\nRunning scalability test $r:$c (perfect isolation) ..."
+            $dir_path/../target/release/examples/grep -D -r $r -c $c -f $pool $dir_path/files.list
+            perf stat -o $dir_path/outputs/wc/$r-$c.out -C 0-$(($r+$c-1)) $dir_path/../target/release/examples/grep -r $r -c $c -f $pool $dir_path/files.list > $dir_path/outputs/wc/i-$r-$c.res
         done
     done
     echo
@@ -258,3 +274,17 @@ for r in ${rs[@]}; do
     done
     echo
 done >> $dir_path/outputs/scale.csv
+
+
+echo "p/c," > $dir_path/outputs/scalei.csv
+(for c in ${cs[@]}; do
+    echo -n "$c,"
+done; echo) >> $dir_path/outputs/scalei.csv
+
+for r in ${rs[@]}; do
+    echo -n "p=$r,"
+    for c in ${cs[@]}; do
+        echo -n $(read_time "$dir_path/outputs/wc/i-$r-$c.out"),
+    done
+    echo
+done >> $dir_path/outputs/scalei.csv
