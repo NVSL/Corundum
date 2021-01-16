@@ -30,7 +30,7 @@ fn main() {
         }).unwrap();
     }
     for _ in 0..cnt {
-        measure!("TxNop".to_string(), cnt, {
+        measure!("TxNop".to_string(), {
             P::transaction(|_| {unsafe { asm!("nop"); }}).unwrap();
         });
     }
@@ -64,7 +64,7 @@ fn main() {
         });
         for _ in 0..cnt {
             let mut b = Pbox::new(10, j);
-            measure!("DerefMut".to_string(), cnt, {
+            measure!("DerefMut".to_string(), {
                 *b += 20;
             });
         }
@@ -119,7 +119,7 @@ fn main() {
         }
         for i in 0..cnt {
             let (_, off, len) = vec[i];
-            measure!("DropLog(8)".to_string(), cnt, {
+            measure!("DropLog(8)".to_string(), {
                 Log::drop_on_commit(off, len, j);
             });
         }
@@ -129,7 +129,7 @@ fn main() {
         }
         for i in 0..cnt {
             let (_, off, len) = vec[i];
-            measure!("DropLog(64)".to_string(), cnt, {
+            measure!("DropLog(64)".to_string(), {
                 Log::drop_on_commit(off, len, j);
             });
         }
@@ -139,7 +139,7 @@ fn main() {
         }
         for i in 0..cnt {
             let (_, off, len) = vec[i];
-            measure!("DropLog(2K)".to_string(), cnt, {
+            measure!("DropLog(2K)".to_string(), {
                 Log::drop_on_commit(off, len, j);
             });
         }
@@ -149,7 +149,7 @@ fn main() {
         }
         for i in 0..cnt {
             let (_, off, len) = vec[i];
-            measure!("DropLog(8K)".to_string(), cnt, {
+            measure!("DropLog(8K)".to_string(), {
                 Log::drop_on_commit(off, len, j);
             });
         }
@@ -159,7 +159,7 @@ fn main() {
         }
         for i in 0..cnt {
             let (_, off, len) = vec[i];
-            measure!("DropLog(32K)".to_string(), cnt, {
+            measure!("DropLog(32K)".to_string(), {
                 Log::drop_on_commit(off, len, j);
             });
         }
@@ -170,7 +170,7 @@ fn main() {
         let b = Pbox::new(0u64, j);
         let mut vec = Vec::<Pbox<u64>>::with_capacity(cnt);
         for _ in 0..cnt {
-            measure!("Pbox:clone*".to_string(), cnt, {
+            measure!("Pbox:clone*".to_string(), {
                 vec.push(b.pclone(j));
             });
         }
