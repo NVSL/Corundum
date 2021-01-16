@@ -250,11 +250,11 @@ impl AddAssign<&Stat> for Stat {
     }
 }
 
-fn div(a: u128, b: u128) -> u128 {
+fn div(a: u128, b: u128) -> f64 {
     if b == 0 {
-        0
+        0f64
     } else {
-        a / b
+        a as f64 / b as f64
     }
 }
 
@@ -326,7 +326,7 @@ Logging       {:>14} ns    avg(ns): {:<8}    cnt: {}",
         for (k,v) in &self.custom {
             let avg = div(v.sum, v.cnt);
             let sd = f64::sqrt(v.sum2/(v.cnt as f64)-f64::powi(avg as f64,2));
-            lns.push(format!("{:<15}{:>10} ns  avg(ns): {:<8} std(ns): {:<8.1} min(ns): {:<8} max(ns): {:<10} cnt: {}",
+            lns.push(format!("{:<15}{:>10} ns  avg(ns): {:<11.3} std(ns): {:<8.1} min(ns): {:<8} max(ns): {:<10} cnt: {}",
                 k, v.sum, avg, sd, v.min, v.max, v.cnt));
             #[cfg(features="plot_histogram")] {
                 if let Some(plt) = plot(&v.points) {

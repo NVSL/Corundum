@@ -31,7 +31,7 @@ fn main() {
     }
     measure!("TxNop".to_string(), cnt, {
         for _ in 0..cnt {
-            P::transaction(|_| {}).unwrap();
+            P::transaction(|_| {unsafe { asm!("nop"); }}).unwrap();
         }
     });
     P::transaction(|_| {
@@ -64,12 +64,12 @@ fn main() {
         let mut v = 0;
         measure!("Deref".to_string(), cnt, {
             for _ in 0..cnt {
-                v = *b;
+                v += *b;
             }
         });
         measure!("DerefMut".to_string(), cnt, {
             for _ in 0..cnt {
-                *b = 20;
+                *b += 20;
             }
         });
         if v < 0 {
@@ -237,6 +237,9 @@ fn main() {
             m = vec[i];
         }
     });
+    if m == cnt as u128 + 1 {
+        println!("unreachable {}", m)
+    }
     measure!(" for".to_string(), cnt, {
         for _ in 0..cnt {
             unsafe { asm!("nop"); }
