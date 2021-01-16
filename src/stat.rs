@@ -8,7 +8,7 @@ use std::sync::Mutex;
 use std::thread::{current, ThreadId};
 use std::time::Instant;
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 struct Data {
     sum: u128,
     cnt: u128,
@@ -18,6 +18,12 @@ struct Data {
 
     #[cfg(features="plot_histogram")] 
     points: HashMap<u128, u128>
+}
+
+impl Default for Data {
+    fn default() -> Self {
+        Data { sum: 0, cnt: 0, sum2: 0f64, min: u128::MAX, max:0 }
+    }
 }
 
 #[derive(Default, Clone)]
@@ -91,8 +97,8 @@ macro_rules! add {
         counter.sum += t;
         counter.cnt += 1;
         counter.sum2 += f64::powi(t as f64, 2);
-        if counter.max == 0 || counter.max < t { counter.max = t; }
-        if counter.min == 0 || counter.min > t { counter.min = t; }
+        if counter.max < t { counter.max = t; }
+        if counter.min > t { counter.min = t; }
         // let p = counter.points.entry(t/10).or_default();
         // *p += 1;
     };
@@ -108,8 +114,8 @@ macro_rules! add {
         counter.sum += t;
         counter.cnt += $cnt;
         counter.sum2 += f64::powi(t as f64, 2);
-        if counter.max == 0 || counter.max < t { counter.max = t; }
-        if counter.min == 0 || counter.min > t { counter.min = t; }
+        if counter.max < t { counter.max = t; }
+        if counter.min > t { counter.min = t; }
     };
     ($tp:ty,$s:ident,$id:ident,$cnt:ident) => {
         let t = $s.elapsed().as_nanos();
@@ -238,8 +244,8 @@ impl AddAssign<&Stat> for Stat {
             counter.cnt += v.cnt;
             counter.sum += v.sum;
             counter.sum2 += v.sum2;
-            if counter.max == 0 || counter.max < v.max { counter.max = v.max; }
-            if counter.min == 0 || counter.min > v.min { counter.min = v.min; }
+            if counter.max < v.max { counter.max = v.max; }
+            if counter.min > v.min { counter.min = v.min; }
             #[cfg(features="plot_histogram")] {
                 for (vp,vv) in &v.points {
                     let p = counter.points.entry(*vp).or_default();
