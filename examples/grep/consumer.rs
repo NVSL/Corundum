@@ -48,7 +48,6 @@ impl Consumer {
                     let mut this = slf.data.lock(j);
                         let mut rem = 0;
                         let line = if dist || !isolated {
-                            println!("asfddf");
                             let mut lines = slf.lines.lock(j);
                             rem = lines.len();
                             lines.pop(j)

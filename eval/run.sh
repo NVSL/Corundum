@@ -84,7 +84,7 @@ if $all || $scale; then
     for r in ${rs[@]}; do
         for c in ${cs[@]}; do
             rm -f $pool
-            echo -e "\nRunning scalability test $r:$c (imperfectly isolation) ..."
+            echo -e "\nRunning scalability test $r:$c (imperfect isolation) ..."
             CPUS=$(($r+$c)) perf stat -o $dir_path/outputs/wc/$r-$c.out -a -C 0-$(($r+$c-1)) $dir_path/../target/release/examples/grep -N -r $r -c $c -f $pool $dir_path/files.list > $dir_path/outputs/wc/$r-$c.res
         done
     done
@@ -98,7 +98,7 @@ if $all || $scalei; then
     for r in ${rs[@]}; do
         for c in ${cs[@]}; do
             rm -f $pool
-            echo -e "\nRunning scalability test $r:$c (perfectly isolation) ..."
+            echo -e "\nRunning scalability test $r:$c (perfect isolation) ..."
             CPUS=$(($r+$c)) perf stat -o /dev/null -a -C 0-$(($r+$c-1)) $dir_path/../target/release/examples/grep -D -r $r -c $c -f $pool $dir_path/files.list
             CPUS=$(($r+$c)) perf stat -o $dir_path/outputs/wc/i-$r-$c.out -a -C 0-$(($r+$c-1)) $dir_path/../target/release/examples/grep -I -N -r $r -c $c -f $pool $dir_path/files.list > $dir_path/outputs/wc/i-$r-$c.res
         done
