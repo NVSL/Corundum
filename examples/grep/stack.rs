@@ -52,6 +52,10 @@ impl<T: PSafe> Stack<T> {
         self.len
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
     pub fn print_top10(&self)
     where
         T: Display,

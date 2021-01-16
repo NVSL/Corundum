@@ -28,9 +28,10 @@ fn help() {
     println!("  -c num        Number of consumer threads (Default 1)");
     println!("  -f file       Pool filename (Default ./wc.pool)");
     println!("  -N            Do not print output (perf test)");
-    println!("  -D            Distribute text partitions to consumers");
-    println!("  -C            Continue from the previous run");
-    println!("  -P            Prepare only (do not run threads)");
+    println!("  -D            Distribute text partitions to consumers (used with -I)");
+    println!("  -I            Continue counting in isolation (used with -D)");
+    println!("  -C            Continue from the previous run (used with -)P");
+    println!("  -P            Prepare only (do not run threads, used with -C)");
     println!("  -h            Display help");
     println!();
     println!("The input list-file should contain a list files to read and count words.");
@@ -52,6 +53,7 @@ fn main() {
     let mut cont = false;
     let mut prep = false;
     let mut dist = false;
+    let mut isld = false;
     let mut pattern = "(\\w+)".to_string();
     while i < args.len() {
         let s = &args[i];
@@ -94,6 +96,8 @@ fn main() {
             unsafe {PRINT = false;}
         } else if s == "-D" {
             dist = true;
+        } else if s == "-I" {
+            isld = true; cont = true;
         } else if s == "-P" {
             prep = true;
         } else if filename.is_empty() {
@@ -189,11 +193,13 @@ fn main() {
             p_threads.push(thread::spawn(move || Producer::start(p)))
         }
 
-        if !dist {
-            for c in &*consumers {
-                let c = c.demote();
-                c_threads.push(thread::spawn(move || Consumer::start(c)))
-            }
+        for consumer in &*consumers {
+            consumer.activate();
+        }
+
+        for c in &*consumers {
+            let c = c.demote();
+            c_threads.push(thread::spawn(move || Consumer::start(c, dist, isld)))
         }
 
         for thread in p_threads {
@@ -201,7 +207,6 @@ fn main() {
         }
 
         // Notifying consumers that there is no more feeds
-        let consumers = root.consumers.borrow();
         for consumer in &*consumers {
             consumer.stop_when_finished();
         }
