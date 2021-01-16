@@ -37,23 +37,15 @@ fn main() {
     P::transaction(|_| {
         for s in &sizes {
             let s = *s * 8;
+            let mut vec = Vec::with_capacity(cnt);
             measure!(format!("Alloc({})", s), cnt, {
                 for _ in 0..cnt {
-                    unsafe{ P::alloc(s); }
+                    unsafe{ vec.push(P::alloc(s)); }
                 }
             });
-        }
-    }).unwrap();
-
-    P::transaction(|_| {
-        for s in &sizes {
-            let mut blks = vec![];
-            for _ in 0..cnt {
-                unsafe{ blks.push(P::alloc(*s * 8)); }
-            }
-            measure!(format!("Dealloc({})^", *s), cnt, {
+            measure!(format!("Dealloc({})^", s), cnt, {
                 for i in 0..cnt {
-                    unsafe{ P::dealloc(blks[i].0, *s); }
+                    unsafe{ P::dealloc(vec[i].0, s); }
                 }
             });
         }
