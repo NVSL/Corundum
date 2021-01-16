@@ -21,7 +21,7 @@ fn main() {
     let sizes = vec![1, 8, 32, 128, 512];
     let cnt = args[2].parse::<usize>().expect("Expected a number");
 
-    let _pool = P::open_no_root(&args[1], O_CFNE | O_32GB).unwrap();
+    let _pool = P::open_no_root(&args[1], O_CNE | O_32GB).unwrap();
     for _ in 0..cnt {
         // Warm-up the allocator
         P::transaction(|_| {
