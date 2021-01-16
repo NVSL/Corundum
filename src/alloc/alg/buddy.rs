@@ -251,9 +251,6 @@ impl<A: MemPool> BuddyAlg<A> {
     /// Materializes the changes in the auxiliary list and clears the drop log
     /// records
     pub unsafe fn perform(&mut self) {
-        #[cfg(any(feature = "use_clflushopt", feature = "use_clwb"))]
-        sfence();
-
         self.drain_aux();
         self.drop_log.clear();
         self.aux_valid = false;

@@ -8,6 +8,3 @@ cat $dir_path/outputs/perf.csv | perl -pe 's/((?<=,)|(?<=^)),/ ,/g;' | column -t
 
 echo -e "\nScalability Results"
 cat $dir_path/outputs/scale.csv | perl -pe 's/((?<=,)|(?<=^)),/ ,/g;' | column -t -s,
-
-echo -e "\nScalability Results (Isolated)"
-cat $dir_path/outputs/scalei.csv | perl -pe 's/((?<=,)|(?<=^)),/ ,/g;' | column -t -s,
