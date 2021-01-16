@@ -29,11 +29,11 @@ fn main() {
             unsafe { P::alloc(s); }
         }).unwrap();
     }
-    measure!("TxNop".to_string(), cnt, {
-        for _ in 0..cnt {
+    for _ in 0..cnt {
+        measure!("TxNop".to_string(), cnt, {
             P::transaction(|_| {unsafe { asm!("nop"); }}).unwrap();
-        }
-    });
+        });
+    }
     P::transaction(|_| {
         for s in &sizes {
             let s = *s * 8;
@@ -55,18 +55,19 @@ fn main() {
     }).unwrap();
 
     P::transaction(|j| {
-        let mut b = Pbox::new(10, j);
+        let b = Pbox::new(10, j);
         let mut v = 0;
         measure!("Deref".to_string(), cnt, {
             for _ in 0..cnt {
                 v += *b;
             }
         });
-        measure!("DerefMut".to_string(), cnt, {
-            for _ in 0..cnt {
+        for _ in 0..cnt {
+            let mut b = Pbox::new(10, j);
+            measure!("DerefMut".to_string(), cnt, {
                 *b += 20;
-            }
-        });
+            });
+        }
         if v < 0 {
             println!("unreachable {}", v);
         }
