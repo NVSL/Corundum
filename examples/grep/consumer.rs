@@ -8,6 +8,7 @@ use regex::Regex;
 type P = BuddyAlloc;
 
 struct ConsumerData {
+    buf: PString,
     local: HashMap<PString, u64>,
     active: bool,
     private_lines: Stack<PString>,
@@ -30,6 +31,7 @@ impl Consumer {
             lines,
             data: PMutex::new(
                 ConsumerData {
+                    buf: PString::new(j),
                     private_lines: Stack::new(),
                     local: HashMap::new(j),
                     active: true,
@@ -46,13 +48,14 @@ impl Consumer {
             if !P::transaction(|j| {
                 if let Some(slf) = slf.promote(j) {
                     let mut this = slf.data.lock(j);
+                    if this.buf.is_empty() {
                         let mut rem = 0;
-                        let line = if isolated {
-                            this.private_lines.pop(j)
-                        } else {
+                        let line = if !isolated {
                             let mut lines = slf.lines.lock(j);
                             rem = lines.len();
                             lines.pop(j)
+                        } else {
+                            this.private_lines.pop(j)
                         };
                         if unsafe { crate::PRINT } {
                             if !isolated {
@@ -69,23 +72,37 @@ impl Consumer {
                             } 
                         }
                         if let Some(line) = line {
-                            let buf = line.to_string();
-                            let re = Regex::new(slf.pattern.as_str()).unwrap();
-    
-                            for cap in re.captures_iter(&buf) {
-                                let w = cap.get(1).unwrap().as_str().to_pstring(j);
-                                this.local.update_with(&w, j, |v| v + 1);
-                            }
+                            this.buf = line;
                             true // Still working
                         } else {
                             this.active
                         }
+                    } else {
+                        true
+                    }
                 } else {
                     false
                 }
             }).unwrap() {
                 return;
             }
+
+            // counting words
+            P::transaction(|j| {
+                if let Some(slf) = slf.promote(j) {
+                    let mut this = slf.data.lock(j);
+                    if !this.buf.is_empty() {
+                        let buf = this.buf.to_string();
+                        let re = Regex::new(slf.pattern.as_str()).unwrap();
+
+                        for cap in re.captures_iter(&buf) {
+                            let w = cap.get(1).unwrap().as_str().to_pstring(j);
+                            this.local.update_with(&w, j, |v| v + 1);
+                        }
+                        this.buf.clear();
+                    }
+                }
+            }).unwrap();
         }
     }
 
