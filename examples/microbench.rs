@@ -38,16 +38,19 @@ fn main() {
         for s in &sizes {
             let s = *s * 8;
             let mut vec = Vec::with_capacity(cnt);
-            measure!(format!("Alloc({})", s), cnt, {
-                for _ in 0..cnt {
-                    unsafe{ vec.push(P::alloc(s)); }
-                }
-            });
-            measure!(format!("Dealloc({})^", s), cnt, {
-                for i in 0..cnt {
-                    unsafe{ P::dealloc(vec[i].0, s); }
-                }
-            });
+            for _ in 0..cnt {
+                vec.push({
+                    measure!(format!("Alloc({})", s), {
+                        unsafe{ P::alloc(s) }
+                    })
+                }); 
+            }
+            for i in 0..cnt {
+                let off = vec[i].0;
+                measure!(format!("Dealloc({})^", s), {
+                    unsafe{ P::dealloc(off, s); }
+                });
+            }
         }
     }).unwrap();
 
@@ -71,35 +74,40 @@ fn main() {
 
     P::transaction(|j| unsafe {
         let b = Pbox::new(0u64, j);
-        measure!("DataLog(8)".to_string(), cnt, {
-            for _ in 0..cnt {
-                (*b).take_log(j, Notifier::None);
-            }
-        });
+        for _ in 0..cnt {
+            let b = &*b;
+            measure!("DataLog(8)".to_string(), {
+                b.take_log(j, Notifier::None);
+            });
+        }
         let b = Pbox::new([0u64;8], j);
-        measure!("DataLog(64)".to_string(), cnt, {
-            for _ in 0..cnt {
-                (*b).take_log(j, Notifier::None);
-            }
-        });
+        for _ in 0..cnt {
+            let b = &*b;
+            measure!("DataLog(64)".to_string(), {
+                b.take_log(j, Notifier::None);
+            });
+        }
         let b = Pbox::new([0u64;32], j);
-        measure!("DataLog(2K)".to_string(), cnt, {
-            for _ in 0..cnt {
-                (*b).take_log(j, Notifier::None);
-            }
-        });
+        for _ in 0..cnt {
+            let b = &*b;
+            measure!("DataLog(2K)".to_string(), {
+                b.take_log(j, Notifier::None);
+            });
+        }
         let b = Pbox::new([0u64;128], j);
-        measure!("DataLog(8K)".to_string(), cnt, {
-            for _ in 0..cnt {
-                (*b).take_log(j, Notifier::None);
-            }
-        });
+        for _ in 0..cnt {
+            let b = &*b;
+            measure!("DataLog(8K)".to_string(), {
+                b.take_log(j, Notifier::None);
+            });
+        }
         let b = Pbox::new([0u64;512], j);
-        measure!("DataLog(32K)".to_string(), cnt, {
-            for _ in 0..cnt {
-                (*b).take_log(j, Notifier::None);
-            }
-        });
+        for _ in 0..cnt {
+            let b = &*b;
+            measure!("DataLog(32K)".to_string(), {
+                b.take_log(j, Notifier::None);
+            });
+        }
         j.ignore();
     }).unwrap();
 
@@ -108,63 +116,63 @@ fn main() {
         for _ in 0..cnt {
             vec.push(P::alloc(8));
         }
-        measure!("DropLog(8)".to_string(), cnt, {
-            for i in 0..cnt {
-                let (_, off, len) = vec[i];
+        for i in 0..cnt {
+            let (_, off, len) = vec[i];
+            measure!("DropLog(8)".to_string(), cnt, {
                 Log::drop_on_commit(off, len, j);
-            }
-        });
+            });
+        }
         vec.clear();
         for _ in 0..cnt {
             vec.push(P::alloc(64));
         }
-        measure!("DropLog(64)".to_string(), cnt, {
-            for i in 0..cnt {
-                let (_, off, len) = vec[i];
+        for i in 0..cnt {
+            let (_, off, len) = vec[i];
+            measure!("DropLog(64)".to_string(), cnt, {
                 Log::drop_on_commit(off, len, j);
-            }
-        });
+            });
+        }
         vec.clear();
         for _ in 0..cnt {
             vec.push(P::alloc(2048));
         }
-        measure!("DropLog(2K)".to_string(), cnt, {
-            for i in 0..cnt {
-                let (_, off, len) = vec[i];
+        for i in 0..cnt {
+            let (_, off, len) = vec[i];
+            measure!("DropLog(2K)".to_string(), cnt, {
                 Log::drop_on_commit(off, len, j);
-            }
-        });
+            });
+        }
         vec.clear();
         for _ in 0..cnt {
             vec.push(P::alloc(8*1024));
         }
-        measure!("DropLog(8K)".to_string(), cnt, {
-            for i in 0..cnt {
-                let (_, off, len) = vec[i];
+        for i in 0..cnt {
+            let (_, off, len) = vec[i];
+            measure!("DropLog(8K)".to_string(), cnt, {
                 Log::drop_on_commit(off, len, j);
-            }
-        });
+            });
+        }
         vec.clear();
         for _ in 0..cnt {
             vec.push(P::alloc(32*1024));
         }
-        measure!("DropLog(32K)".to_string(), cnt, {
-            for i in 0..cnt {
-                let (_, off, len) = vec[i];
+        for i in 0..cnt {
+            let (_, off, len) = vec[i];
+            measure!("DropLog(32K)".to_string(), cnt, {
                 Log::drop_on_commit(off, len, j);
-            }
-        });
+            });
+        }
         vec.clear();
     }).unwrap();
 
     P::transaction(|j| {
         let b = Pbox::new(0u64, j);
         let mut vec = Vec::<Pbox<u64>>::with_capacity(cnt);
-        measure!("Pbox:clone*".to_string(), cnt, {
-            for _ in 0..cnt {
+        for _ in 0..cnt {
+            measure!("Pbox:clone*".to_string(), cnt, {
                 vec.push(b.pclone(j));
-            }
-        });
+            });
+        }
     }).unwrap();
 
     P::transaction(|j| {

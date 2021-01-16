@@ -325,7 +325,7 @@ Logging       {:>14} ns    avg(ns): {:<8}    cnt: {}",
 
         for (k,v) in &self.custom {
             let avg = div(v.sum, v.cnt);
-            let sd = f64::sqrt(v.sum2/(v.cnt as f64)-f64::powi(avg as f64,2));
+            let sd = f64::sqrt(v.sum2/(v.cnt as f64)-f64::powi(avg,2));
             lns.push(format!("{:<15}{:>10} ns  avg(ns): {:<11.3} std(ns): {:<8.1} min(ns): {:<8} max(ns): {:<10} cnt: {}",
                 k, v.sum, avg, sd, v.min, v.max, v.cnt));
             #[cfg(features="plot_histogram")] {
@@ -405,10 +405,21 @@ fn plot(data: &HashMap<u128, u128>) -> Option<Vec<String>> {
 #[macro_export]
 macro_rules! measure {
     ($tag:expr,$n:expr,$f:block) => {
-        let __tag = $tag;
         {
-            let _perf = Measure::<P>::Batch(Instant::now(), __tag, $n as u128);
-            $f
+            let __tag = $tag;
+            {
+                let _perf = Measure::<P>::Batch(Instant::now(), __tag, $n as u128);
+                $f
+            }
+        }
+    };
+    ($tag:expr,$f:block) => {
+        {
+            let __tag = $tag;
+            {
+                let _perf = Measure::<P>::Custom(Instant::now(), __tag);
+                $f
+            }
         }
     };
 }
