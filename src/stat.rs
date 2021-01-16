@@ -114,7 +114,7 @@ macro_rules! add {
         let avg = t as f64/$cnt as f64;
         counter.sum += t;
         counter.cnt += $cnt;
-        counter.sum2 += f64::powi(avg * $cnt as f64, 2);
+        counter.sum2 += f64::powi(avg, 2) * $cnt as f64;
         let min = f64::trunc(avg) as u128;
         let max = f64::ceil(avg) as u128;
         if counter.max < max { counter.max = max; }
