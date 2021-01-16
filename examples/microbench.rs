@@ -34,8 +34,8 @@ fn main() {
             P::transaction(|_| {unsafe { asm!("nop"); }}).unwrap();
         });
     }
-    P::transaction(|_| {
-        for s in &sizes {
+    for s in &sizes {
+        P::transaction(|_| {
             let s = *s * 8;
             let mut vec = Vec::with_capacity(cnt);
             for _ in 0..cnt {
@@ -51,8 +51,8 @@ fn main() {
                     unsafe{ P::dealloc(off, s); }
                 });
             }
-        }
-    }).unwrap();
+        }).unwrap();
+    }
 
     P::transaction(|j| {
         let b = Pbox::new(10, j);
@@ -81,6 +81,10 @@ fn main() {
                 b.take_log(j, Notifier::None);
             });
         }
+        j.ignore();
+    }).unwrap();
+
+    P::transaction(|j| unsafe {
         let b = Pbox::new([0u64;8], j);
         for _ in 0..cnt {
             let b = &*b;
@@ -88,6 +92,10 @@ fn main() {
                 b.take_log(j, Notifier::None);
             });
         }
+        j.ignore();
+    }).unwrap();
+
+    P::transaction(|j| unsafe {
         let b = Pbox::new([0u64;32], j);
         for _ in 0..cnt {
             let b = &*b;
@@ -95,6 +103,10 @@ fn main() {
                 b.take_log(j, Notifier::None);
             });
         }
+        j.ignore();
+    }).unwrap();
+
+    P::transaction(|j| unsafe {
         let b = Pbox::new([0u64;128], j);
         for _ in 0..cnt {
             let b = &*b;
@@ -102,6 +114,10 @@ fn main() {
                 b.take_log(j, Notifier::None);
             });
         }
+        j.ignore();
+    }).unwrap();
+
+    P::transaction(|j| unsafe {
         let b = Pbox::new([0u64;512], j);
         for _ in 0..cnt {
             let b = &*b;
@@ -123,7 +139,10 @@ fn main() {
                 Log::drop_on_commit(off, len, j);
             });
         }
-        vec.clear();
+    }).unwrap();
+
+    P::transaction(|j| unsafe {
+        let mut vec = Vec::with_capacity(cnt);
         for _ in 0..cnt {
             vec.push(P::alloc(64));
         }
@@ -133,7 +152,10 @@ fn main() {
                 Log::drop_on_commit(off, len, j);
             });
         }
-        vec.clear();
+    }).unwrap();
+
+    P::transaction(|j| unsafe {
+        let mut vec = Vec::with_capacity(cnt);
         for _ in 0..cnt {
             vec.push(P::alloc(2048));
         }
@@ -143,7 +165,10 @@ fn main() {
                 Log::drop_on_commit(off, len, j);
             });
         }
-        vec.clear();
+    }).unwrap();
+
+    P::transaction(|j| unsafe {
+        let mut vec = Vec::with_capacity(cnt);
         for _ in 0..cnt {
             vec.push(P::alloc(8*1024));
         }
@@ -153,7 +178,10 @@ fn main() {
                 Log::drop_on_commit(off, len, j);
             });
         }
-        vec.clear();
+    }).unwrap();
+
+    P::transaction(|j| unsafe {
+        let mut vec = Vec::with_capacity(cnt);
         for _ in 0..cnt {
             vec.push(P::alloc(32*1024));
         }
@@ -163,7 +191,6 @@ fn main() {
                 Log::drop_on_commit(off, len, j);
             });
         }
-        vec.clear();
     }).unwrap();
 
     P::transaction(|j| {
