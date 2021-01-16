@@ -111,11 +111,12 @@ macro_rules! add {
         let tid = current().id();
         let stat = stat.entry((tid,type_name::<$tp>())).or_default();
         let counter = stat.custom.entry($m).or_default();
+        let avg = t/$cnt;
         counter.sum += t;
         counter.cnt += $cnt;
         counter.sum2 += f64::powi(t as f64, 2);
-        if counter.max < t { counter.max = t; }
-        if counter.min > t { counter.min = t; }
+        if counter.max < avg { counter.max = avg; }
+        if counter.min > avg { counter.min = avg; }
     };
     ($tp:ty,$s:ident,$id:ident,$cnt:ident) => {
         let t = $s.elapsed().as_nanos();
