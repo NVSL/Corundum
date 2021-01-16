@@ -40,22 +40,22 @@ impl Consumer {
     }
 
     /// Starts processing `lines` and updating `words`
-    pub fn start(slf: VWeak<Consumer, P>, dist: bool, isolated: bool) {
+    pub fn start(slf: VWeak<Consumer, P>, isolated: bool) {
         loop {
             // Read from global buffer to the local buffer
             if !P::transaction(|j| {
                 if let Some(slf) = slf.promote(j) {
                     let mut this = slf.data.lock(j);
                         let mut rem = 0;
-                        let line = if dist || !isolated {
+                        let line = if isolated {
+                            this.private_lines.pop(j)
+                        } else {
                             let mut lines = slf.lines.lock(j);
                             rem = lines.len();
                             lines.pop(j)
-                        } else {
-                            this.private_lines.pop(j)
                         };
                         if unsafe { crate::PRINT } {
-                            if dist || !isolated {
+                            if !isolated {
                                 eprint!(
                                     "\r\x1b[?25lRemaining: {:<12} Memory usage: {:<9} bytes \x1b[?25h",
                                     rem,
@@ -69,17 +69,12 @@ impl Consumer {
                             } 
                         }
                         if let Some(line) = line {
-                            if dist {
-                                let b = line.pclone(j);
-                                this.private_lines.push(b, j);
-                            } else {
-                                let buf = line.to_string();
-                                let re = Regex::new(slf.pattern.as_str()).unwrap();
-        
-                                for cap in re.captures_iter(&buf) {
-                                    let w = cap.get(1).unwrap().as_str().to_pstring(j);
-                                    this.local.update_with(&w, j, |v| v + 1);
-                                }
+                            let buf = line.to_string();
+                            let re = Regex::new(slf.pattern.as_str()).unwrap();
+    
+                            for cap in re.captures_iter(&buf) {
+                                let w = cap.get(1).unwrap().as_str().to_pstring(j);
+                                this.local.update_with(&w, j, |v| v + 1);
                             }
                             true // Still working
                         } else {
@@ -115,6 +110,16 @@ impl Consumer {
             let mut this = self.data.lock(j);
             this.active = true;
         }).unwrap();
+    }
+
+    pub fn take_one(&self, lines: &mut Stack<PString>, j: &Journal) -> bool {
+        let mut this = self.data.lock(j);
+        if let Some(line) = lines.pop(j) {
+            this.private_lines.push(line, j);
+            true
+        } else {
+            false
+        }
     }
 
     pub fn private_buf_size(&self) -> usize {

@@ -18,7 +18,7 @@ fn main() {
         return;
     }
 
-    let sizes = vec![1, 8, 32, 128, 512];
+    let sizes = vec![512, 128, 32, 8, 1];
     let cnt = args[2].parse::<usize>().expect("Expected a number");
 
     let _pool = P::open_no_root(&args[1], O_CF | O_32GB).unwrap();

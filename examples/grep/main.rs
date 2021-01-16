@@ -197,18 +197,32 @@ fn main() {
             consumer.activate();
         }
 
-        for c in &*consumers {
-            let c = c.demote();
-            c_threads.push(thread::spawn(move || Consumer::start(c, dist, isld)))
+        if !dist {
+            for c in &*consumers {
+                let c = c.demote();
+                c_threads.push(thread::spawn(move || Consumer::start(c, isld)))
+            }
         }
 
         for thread in p_threads {
             thread.join().unwrap()
         }
 
-        // Notifying consumers that there is no more feeds
-        for consumer in &*consumers {
-            consumer.stop_when_finished();
+        if !dist {
+            // Notifying consumers that there is no more feeds
+            for consumer in &*consumers {
+                consumer.stop_when_finished();
+            }
+        } else {
+            P::transaction(|j| {
+                let mut lines = root.lines.lock(j);
+                let mut work = true;
+                while work {
+                    for consumer in &*consumers {
+                        work = consumer.take_one(&mut lines, j);
+                    }
+                }
+            }).unwrap();
         }
 
         for thread in c_threads {

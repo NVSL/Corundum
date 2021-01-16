@@ -85,7 +85,7 @@ if $all || $scale; then
         for c in ${cs[@]}; do
             rm -f $pool
             echo -e "\nRunning scalability test $r:$c (imperfect isolation) ..."
-            CPUS=$(($r+$c)) perf stat -o $dir_path/outputs/wc/$r-$c.out -a -C 0-$(($r+$c-1)) $dir_path/../target/release/examples/grep -N -r $r -c $c -f $pool $dir_path/files.list > $dir_path/outputs/wc/$r-$c.res
+            CPUS=$(($r+$c)) perf stat -o $dir_path/outputs/wc/$r-$c.out -a -C 0-$(($r+$c-1)) taskset -c 0-$(($r+$c-1)) $dir_path/../target/release/examples/grep -N -r $r -c $c -f $pool $dir_path/files.list > $dir_path/outputs/wc/$r-$c.res
         done
     done
     echo
@@ -99,8 +99,8 @@ if $all || $scalei; then
         for c in ${cs[@]}; do
             rm -f $pool
             echo -e "\nRunning scalability test $r:$c (perfect isolation) ..."
-            CPUS=$(($r+$c)) perf stat -o /dev/null -a -C 0-$(($r+$c-1)) $dir_path/../target/release/examples/grep -D -r $r -c $c -f $pool $dir_path/files.list
-            CPUS=$(($r+$c)) perf stat -o $dir_path/outputs/wc/i-$r-$c.out -a -C 0-$(($r+$c-1)) $dir_path/../target/release/examples/grep -I -N -r $r -c $c -f $pool $dir_path/files.list > $dir_path/outputs/wc/i-$r-$c.res
+            CPUS=$(($r+$c)) taskset -c 0-$(($r+$c-1)) $dir_path/../target/release/examples/grep -D -r $r -c $c -f $pool $dir_path/files.list
+            CPUS=$(($r+$c)) perf stat -o $dir_path/outputs/wc/i-$r-$c.out -a -C 0-$(($r+$c-1)) taskset -c 0-$(($r+$c-1)) $dir_path/../target/release/examples/grep -I -N -r $r -c $c -f $pool $dir_path/files.list > $dir_path/outputs/wc/i-$r-$c.res
         done
     done
     echo
@@ -114,41 +114,41 @@ if $all || $pmdk; then
 
     rm -f $pool
     echo "Running performance test (PMDK-BST:INS)..."
-    CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=$nofopt PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-bst-INS.out -d $dir_path/pmdk/btree $pool s 30000
+    CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=$nofopt PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-bst-INS.out -d taskset -c 0 $dir_path/pmdk/btree $pool s 30000
     echo "Running performance test (PMDK-BST:CHK)..."
-    CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=$nofopt PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-bst-CHK.out -d $dir_path/pmdk/btree $pool r 30000
+    CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=$nofopt PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-bst-CHK.out -d taskset -c 0 $dir_path/pmdk/btree $pool r 30000
 
     rm -f $pool
     pmempool create obj --layout=simplekv -s 1G $pool
     echo "Running performance test (PMDK-KVStore:PUT)..."
-    CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=$nofopt PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-kv-PUT.out -d $dir_path/pmdk/simplekv $pool burst put 65536
+    CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=$nofopt PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-kv-PUT.out -d taskset -c 0 $dir_path/pmdk/simplekv $pool burst put 65536
     echo "Running performance test (PMDK-KVStore:GET)..."
-    CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=$nofopt PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-kv-GET.out -d $dir_path/pmdk/simplekv $pool burst get 65536
+    CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=$nofopt PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-kv-GET.out -d taskset -c 0 $dir_path/pmdk/simplekv $pool burst get 65536
 
 
     rm -f $pool
     for i in ${ins[@]}; do
     echo "Running performance test (PMDK-B+Tree:$i)..."
-    PMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=$nofopt PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-$i.out -d $dir_path/pmdk/pmdk-1.8/src/examples/libpmemobj/map/mapcli btree $pool < $dir_path/inputs/perf/$i > /dev/null
+    PMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=$nofopt PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -C 0 -o $dir_path/outputs/perf/pmdk-$i.out -d taskset -c 0 $dir_path/pmdk/pmdk-1.8/src/examples/libpmemobj/map/mapcli btree $pool < $dir_path/inputs/perf/$i > /dev/null
     done
 fi
 
 if $all || $atlas; then
     rm -rf /mnt/pmem0/`whoami`
     echo "Running performance test (Atlas-BST:INS)..."
-    perf stat -C 0 -o $dir_path/outputs/perf/atlas-bst-INS.out -d $dir_path/atlas/Atlas/runtime/build/tests/data_structures/btree s 30000
+    perf stat -C 0 -o $dir_path/outputs/perf/atlas-bst-INS.out -d taskset -c 0 $dir_path/atlas/Atlas/runtime/build/tests/data_structures/btree s 30000
     echo "Running performance test (Atlas-BST:CHK)..."
-    perf stat -C 0 -o $dir_path/outputs/perf/atlas-bst-CHK.out -d $dir_path/atlas/Atlas/runtime/build/tests/data_structures/btree r 30000
+    perf stat -C 0 -o $dir_path/outputs/perf/atlas-bst-CHK.out -d taskset -c 0 $dir_path/atlas/Atlas/runtime/build/tests/data_structures/btree r 30000
 
     echo "Running performance test (Atlas-KVStore:PUT)..."
-    perf stat -C 0 -o $dir_path/outputs/perf/atlas-kv-PUT.out -d $dir_path/atlas/Atlas/runtime/build/tests/data_structures/simplekv burst put 65536
+    perf stat -C 0 -o $dir_path/outputs/perf/atlas-kv-PUT.out -d taskset -c 0 $dir_path/atlas/Atlas/runtime/build/tests/data_structures/simplekv burst put 65536
     echo "Running performance test (Atlas-KVStore:GET)..."
-    perf stat -C 0 -o $dir_path/outputs/perf/atlas-kv-GET.out -d $dir_path/atlas/Atlas/runtime/build/tests/data_structures/simplekv burst get 65536
+    perf stat -C 0 -o $dir_path/outputs/perf/atlas-kv-GET.out -d taskset -c 0 $dir_path/atlas/Atlas/runtime/build/tests/data_structures/simplekv burst get 65536
 
     rm -rf /mnt/pmem0/`whoami`  # Static in the code
     for i in ${ins[@]}; do
         echo "Running performance test (Atlas-B+Tree:$i)..."
-        perf stat -C 0-4 -o $dir_path/outputs/perf/atlas-$i.out -d $dir_path/atlas/Atlas/runtime/build/tests/data_structures/btree_map < $dir_path/inputs/perf/$i > /dev/null
+        perf stat -C 0-4 -o $dir_path/outputs/perf/atlas-$i.out -d taskset -c 0 $dir_path/atlas/Atlas/runtime/build/tests/data_structures/btree_map < $dir_path/inputs/perf/$i > /dev/null
     done
 fi
 
@@ -156,19 +156,19 @@ if $all || $mnemosyne; then
     cd $dir_path/mnemosyne/mnemosyne-gcc/usermode
     rm -rf /mnt/pmem0/psegments
     echo "Running performance test (Mnemosyne-BST:INS)..."
-    perf stat -C 0 -o $dir_path/outputs/perf/mnemosyne-bst-INS.out -d ./build/examples/btree/btree s 30000
+    perf stat -C 0 -o $dir_path/outputs/perf/mnemosyne-bst-INS.out -d taskset -c 0 ./build/examples/btree/btree s 30000
     echo "Running performance test (Mnemosyne-BST:CHK)..."
-    perf stat -C 0 -o $dir_path/outputs/perf/mnemosyne-bst-CHK.out -d ./build/examples/btree/btree r 30000
+    perf stat -C 0 -o $dir_path/outputs/perf/mnemosyne-bst-CHK.out -d taskset -c 0 ./build/examples/btree/btree r 30000
 
     echo "Running performance test (Mnemosyne-KVStore:PUT)..."
-    perf stat -C 0 -o $dir_path/outputs/perf/mnemosyne-kv-PUT.out -d ./build/examples/simplekv/simplekv burst put 65536
+    perf stat -C 0 -o $dir_path/outputs/perf/mnemosyne-kv-PUT.out -d taskset -c 0 ./build/examples/simplekv/simplekv burst put 65536
     echo "Running performance test (Mnemosyne-KVStore:GET)..."
-    perf stat -C 0 -o $dir_path/outputs/perf/mnemosyne-kv-GET.out -d ./build/examples/simplekv/simplekv burst get 65536
+    perf stat -C 0 -o $dir_path/outputs/perf/mnemosyne-kv-GET.out -d taskset -c 0 ./build/examples/simplekv/simplekv burst get 65536
 
     rm -rf /mnt/pmem0/psegments
     for i in ${ins[@]}; do
         echo "Running performance test (Mnemosyne-B+Tree:$i)..."
-        perf stat -C 0-4 -o $dir_path/outputs/perf/mnemosyne-$i.out -d ./build/examples/btree_map/btree_map < $dir_path/inputs/perf/$i > /dev/null
+        perf stat -C 0-4 -o $dir_path/outputs/perf/mnemosyne-$i.out -d taskset -c 0 ./build/examples/btree_map/btree_map < $dir_path/inputs/perf/$i > /dev/null
     done
     cd $dir_path
 fi
@@ -176,35 +176,35 @@ fi
 if $all || $go; then
     rm -f $pool
     echo "Running performance test (go-pmem-BST:INS)..."
-    perf stat -C 0 -o $dir_path/outputs/perf/go-bst-INS.out -d $dir_path/go/btree $pool s 30000
+    perf stat -C 0 -o $dir_path/outputs/perf/go-bst-INS.out -d taskset -c 0 $dir_path/go/btree $pool s 30000
     echo "Running performance test (go-pmem-BST:CHK)..."
-    perf stat -C 0 -o $dir_path/outputs/perf/go-bst-CHK.out -d $dir_path/go/btree $pool r 30000
+    perf stat -C 0 -o $dir_path/outputs/perf/go-bst-CHK.out -d taskset -c 0 $dir_path/go/btree $pool r 30000
 
     rm -f $pool
     echo "Running performance test (go-pmem-KVStore:PUT)..."
-    perf stat -C 0 -o $dir_path/outputs/perf/go-kv-PUT.out -d $dir_path/go/simplekv $pool burst put 65536
+    perf stat -C 0 -o $dir_path/outputs/perf/go-kv-PUT.out -d taskset -c 0 $dir_path/go/simplekv $pool burst put 65536
     echo "Running performance test (go-pmem-KVStore:GET)..."
-    perf stat -C 0 -o $dir_path/outputs/perf/go-kv-GET.out -d $dir_path/go/simplekv $pool burst get 65536
+    perf stat -C 0 -o $dir_path/outputs/perf/go-kv-GET.out -d taskset -c 0 $dir_path/go/simplekv $pool burst get 65536
 
     rm -f $pool
     for i in ${ins[@]}; do
     echo "Running performance test (go-pmem-B+Tree:$i)..."
-    perf stat -C 0 -o $dir_path/outputs/perf/go-$i.out -d $dir_path/go/btree_map $pool < $dir_path/inputs/perf/$i > /dev/null
+    perf stat -C 0 -o $dir_path/outputs/perf/go-$i.out -d taskset -c 0 $dir_path/go/btree_map $pool < $dir_path/inputs/perf/$i > /dev/null
     done
 fi
 
 if $all || $crndm; then
     rm -f $pool
     echo "Running performance test (Corundum-BST:INS)..."
-    CPUS=1 perf stat -C 0 -o $dir_path/outputs/perf/crndm-bst-INS.out -d $dir_path/../target/release/examples/btree $pool s 30000
+    CPUS=1 perf stat -C 0 -o $dir_path/outputs/perf/crndm-bst-INS.out -d taskset -c 0 $dir_path/../target/release/examples/btree $pool s 30000
     echo "Running performance test (Corundum-BST:CHK)..."
-    CPUS=1 perf stat -C 0 -o $dir_path/outputs/perf/crndm-bst-CHK.out -d $dir_path/../target/release/examples/btree $pool r 30000
+    CPUS=1 perf stat -C 0 -o $dir_path/outputs/perf/crndm-bst-CHK.out -d taskset -c 0 $dir_path/../target/release/examples/btree $pool r 30000
 
     rm -f $pool
     echo "Running performance test (Corundum-KVStore:PUT)..."
-    CPUS=1 perf stat -C 0 -o $dir_path/outputs/perf/crndm-kv-PUT.out -d $dir_path/../target/release/examples/simplekv $pool burst put 65536
+    CPUS=1 perf stat -C 0 -o $dir_path/outputs/perf/crndm-kv-PUT.out -d taskset -c 0 $dir_path/../target/release/examples/simplekv $pool burst put 65536
     echo "Running performance test (Corundum-KVStore:GET)..."
-    CPUS=1 perf stat -C 0 -o $dir_path/outputs/perf/crndm-kv-GET.out -d $dir_path/../target/release/examples/simplekv $pool burst get 65536
+    CPUS=1 perf stat -C 0 -o $dir_path/outputs/perf/crndm-kv-GET.out -d taskset -c 0 $dir_path/../target/release/examples/simplekv $pool burst get 65536
 
     cd $dir_path/..
     cargo build --release --example mapcli --features="pin_journals,$clflushopt"
@@ -212,7 +212,7 @@ if $all || $crndm; then
     rm -f $pool
     for i in ${ins[@]}; do
     echo "Running performance test (Corundum-B+Tree:$i)..."
-    perf stat -C 0 -o $dir_path/outputs/perf/crndm-$i.out -d $dir_path/../target/release/examples/mapcli btree $pool < $dir_path/inputs/perf/$i > /dev/null
+    CPUS=1 perf stat -C 0 -o $dir_path/outputs/perf/crndm-$i.out -d taskset -c 0 $dir_path/../target/release/examples/mapcli btree $pool < $dir_path/inputs/perf/$i > /dev/null
     done
 fi
 
