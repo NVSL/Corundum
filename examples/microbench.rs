@@ -57,7 +57,7 @@ fn main() {
             for _ in 0..cnt {
                 let b = Pbox::new(PRefCell::new(10, j), j);
                 let mut b = b.borrow_mut(j);
-                measure!("DerefMut (1st)".to_string(), {
+                measure!("DerefMut(1st)".to_string(), {
                     *b += 20;
                 });
             }
@@ -89,7 +89,7 @@ fn main() {
             let b = Pbox::new(Pbox::new(10, j), j);
             let mut b = &**b;
             let mut m = &mut b;
-            measure!("DerefMut (!1st)".to_string(), cnt, {
+            measure!("DerefMut(!1st)".to_string(), cnt, {
                 for _ in 0..cnt {
                     m = &mut b;
                 }
