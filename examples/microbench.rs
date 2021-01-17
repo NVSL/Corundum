@@ -74,23 +74,26 @@ fn main() {
             }).unwrap();
         }
         P::transaction(|j| {
+            for _ in 0..cnt {
+                let b = Pbox::new(10, j);
+                let mut v = 0;
+                measure!("DerefMut (1st)".to_string(), {
+                    v += *b;
+                });
+                if v < 0 {
+                    println!("unreachable {}", v);
+                }
+            }
+        }).unwrap();
+        P::transaction(|j| {
             let b = Pbox::new(PRefCell::new(10, j), j);
             let mut b = b.borrow_mut(j);
-            let mut v = 0;
             *b = 10;
-            measure!("Deref".to_string(), cnt, {
-                for _ in 0..cnt {
-                    v += *b;
-                }
-            });
             measure!("DerefMut (!1st)".to_string(), cnt, {
                 for _ in 0..cnt {
                     *b += 20;
                 }
             });
-            if v < 0 {
-                println!("unreachable {}", v);
-            }
         }).unwrap();
         P::transaction(|j| unsafe {
             let b = Pbox::new(0u64, j);
