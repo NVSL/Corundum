@@ -276,11 +276,11 @@ done >> $dir_path/outputs/scale.csv
 
 
 function avg() {
-    echo $(cat $1 | grep -oP "$2.+avg\\(ns\\): \\d+\\.\\d+" | grep -oP '(\d+\.\d+)')
+    echo $(cat $1 | grep -oP "$2 .+avg\\(ns\\): \\d+\\.\\d{3} " | grep -oP '(\d+\.\d{3}) ')
 }
 
 function std() {
-    echo $(cat $1 | grep -oP "$2.+std\\(ns\\): \\d+\\.\\d+" | grep -oP '(\d+\.\d+)')
+    echo $(cat $1 | grep -oP "$2 .+std\\(ns\\): \\d+\\.\\d " | grep -oP '(\d+\.\d) ')
 }
 
 tags=(
@@ -310,7 +310,7 @@ tags=(
     "Parc:promote"
     "DerefMut\(1st\)"
     "DerefMut\(!1st\)"
-    "Deref "
+    "Deref"
 )
 
 p=$dir_path/outputs/perf/micro-pmem.out
@@ -319,5 +319,5 @@ m=$dir_path/outputs/micro.csv
 echo ",PMEM,,DRAM," > $m
 echo ",Mean (ns),STD (ns),Mean (ns),STD (ns)" >> $m
 for t in ${tags[@]}; do
-    echo "$t,$(avg $p $t),$(std $p $t),$(avg $d $t),$(std $d $t)" >> $m
+    echo "${t//\\/},$(avg $p $t),$(std $p $t),$(avg $d $t),$(std $d $t)" >> $m
 done 
