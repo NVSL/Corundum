@@ -8,6 +8,7 @@ scalei=false
 pmdk=false
 atlas=false
 go=false
+micro=false
 mnemosyne=false
 crndm=false
 nofopt=1
@@ -19,8 +20,9 @@ function help() {
     echo "    -p, --pmdk            Run PMDK performance tests"
     echo "    -a, --atlas           Run Atlas performance tests"
     echo "    -g, --go-pmem         Run go-pmem performance tests"
+    echo "    -m, --mnemosyne       Run Mnemosyne performance tests"
     echo "    -c, --corundum        Run Corundum performance tests"
-    echo "    -m, --mnemosyne       Run Corundum performance tests"
+    echo "    -M, --micro-bench     Run Corundum basic operation latency measurement"
     echo "    -n, --no-run          Do not run the experiments"
     echo "    -j, --pin-journals    Enable 'pin_journal' feature in Corundum"
     echo "    -o, --clflushopt      Allow using CLFLUSHOPT"
@@ -46,6 +48,8 @@ do
         -c|--corundum)       all=false && crndm=true
             ;;
         -m|--mnemosyne)      all=false && mnemosyne=true
+            ;;
+        -M|--micro-bench)    all=false && micro=true
             ;;
         -n|--no-run)         all=false
             ;;
@@ -203,6 +207,14 @@ if $all || $crndm; then
     done
 fi
 
+if $all || $crndm; then
+    cd $dir_path/..
+    rm -f $pool
+    CPUS=1 taskset -c 0 cargo run --release --example microbench --features="$features" -- $pool 100000 > $dir_path/outputs/perf/micro-pmem.out
+    rm -f /dev/shm/m.pool
+    CPUS=1 taskset -c 0 cargo run --release --example microbench --features="$features" -- /dev/shm/m.pool 100000 > $dir_path/outputs/perf/micro-dram.out
+fi
+
 echo ",Execution Time (s),,,,,,,,"                                              > $dir_path/outputs/perf.csv
 echo ",BST,,KVStore,,B+Tree,,,,"                                               >> $dir_path/outputs/perf.csv
 echo ",INS,CHK,PUT,GET,INS,CHK,REM,RAND"                                       >> $dir_path/outputs/perf.csv
@@ -251,7 +263,6 @@ echo -n      $(read_time "$dir_path/outputs/perf/crndm-CHK.out"),              >
 echo -n      $(read_time "$dir_path/outputs/perf/crndm-REM.out"),              >> $dir_path/outputs/perf.csv
 echo -n      $(read_time "$dir_path/outputs/perf/crndm-RAND.out")              >> $dir_path/outputs/perf.csv
 echo                                                                           >> $dir_path/outputs/perf.csv
-
 
 echo "p/c," > $dir_path/outputs/scale.csv
 (for c in ${cs[@]}; do

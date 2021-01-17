@@ -24,10 +24,8 @@ fn main() {
     let _pool = P::open_no_root(&args[1], O_CF | O_32GB).unwrap();
     for _ in 0..cnt {
         // Warm-up the allocator
-        P::transaction(|_| {
-            let s = 8 + rand::random::<usize>() % 1000;
-            unsafe { P::alloc(s); }
-        }).unwrap();
+        let s = 8 + rand::random::<usize>() % 5000;
+        unsafe { P::alloc(s); }
     }
     for _ in 0..cnt {
         measure!("TxNop".to_string(), {
@@ -35,23 +33,21 @@ fn main() {
         });
     }
     for s in &sizes {
-        P::transaction(|_| {
-            let s = *s * 8;
-            let mut vec = Vec::with_capacity(cnt);
-            for _ in 0..cnt {
-                vec.push({
-                    measure!(format!("Alloc({})", s), {
-                        unsafe{ P::alloc(s) }
-                    })
-                }); 
-            }
-            for i in 0..cnt {
-                let off = vec[i].0;
-                measure!(format!("Dealloc({})^", s), {
-                    unsafe{ P::dealloc(off, s); }
-                });
-            }
-        }).unwrap();
+        let s = *s * 8;
+        let mut vec = Vec::with_capacity(cnt);
+        for _ in 0..cnt {
+            vec.push({
+                measure!(format!("Alloc({})", s), {
+                    unsafe{ P::alloc(s) }
+                })
+            }); 
+        }
+        for i in 0..cnt {
+            let off = vec[i].0;
+            measure!(format!("Dealloc({})^", s), {
+                unsafe{ P::dealloc(off, s); }
+            });
+        }
     }
 
     P::transaction(|j| {
