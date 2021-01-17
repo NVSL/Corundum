@@ -148,7 +148,7 @@ impl Chaperon {
             vdata: None,
         };
         let bytes = filename.as_bytes();
-        for i in 0..usize::min(4096, filename.len()) {
+        for i in 0..4096.min(filename.len()) {
             a.filename[i] = bytes[i];
         }
         file.write_all(a.as_bytes()).unwrap();

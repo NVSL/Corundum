@@ -23,7 +23,7 @@ impl From<String> for FixStr {
             std::ptr::copy_nonoverlapping(
                 &value[0],
                 &mut chars[0] as *mut u8,
-                usize::min(value.len(), 32));
+                value.len().min(32));
         }
         FixStr {
             chars

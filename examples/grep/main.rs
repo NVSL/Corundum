@@ -81,8 +81,8 @@ fn main() {
             }
             i += 1;
             c = args[i].parse().expect("An integer expected");
-            if c < 1 {
-                panic!("Number of consumer threads cannot be less than 1");
+            if c < 0 {
+                panic!("Number of consumer threads cannot be less than 0");
             }
         } else if s == "-f" {
             if i == args.len() - 1 {
@@ -147,14 +147,14 @@ fn main() {
             for line in f.lines() {
                 files.push(line.unwrap());
             }
-            let p = usize::min(r, files.len());
+            let p = r.min(files.len());
             let b = files.len() / p;
             for i in 0..p + 1 {
                 if i * b < files.len() {
                     producers.push(
                         Parc::new(
                             Producer::new(
-                                files[i * b..usize::min(files.len(), (i + 1) * b)].to_vec(),
+                                files[i * b..files.len().min((i + 1) * b)].to_vec(),
                                 root.lines.pclone(j),
                                 j,
                             ),
@@ -164,7 +164,7 @@ fn main() {
                     );
                 }
             }
-            for _ in 0..c {
+            for _ in 0..c.max(1) {
                 consumers.push(
                     Parc::new(
                         Consumer::new(&pattern, root.lines.pclone(j), j),
@@ -193,19 +193,36 @@ fn main() {
             p_threads.push(thread::spawn(move || Producer::start(p)))
         }
 
-        for consumer in &*consumers {
-            consumer.activate();
-        }
-
-        if !dist {
-            for c in &*consumers {
-                let c = c.demote();
-                c_threads.push(thread::spawn(move || Consumer::start(c, isld)))
+        if c == 0 {
+            for thread in p_threads {
+                thread.join().unwrap()
             }
-        }
 
-        for thread in p_threads {
-            thread.join().unwrap()
+            for consumer in &*consumers {
+                consumer.activate();
+            }
+
+            if !dist {
+                for c in &*consumers {
+                    let c = c.demote();
+                    c_threads.push(thread::spawn(move || Consumer::start(c, isld)))
+                }
+            }
+        } else {
+            for consumer in &*consumers {
+                consumer.activate();
+            }
+
+            if !dist {
+                for c in &*consumers {
+                    let c = c.demote();
+                    c_threads.push(thread::spawn(move || Consumer::start(c, isld)))
+                }
+            }
+
+            for thread in p_threads {
+                thread.join().unwrap()
+            }
         }
 
         if !dist {

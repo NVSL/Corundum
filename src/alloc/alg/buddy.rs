@@ -118,7 +118,7 @@ pub fn get_idx(x: usize) -> usize {
     if x == 0 {
         usize::MAX
     } else {
-        let x = usize::max(x, mem::size_of::<Buddy>());
+        let x = x.max(mem::size_of::<Buddy>());
         (num_bits::<usize>() - (x - 1).leading_zeros()) as usize
     }
 }
@@ -396,7 +396,7 @@ impl<A: MemPool> BuddyAlg<A> {
                 let e = Self::buddy(b);
                 let on_left = off & (1 << idx) == 0;
                 if (b == end && on_left) || (b + len as u64 == off && !on_left) {
-                    let off = u64::min(off, b);
+                    let off = off.min(b);
                     if let Some(p) = prev {
                         self.aux_push(p, e.next);
                     } else {
@@ -1007,7 +1007,7 @@ macro_rules! pool {
 
                             let base = raw_offset as *mut _ as u64;
                             unsafe {
-                                inner.gen = u32::max(MAX_GEN, inner.gen) + 1;
+                                inner.gen = MAX_GEN.max(inner.gen) + 1;
                                 MAX_GEN = inner.gen;
                                 BUDDY_START = base;
                                 BUDDY_VALID_START = base

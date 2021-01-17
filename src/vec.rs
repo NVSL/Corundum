@@ -351,7 +351,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
         if other.len() != 0 {
             unsafe {
                 let len = self.len;
-                let new_cap = usize::max(self.capacity(), len + other.len());
+                let new_cap = self.capacity().max(len + other.len());
                 self.reserve(new_cap - self.capacity(), j);
                 let ptr = self.buf.as_mut_ptr();
                 ptr::copy(other.as_ptr(), ptr.add(len), other.len());
@@ -366,11 +366,11 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
         eprintln!("shrink_to");
 
         // Prevent shrinking to smaller than data
-        let new_cap = usize::max(new_cap, self.len);
+        let new_cap = new_cap.max(self.len);
         if get_idx(new_cap * mem::size_of::<T>()) != get_idx(cap * mem::size_of::<T>()) {
             unsafe {
                 let buf = self.as_slice_mut();
-                let (rem, left) = buf.split_at_mut(usize::min(buf.len(), new_cap));
+                let (rem, left) = buf.split_at_mut(buf.len().min(new_cap));
                 if !left.is_empty() {
                     ptr::drop_in_place(left);
                     // FIXME: use power of 2 sizes padding to be able to free memory
@@ -437,7 +437,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
 
         let cap = self.buf.capacity();
         let len = self.len;
-        let new_cap = usize::max(len + additional, cap);
+        let new_cap = len + additional.max(cap);
         if get_idx(new_cap * mem::size_of::<T>()) == get_idx(len * mem::size_of::<T>()) {
             self.buf.set_cap(new_cap);
         } else {

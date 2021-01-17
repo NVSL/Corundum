@@ -75,7 +75,7 @@ ls -1 $dir_path/inputs/wc/* > $dir_path/files.list
 mkdir -p $dir_path/outputs/wc
 
 rs=(1)
-cs=`seq 15`
+cs=`seq 0 15`
 if $all || $scale; then
     cd $dir_path/..
     cargo build --release --example grep --features="$features"
@@ -268,9 +268,9 @@ echo -n "p/c," > $dir_path/outputs/scale.csv
     echo -n "$c,"
 done; echo) >> $dir_path/outputs/scale.csv
 
+b=$(read_time "$dir_path/outputs/wc/1-0.out")
 for r in ${rs[@]}; do
     echo -n "p=$r,"
-    b=$(read_time "$dir_path/outputs/wc/1-1.out")
     for c in ${cs[@]}; do
         m=$(read_time "$dir_path/outputs/wc/$r-$c.out")
         g=$(echo - | awk "{print $b / $m}")

@@ -26,7 +26,7 @@ fn main() {
     let n2 = P2::open::<Root<P2>>("fibo2.pool", O_CFNE).unwrap();
 
     while !Chaperon::session("fibo.pool", || {
-        let n1_val = f64::max(1.0, *n1.val.borrow());
+        let n1_val = 1f64.max(*n1.val.borrow());
         let n1_idx = *n1.idx.borrow();
 
         if n1_idx >= 100 {

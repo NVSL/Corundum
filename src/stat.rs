@@ -397,13 +397,13 @@ fn plot(data: &HashMap<u128, u128>) -> Option<Vec<String>> {
     let h_len = h_max - h_min;
     for (t,freq) in data {
         let t = ((t - h_min) * 390) / h_len;
-        let t = usize::min(39, t as usize);
+        let t = 39.min(t as usize);
         freqs[t as usize] += freq;
     }
     let v_max = freqs.iter().max()?;
     for i in 0..freqs.len() {
         let f = (freqs[i] * 19) / v_max;
-        let f = usize::min(19, f as usize);
+        let f = 19.min(f as usize);
         for j in 0..f {
             unsafe { res[19-j].as_bytes_mut()[i] = b'A'; }
         }
