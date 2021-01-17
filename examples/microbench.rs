@@ -49,28 +49,34 @@ fn main() {
             });
         }
     }
-
-    P::transaction(|j| {
-        let b = Pbox::new(10, j);
-        let mut v = 0;
-        measure!("Deref".to_string(), cnt, {
+    for _ in 0 .. cnt/50 {
+        let cnt = 50;
+        P::transaction(|j| {
             for _ in 0..cnt {
-                v += *b;
+                let b = Pbox::new(PRefCell::new(10, j), j);
+                let mut b = b.borrow_mut(j);
+                measure!("DerefMut (1)".to_string(), {
+                    *b += 20;
+                });
             }
-        });
-        for _ in 0..cnt {
-            let mut b = Pbox::new(10, j);
-            measure!("DerefMut".to_string(), {
-                *b += 20;
+            let b = Pbox::new(PRefCell::new(10, j), j);
+            let mut b = b.borrow_mut(j);
+            let mut v = 0;
+            *b = 10;
+            measure!("Deref".to_string(), cnt, {
+                for _ in 0..cnt {
+                    v += *b;
+                }
             });
-        }
-        if v < 0 {
-            println!("unreachable {}", v);
-        }
-    }).unwrap();
-
-    for _ in 0 .. cnt/40 {
-        let cnt = 40;
+            measure!("DerefMut (>1)".to_string(), cnt, {
+                for _ in 0..cnt {
+                    *b += 20;
+                }
+            });
+            if v < 0 {
+                println!("unreachable {}", v);
+            }
+        }).unwrap();
         P::transaction(|j| unsafe {
             let b = Pbox::new(0u64, j);
             for _ in 0..cnt {
