@@ -78,7 +78,7 @@ fn main() {
             let mut v = 0;
             measure!("Deref".to_string(), cnt, {
                 for _ in 0..cnt {
-                    v += *b;
+                    v = *b;
                 }
             });
             if v < 0 {
