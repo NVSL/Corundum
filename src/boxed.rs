@@ -624,7 +624,6 @@ impl<T: PSafe, A: MemPool> DerefMut for Pbox<T, A> {
             let journal = Journal::<A>::try_current()
                 .expect("Unrecoverable data modification").0;
             unsafe {
-                eprintln!("Pbox::deref_mut");
                 d.take_log(&*journal, Notifier::NonAtomic(Ptr::from_ref(&self.1)));
             }
         }
