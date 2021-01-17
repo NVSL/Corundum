@@ -288,7 +288,7 @@ pub(crate) mod problems {
             let root = P::open::<Root>("test_vweak.pool", O_CFNE).unwrap();
             let vp = Prc::demote(&root.v.borrow());
             P::transaction(|j| {
-                if let Some(p) = vp.upgrade(j) {
+                if let Some(p) = vp.promote(j) {
 
                     let _vp2 = Prc::demote(&p);
                     // drop a recently created demote reference
@@ -306,7 +306,7 @@ pub(crate) mod problems {
                 let mut b = root.v.borrow_mut(j);
                 *b = Prc::new(12, j);
 
-                if let Some(p) = vp.upgrade(j) {
+                if let Some(p) = vp.promote(j) {
                     println!("new data = {}", p);
                 } else {
                     println!("no new data");
@@ -317,7 +317,7 @@ pub(crate) mod problems {
             let x = Prc::demote(&root.v.borrow());
             P::transaction(|j| {
                 // Trying to access a demote pointer from the current session
-                if let Some(p) = x.upgrade(j) {
+                if let Some(p) = x.promote(j) {
                     println!("data = {}", p);
                 } else {
                     println!("no data");
@@ -331,7 +331,7 @@ pub(crate) mod problems {
         let _root = P::open::<Root>("test_vweak.pool", O_CFNE).unwrap();
         P::transaction(|j| {
             // Trying to access a demote pointer from previous session
-            if let Some(p) = ovp.upgrade(j) {
+            if let Some(p) = ovp.promote(j) {
                 println!("data = {}", p);
             } else {
                 println!("no data");

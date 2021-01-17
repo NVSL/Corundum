@@ -46,7 +46,7 @@ fn main() {
         }
         for i in 0..cnt {
             let off = vec[i].0;
-            measure!(format!("Dealloc({})^", s), {
+            measure!(format!("Dealloc({})", s), {
                 unsafe{ P::dealloc(off, s); }
             });
         }
@@ -244,7 +244,7 @@ fn main() {
             let b = Pbox::new(0u64, j);
             let mut vec = Vec::<Pbox<u64>>::with_capacity(cnt);
             for _ in 0..cnt {
-                vec.push(measure!("Pbox:clone*".to_string(), {
+                vec.push(measure!("Pbox:clone".to_string(), {
                     b.pclone(j)
                 }));
             }
@@ -254,7 +254,7 @@ fn main() {
             let b = Prc::new(0u64, j);
             let mut vec = Vec::<Prc<u64>>::with_capacity(cnt);
             for _ in 0..cnt {
-                vec.push(measure!("Prc:clone*".to_string(), {
+                vec.push(measure!("Prc:clone".to_string(), {
                     b.pclone(j)
                 }));
             }
@@ -264,7 +264,7 @@ fn main() {
             let b = Parc::new(0u64, j);
             let mut vec = Vec::<Parc<u64>>::with_capacity(cnt);
             for _ in 0..cnt {
-                vec.push(measure!("Parc:clone*".to_string(), {
+                vec.push(measure!("Parc:clone".to_string(), {
                     b.pclone(j)
                 }));
             }
@@ -275,14 +275,32 @@ fn main() {
         let b = Prc::new(0u64, j);
         let mut vec = Vec::<prc::PWeak<u64>>::with_capacity(cnt);
         for _ in 0..cnt {
-            vec.push(measure!("Prc:downgrade*".to_string(), {
+            vec.push(measure!("Prc:downgrade".to_string(), {
                 Prc::downgrade(&b, j)
             }));
         }
         for i in 0..cnt {
             let p = &vec[i];
-            let _p = measure!("Prc:upgrade^".to_string(), {
+            let _p = measure!("Prc:upgrade".to_string(), {
                 p.upgrade(j)
+            }).unwrap();
+        }
+    }).unwrap();
+
+    P::transaction(|j| {
+        let b = Prc::new(0u64, j);
+        let mut vvec = Vec::<prc::VWeak<u64>>::with_capacity(cnt);
+        for _ in 0..cnt {
+            unsafe { 
+                vvec.push(measure!("Prc:demote".to_string(), {
+                    Prc::unsafe_demote(&b)
+                }))
+            }
+        }
+        for i in 0..cnt {
+            let p = &vvec[i];
+            let _p = measure!("Prc:promote".to_string(), {
+                p.promote(j)
             }).unwrap();
         }
     }).unwrap();
@@ -290,28 +308,32 @@ fn main() {
     P::transaction(|j| {
         let b = Parc::new(0u64, j);
         let mut pvec = Vec::<parc::PWeak<u64>>::with_capacity(cnt);
-        let mut vvec = Vec::<parc::VWeak<u64>>::with_capacity(cnt);
         for _ in 0..cnt {
-            pvec.push(measure!("Parc:downgrade*".to_string(), {
+            pvec.push(measure!("Parc:downgrade".to_string(), {
                 Parc::downgrade(&b, j)
             }));
         }
         for i in 0..cnt {
             let p = &pvec[i];
-            let _p = measure!("Parc:upgrade^".to_string(), {
+            let _p = measure!("Parc:upgrade".to_string(), {
                 p.upgrade(j)
             }).unwrap();
         }
+    }).unwrap();
+
+    P::transaction(|j| {
+        let b = Parc::new(0u64, j);
+        let mut vvec = Vec::<parc::VWeak<u64>>::with_capacity(cnt);
         for _ in 0..cnt {
             unsafe { 
-                vvec.push(measure!("Parc:demote*".to_string(), {
+                vvec.push(measure!("Parc:demote".to_string(), {
                     Parc::unsafe_demote(&b)
                 }))
             }
         }
         for i in 0..cnt {
             let p = &vvec[i];
-            let _p = measure!("Parc:promote^".to_string(), {
+            let _p = measure!("Parc:promote".to_string(), {
                 p.promote(j)
             }).unwrap();
         }

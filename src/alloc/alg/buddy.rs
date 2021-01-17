@@ -1471,6 +1471,10 @@ macro_rules! pool {
                 /// Compact form of [`prc::Weak`](../prc/struct.Weak.html)
                 /// `<`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
                 pub type PWeak<T> = $crate::prc::Weak<T, super::BuddyAlloc>;
+
+                /// Compact form of [`sync::VWeak`](../../prc/struct.VWeak.html)
+                /// `<`[`BuddyAlloc`](../struct.BuddyAlloc.html)`>`.
+                pub type VWeak<T> = $crate::prc::VWeak<T, super::BuddyAlloc>;
             }
 
             pub mod parc {

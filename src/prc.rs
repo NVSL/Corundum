@@ -390,8 +390,12 @@ impl<T: PSafe, A: MemPool> Prc<MaybeUninit<T>, A> {
 }
 
 impl<T: PSafe + ?Sized, A: MemPool> Prc<T, A> {
-    /// Creates a new `Weak` pointer to this allocation.
+    /// Creates a new `Weak` persistent pointer to this allocation.
+    /// 
+    /// The `Weak` pointer can later be [`upgrade`]d to a `Prc`.
     ///
+    /// [`upgrade`]: ./struct.Weak.html#upgrade
+    /// 
     /// # Examples
     ///
     /// ```
@@ -410,10 +414,42 @@ impl<T: PSafe + ?Sized, A: MemPool> Prc<T, A> {
         Weak { ptr: this.ptr }
     }
 
-    /// Creates a new `VWeak` pointer to this allocation.
+    /// Creates a new `Weak` volatile to this allocation.
+    /// 
+    /// The `Weak` pointer can later be [`promote`]d to a `Prc`.
+    ///
+    /// [`promote`]: ./struct.VWeak.html#upgrade
+    /// 
+    /// # Examples
+    ///
+    /// ```
+    /// # use corundum::alloc::*;
+    /// # type P = Heap;
+    /// use corundum::prc::Prc;
+    ///
+    /// P::transaction(|j| {
+    ///     let five = Prc::new(5, j);
+    ///     let weak_five = Prc::demote(&five);
+    /// 
+    ///     assert_eq!(Prc::strong_count(&five), 1);
+    /// 
+    ///     if let Some(f) = weak_five.promote(j) {
+    ///         assert_eq!(*f, 5);
+    ///         assert_eq!(Prc::strong_count(&five), 2);
+    ///     }
+    /// 
+    ///     assert_eq!(Prc::strong_count(&five), 1);
+    /// }).unwrap()
+    /// ```
     pub fn demote(this: &Self) -> VWeak<T, A> {
         debug_assert!(!this.ptr.is_dangling());
         VWeak::new(this)
+    }
+
+    /// Demote without dynamically checking transaction boundaries
+    pub unsafe fn unsafe_demote(&self) -> VWeak<T, A> {
+        debug_assert!(!self.ptr.is_dangling());
+        VWeak::new(self)
     }
 
     #[inline]
@@ -1040,7 +1076,7 @@ impl<T: PSafe + ?Sized, A: MemPool> VWeak<T, A> {
         }
     }
 
-    pub fn upgrade(&self, journal: &Journal<A>) -> Option<Prc<T, A>> {
+    pub fn promote(&self, journal: &Journal<A>) -> Option<Prc<T, A>> {
         let inner = self.inner()?;
         let strong = inner.counter.strong;
         if strong == 0 {
