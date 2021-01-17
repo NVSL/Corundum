@@ -86,7 +86,8 @@ fn main() {
             }
         }).unwrap();
         P::transaction(|j| {
-            let mut b = Pbox::new(10, j);
+            let b = Pbox::new(Pbox::new(10, j), j);
+            let mut b = &**b;
             let mut m = &mut b;
             measure!("DerefMut (!1st)".to_string(), cnt, {
                 for _ in 0..cnt {
