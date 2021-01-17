@@ -83,7 +83,7 @@ if $all || $scale; then
     for r in ${rs[@]}; do
         for c in ${cs[@]}; do
             rm -f $pool
-            echo -e "\nRunning scalability test $r:$c (imperfect isolation) ..."
+            echo -e "\nRunning scalability test $r:$c ..."
             CPUS=$(($r+$c)) perf stat -o $dir_path/outputs/wc/$r-$c.out -a -C 0-$(($r+$c-1)) taskset -c 0-$(($r+$c-1)) $dir_path/../target/release/examples/grep -N -r $r -c $c -f $pool $dir_path/files.list > $dir_path/outputs/wc/$r-$c.res
         done
     done
@@ -210,6 +210,10 @@ if $all || $micro; then
     CPUS=1 taskset -c 0 cargo run --release --example microbench --features="$features" -- /dev/shm/m.pool 100000 > $dir_path/outputs/perf/micro-dram.out
 fi
 
+function read_time() {
+    echo $(cat $1 | grep -oP '(\d+\.\d+)\s+seconds time elapsed' | grep -oP '(\d+\.\d+)')
+}
+
 echo ",Execution Time (s),,,,,,,,"                                              > $dir_path/outputs/perf.csv
 echo ",BST,,KVStore,,B+Tree,,,,"                                               >> $dir_path/outputs/perf.csv
 echo ",INS,CHK,PUT,GET,INS,CHK,REM,RAND"                                       >> $dir_path/outputs/perf.csv
@@ -259,11 +263,7 @@ echo -n      $(read_time "$dir_path/outputs/perf/crndm-REM.out"),              >
 echo -n      $(read_time "$dir_path/outputs/perf/crndm-RAND.out")              >> $dir_path/outputs/perf.csv
 echo                                                                           >> $dir_path/outputs/perf.csv
 
-function read_time() {
-    echo $(cat $1 | grep -oP '(\d+\.\d+)\s+seconds time elapsed' | grep -oP '(\d+\.\d+)')
-}
-
-echo "p/c," > $dir_path/outputs/scale.csv
+echo -n "p/c," > $dir_path/outputs/scale.csv
 (for c in ${cs[@]}; do
     echo -n "$c,"
 done; echo) >> $dir_path/outputs/scale.csv
