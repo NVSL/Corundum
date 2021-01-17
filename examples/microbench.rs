@@ -253,63 +253,63 @@ fn main() {
         P::transaction(|j| {
             let b = Prc::new(0u64, j);
             let mut vec = Vec::<Prc<u64>>::with_capacity(cnt);
-            measure!("Prc:clone*".to_string(), cnt, {
-                for _ in 0..cnt {
+            for _ in 0..cnt {
+                measure!("Prc:clone*".to_string(), {
                     vec.push(b.pclone(j));
-                }
-            });
+                });
+            }
         }).unwrap();
     
         P::transaction(|j| {
             let b = Parc::new(0u64, j);
             let mut vec = Vec::<Parc<u64>>::with_capacity(cnt);
-            measure!("Parc:clone*".to_string(), cnt, {
-                for _ in 0..cnt {
+            for _ in 0..cnt {
+                measure!("Parc:clone*".to_string(), {
                     vec.push(b.pclone(j));
-                }
-            });
+                });
+            }
         }).unwrap();
     }
 
     P::transaction(|j| {
         let b = Prc::new(0u64, j);
         let mut vec = Vec::<prc::PWeak<u64>>::with_capacity(cnt);
-        measure!("Prc:downgrade*".to_string(), cnt, {
-            for _ in 0..cnt {
+        for _ in 0..cnt {
+            measure!("Prc:downgrade*".to_string(), {
                 vec.push(Prc::downgrade(&b, j));
-            }
-        });
-        measure!("Prc:upgrade^".to_string(), cnt, {
-            for i in 0..cnt {
+            });
+        }
+        for i in 0..cnt {
+            measure!("Prc:upgrade^".to_string(), {
                 vec[i].upgrade(j).unwrap();
-            }
-        });
+            });
+        }
     }).unwrap();
 
     P::transaction(|j| {
         let b = Parc::new(0u64, j);
         let mut pvec = Vec::<parc::PWeak<u64>>::with_capacity(cnt);
         let mut vvec = Vec::<parc::VWeak<u64>>::with_capacity(cnt);
-        measure!("Parc:downgrade*".to_string(), cnt, {
-            for _ in 0..cnt {
+        for _ in 0..cnt {
+            measure!("Parc:downgrade*".to_string(), {
                 pvec.push(Parc::downgrade(&b, j));
-            }
-        });
-        measure!("Parc:upgrade^".to_string(), cnt, {
-            for i in 0..cnt {
+            });
+        }
+        for i in 0..cnt {
+            measure!("Parc:upgrade^".to_string(), {
                 pvec[i].upgrade(j).unwrap();
-            }
-        });
-        measure!("Parc:demote*".to_string(), cnt, {
-            for _ in 0..cnt {
+            });
+        }
+        for _ in 0..cnt {
+            measure!("Parc:demote*".to_string(), {
                 unsafe { vvec.push(Parc::unsafe_demote(&b)); }
-            }
-        });
-        measure!("Parc:promote^".to_string(), cnt, {
-            for i in 0..cnt {
+            });
+        }
+        for i in 0..cnt {
+            measure!("Parc:promote^".to_string(), {
                 let _p = vvec[i].promote(j).unwrap();
-            }
-        });
+            });
+        }
     }).unwrap();
 
     for s in &sizes {
