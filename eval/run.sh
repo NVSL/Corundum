@@ -23,12 +23,12 @@ function help() {
     echo "    -c, --corundum        Run Corundum performance tests"
     echo "    -M, --micro-bench     Run Corundum basic operation latency measurement"
     echo "    -n, --no-run          Do not run the experiments"
-    echo "    -j, --pin-journals    Enable 'pin_journal' feature in Corundum"
+    # echo "    -j, --pin-journals    Enable 'pin_journal' feature in Corundum"
     echo "    -o, --clflushopt      Allow using CLFLUSHOPT"
     echo "    -h, --help            Display this information"
 }
 
-features=""
+features="pin_journals"
 while test $# -gt 0
 do
     case "$1" in
@@ -61,10 +61,6 @@ do
     esac
     shift
 done
-
-function read_time() {
-    echo $(cat $1 | grep -oP '(\d+\.\d+)\s+seconds time elapsed' | grep -oP '(\d+\.\d+)')
-}
 
 source $HOME/.cargo/env
 rustup default nightly
@@ -207,7 +203,9 @@ fi
 if $all || $micro; then
     cd $dir_path/..
     rm -f $pool
+    echo "Running microbenchmarks on PMEM ($pool)..."
     CPUS=1 taskset -c 0 cargo run --release --example microbench --features="$features" -- $pool 100000 > $dir_path/outputs/perf/micro-pmem.out
+    echo "Running microbenchmarks on PMEM (/dev/shm/m.pool)..."
     rm -f /dev/shm/m.pool
     CPUS=1 taskset -c 0 cargo run --release --example microbench --features="$features" -- /dev/shm/m.pool 100000 > $dir_path/outputs/perf/micro-dram.out
 fi
@@ -261,6 +259,10 @@ echo -n      $(read_time "$dir_path/outputs/perf/crndm-REM.out"),              >
 echo -n      $(read_time "$dir_path/outputs/perf/crndm-RAND.out")              >> $dir_path/outputs/perf.csv
 echo                                                                           >> $dir_path/outputs/perf.csv
 
+function read_time() {
+    echo $(cat $1 | grep -oP '(\d+\.\d+)\s+seconds time elapsed' | grep -oP '(\d+\.\d+)')
+}
+
 echo "p/c," > $dir_path/outputs/scale.csv
 (for c in ${cs[@]}; do
     echo -n "$c,"
@@ -268,12 +270,14 @@ done; echo) >> $dir_path/outputs/scale.csv
 
 for r in ${rs[@]}; do
     echo -n "p=$r,"
+    b=$(read_time "$dir_path/outputs/wc/1-1.out")
     for c in ${cs[@]}; do
-        echo -n $(read_time "$dir_path/outputs/wc/$r-$c.out"),
+        m=$(read_time "$dir_path/outputs/wc/$r-$c.out")
+        g=$(echo - | awk "{print $b / $m}")
+        echo -n $g,
     done
     echo
 done >> $dir_path/outputs/scale.csv
-
 
 function avg() {
     echo $(cat $1 | grep -oP "$2 .+avg\\(ns\\): \\d+\\.\\d{3} " | grep -oP '(\d+\.\d{3}) ')
