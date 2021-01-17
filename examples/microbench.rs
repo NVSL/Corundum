@@ -69,8 +69,8 @@ fn main() {
         }
     }).unwrap();
 
-    for _ in 0 .. cnt/50 {
-        let cnt = 50;
+    for _ in 0 .. cnt/40 {
+        let cnt = 40;
         P::transaction(|j| unsafe {
             let b = Pbox::new(0u64, j);
             for _ in 0..cnt {
