@@ -273,14 +273,14 @@ fn main() {
 
     P::transaction(|j| {
         let b = Prc::new(0u64, j);
-        let mut vec = Vec::<prc::PWeak<u64>>::with_capacity(cnt);
+        let mut pvec = Vec::<prc::PWeak<u64>>::with_capacity(cnt);
         for _ in 0..cnt {
-            vec.push(measure!("Prc:downgrade".to_string(), {
+            pvec.push(measure!("Prc:downgrade".to_string(), {
                 Prc::downgrade(&b, j)
             }));
         }
         for i in 0..cnt {
-            let p = &vec[i];
+            let p = &pvec[i];
             let _p = measure!("Prc:upgrade".to_string(), {
                 p.upgrade(j)
             }).unwrap();
@@ -372,5 +372,5 @@ fn main() {
         println!("unreachable {}", m);
     }
 
-    eprintln!("{}", report());
+    println!("{}", report());
 }

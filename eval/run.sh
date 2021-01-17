@@ -4,7 +4,6 @@ dir_path=$(dirname $full_path)
 
 all=true
 scale=false
-scalei=false
 pmdk=false
 atlas=false
 go=false
@@ -36,8 +35,6 @@ do
         -h|--help)           help && exit 0
             ;;
         -s|--scale)          all=false && scale=true
-            ;;
-        -i|--scale-isolated) all=false && scalei=true
             ;;
         -p|--pmdk)           all=false && pmdk=true
             ;;
@@ -207,7 +204,7 @@ if $all || $crndm; then
     done
 fi
 
-if $all || $crndm; then
+if $all || $micro; then
     cd $dir_path/..
     rm -f $pool
     CPUS=1 taskset -c 0 cargo run --release --example microbench --features="$features" -- $pool 100000 > $dir_path/outputs/perf/micro-pmem.out
@@ -278,7 +275,49 @@ for r in ${rs[@]}; do
 done >> $dir_path/outputs/scale.csv
 
 
-echo "p/c," > $dir_path/outputs/scalei.csv
-(for c in ${cs[@]}; do
-    echo -n "$c,"
-done; echo) >> $dir_path/outputs/scalei.csv
+function avg() {
+    echo $(cat $1 | grep -oP "$2.+avg\\(ns\\): \\d+\\.\\d+" | grep -oP '(\d+\.\d+)')
+}
+
+function std() {
+    echo $(cat $1 | grep -oP "$2.+std\\(ns\\): \\d+\\.\\d+" | grep -oP '(\d+\.\d+)')
+}
+
+tags=(
+    "Alloc\(8\)"
+    "Alloc\(256\)"
+    "Alloc\(4096\)"
+    "AtomicInit\(8\)"
+    "Dealloc\(8\)"
+    "Dealloc\(256\)"
+    "Dealloc\(4096\)"
+    "TxNop"
+    "DataLog\(8\)"
+    "DataLog\(2K\)"
+    "DataLog\(32K\)"
+    "DropLog\(8\)"
+    "DropLog\(32K\)"
+    "Pbox:clone"
+    "Prc:clone"
+    "Parc:clone"
+    "Prc:downgrade"
+    "Parc:downgrade"
+    "Prc:upgrade"
+    "Parc:upgrade"
+    "Prc:demote"
+    "Parc:demote"
+    "Prc:promote"
+    "Parc:promote"
+    "DerefMut\(1st\)"
+    "DerefMut\(!1st\)"
+    "Deref "
+)
+
+p=$dir_path/outputs/perf/micro-pmem.out
+d=$dir_path/outputs/perf/micro-dram.out
+m=$dir_path/outputs/micro.csv
+echo ",PMEM,,DRAM," > $m
+echo ",Mean (ns),STD (ns),Mean (ns),STD (ns)" >> $m
+for t in ${tags[@]}; do
+    echo "$t,$(avg $p $t),$(std $p $t),$(avg $d $t),$(std $d $t)" >> $m
+done 
