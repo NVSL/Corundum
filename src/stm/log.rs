@@ -327,7 +327,7 @@ impl<A: MemPool> Log<A> {
 
             //     Self::take_impl(log.off(), pointer.off(), len, journal, notifier)
             // } else {
-                crate::ll::msync_obj(log.as_ref());
+                crate::ll::persist_obj(log.as_ref());
                 Self::take_impl(pointer.off(), log.off(), len, journal, notifier)
             // }
         }
@@ -440,7 +440,7 @@ impl<A: MemPool> Log<A> {
                 let src = A::get_mut_unchecked::<u8>(*src);
                 let log = A::get_mut_unchecked::<u8>(*log);
                 ptr::copy_nonoverlapping(log, src, *len);
-                msync(log, *len);
+                persist(log, *len);
             }
         }
     }
@@ -506,7 +506,7 @@ impl<A: MemPool> Log<A> {
 
                 #[cfg(all(not(feature = "no_flush_updates"), not(feature = "replace_with_log")))]
                 unsafe {
-                    msync::<u8>(A::get_mut_unchecked(*_src), *_len);
+                    persist::<u8>(A::get_mut_unchecked(*_src), *_len);
                 }
             }
             DropOnCommit(src, len) => {

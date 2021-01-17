@@ -195,7 +195,7 @@ impl<T: PSafe, A: MemPool> FatPtr<T, A> {
             let slice = self.as_slice();
             let (dst, off, _, z) = A::atomic_new_slice(slice);
             A::perform(z);
-            msync(dst, self.cap);
+            persist(dst, self.cap);
             Self::from_off_cap(off, len)
         }
     }

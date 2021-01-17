@@ -187,12 +187,12 @@ impl Chaperon {
     }
 
     pub(crate) fn new_section(&mut self) -> usize {
-        use crate::ll::msync_obj;
+        use crate::ll::persist_obj;
 
         assert!(self.len < MAX_TRANS, "reached max number of attachments");
         self.len += 1;
         self.done[self.len - 1] = false;
-        msync_obj(self);
+        persist_obj(self);
         self.len
     }
 

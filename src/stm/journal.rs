@@ -82,7 +82,7 @@ impl<A: MemPool> Page<A> {
     /// Writes a new log to the journal
     fn write(&mut self, log: LogEnum, notifier: Notifier<A>) -> Ptr<Log<A>, A> {
         self.logs[self.len] = Log::new(log, notifier);
-        msync(&self.logs[self.len], std::mem::size_of::<Log<A>>());
+        persist(&self.logs[self.len], std::mem::size_of::<Log<A>>());
 
         let log = unsafe { Ptr::new_unchecked(&self.logs[self.len]) };
         self.len += 1;
@@ -173,7 +173,7 @@ impl<A: MemPool> Journal<A> {
     /// Sets a flag
     pub(crate) fn set(&mut self, flag: u64) {
         self.flags |= flag;
-        msync_obj(&self.flags);
+        persist_obj(&self.flags);
     }
 
     /// Resets a flag
@@ -422,7 +422,7 @@ impl<A: MemPool> Journal<A> {
                     let id = self.sec_id;
                     self.chaperon = [0; 64];
                     self.sec_id = 0;
-                    msync_obj(&self.sec_id);
+                    persist_obj(&self.sec_id);
                     c.finish(id as usize);
                 } else {
                     self.chaperon = [0; 64];

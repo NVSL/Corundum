@@ -1323,7 +1323,7 @@ macro_rules! pool {
                                 inner.flags |= FLAG_HAS_ROOT;
                                 inner.root_obj = root_off;
                                 inner.root_type_id = id;
-                                msync_obj(inner);
+                                persist_obj(inner);
                                 Ok((RootCell::new(ptr, Arc::new(slf))))
                             }
                         } else {

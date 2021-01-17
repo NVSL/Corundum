@@ -5,6 +5,7 @@ use crate::cell::RootObj;
 use crate::clone::*;
 use crate::ptr::Ptr;
 use crate::stm::*;
+use crate::ll::*;
 use crate::{PSafe, VSafe, TxOutSafe};
 use std::cmp::Ordering;
 use std::convert::From;
@@ -260,9 +261,8 @@ impl<T: PSafe, A: MemPool> Pbox<T, A> {
                 unsafe {
                     let this = boxed as *const _ as *mut Option<Pbox<T, A>>;
                     let new = A::atomic_new(value);
-                    let bx = Some(Pbox::from_raw(new.0));
-                    ptr::copy_nonoverlapping(&bx, &mut *this, mem::size_of::<Option<Pbox<T, A>>>());
-                    mem::forget(bx);
+                    *this = Some(Pbox::from_raw(new.0));
+                    persist_obj(boxed);
                     A::perform(new.3);
                 }
                 Ok(())

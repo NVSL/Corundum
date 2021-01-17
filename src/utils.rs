@@ -96,19 +96,19 @@ impl<T, const N: usize> Ring<T, N> {
         self.data[self.tail] = x;
 
         #[cfg(not(feature = "no_flush_alloc"))]
-        msync(&self.data[self.tail], 8);
+        persist(&self.data[self.tail], 8);
         
         self.tail = (self.tail + 1) % N;
 
         #[cfg(not(feature = "no_flush_alloc"))]
-        msync(&self.head, 16);
+        persist(&self.head, 16);
     }
 
     #[inline]
     pub fn sync_all(&self) {
         if self.head == self.tail {
             #[cfg(not(feature = "no_flush_alloc"))]
-            msync(&self.head, 16);
+            persist(&self.head, 16);
             return;
         }
         #[cfg(not(feature = "no_flush_alloc"))]
@@ -116,13 +116,13 @@ impl<T, const N: usize> Ring<T, N> {
             let h = &self.data[self.head] as *const _ as usize;
             let t = &self.data[self.tail] as *const _ as usize;
             if h < t {
-                msync(&self.data[self.head], t - h);
-                msync(&self.head, 16);
+                persist(&self.data[self.head], t - h);
+                persist(&self.head, 16);
             } else {
                 let b = self as *const Self as usize;
-                msync(self, h - b);
+                persist(self, h - b);
                 let b = b + std::mem::size_of::<Self>();
-                msync(&self.data[self.tail], b - t);
+                persist(&self.data[self.tail], b - t);
             }
         }
     }

@@ -2,7 +2,7 @@
  
 #![allow(unused)]
 
-#[inline]
+#[inline(always)]
 pub fn cpu() -> usize {
     std::thread::current().id().as_u64().get() as usize
 }
@@ -14,8 +14,8 @@ use std::arch::x86::{_mm_mfence, _mm_sfence, clflush};
 use std::arch::x86_64::{_mm_clflush, _mm_mfence, _mm_sfence};
 
 /// Synchronize caches and memories and acts like a write barrier
-#[inline]
-pub fn msync<T: ?Sized>(ptr: &T, len: usize) {
+#[inline(always)]
+pub fn persist<T: ?Sized>(ptr: &T, len: usize) {
     #[cfg(feature = "perf_stat")]
     let _perf = crate::stat::Measure::<crate::default::BuddyAlloc>::Sync(std::time::Instant::now());
 
@@ -31,21 +31,21 @@ pub fn msync<T: ?Sized>(ptr: &T, len: usize) {
             let off = (off >> 12) << 12;
             let len = end - off;
             let ptr = off as *const u8;
-            if libc::msync(
+            if libc::persist(
                 ptr as *mut libc::c_void,
                 len,
                 libc::MS_SYNC | libc::MS_INVALIDATE,
             ) != 0
             {
-                panic!("msync failed");
+                panic!("persist failed");
             }
         }
     }
 }
 
 /// Synchronize caches and memories and acts like a write barrier
-#[inline]
-pub fn msync_obj<T: ?Sized>(obj: &T) {
+#[inline(always)]
+pub fn persist_obj<T: ?Sized>(obj: &T) {
     #[cfg(feature = "perf_stat")]
     let _perf = crate::stat::Measure::<crate::default::BuddyAlloc>::Sync(std::time::Instant::now());
 
@@ -56,13 +56,13 @@ pub fn msync_obj<T: ?Sized>(obj: &T) {
 
         #[cfg(feature = "use_msync")]
         {
-            msync(obj, std::mem::size_of_val(obj));
+            persist(obj, std::mem::size_of_val(obj));
         }
     }
 }
 
 /// Flushes cache line back to memory
-#[inline]
+#[inline(always)]
 pub fn clflush<T: ?Sized>(ptr: &T, len: usize) {
     #[cfg(not(feature = "no_persist"))]
     {
@@ -99,7 +99,7 @@ pub fn clflush<T: ?Sized>(ptr: &T, len: usize) {
 }
 
 /// Flushes cache lines of a whole object back to memory
-#[inline]
+#[inline(always)]
 pub fn clflush_obj<T: ?Sized>(obj: &T) {
     #[cfg(not(feature = "no_persist"))]
     {
@@ -109,9 +109,9 @@ pub fn clflush_obj<T: ?Sized>(obj: &T) {
 }
 
 /// Store fence
-#[inline]
+#[inline(always)]
 pub fn sfence() {
-    unsafe {
+    #[cfg(any(feature = "use_clwb", feature = "use_clflushopt"))] unsafe {
         llvm_asm!("sfence");
     }
 }
