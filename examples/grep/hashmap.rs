@@ -102,7 +102,7 @@ where
 
     pub fn clear(&mut self, j: &Journal) {
         for i in 0..BUCKETS_MAX {
-            *self.buckets[i].borrow_mut(j) = PVec::new(j);
+            self.buckets[i].borrow_mut(j).clear();
         }
         self.values.clear();
     }
