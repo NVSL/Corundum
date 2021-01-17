@@ -88,13 +88,16 @@ fn main() {
         P::transaction(|j| {
             let b = Pbox::new(PRefCell::new(10, j), j);
             let mut b = b.borrow_mut(j);
-            let b = &mut *b;
             *b = 10;
+            let mut m = &mut *b;
             measure!("DerefMut (!1st)".to_string(), cnt, {
                 for _ in 0..cnt {
-                    *b += 20;
+                    m = &mut *b;
                 }
             });
+            if *m < 0 {
+                println!("unreachable {}", m);
+            }
         }).unwrap();
         P::transaction(|j| unsafe {
             let b = Pbox::new(0u64, j);
