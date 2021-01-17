@@ -77,7 +77,7 @@ fn main() {
             for _ in 0..cnt {
                 let b = Pbox::new(10, j);
                 let mut v = 0;
-                measure!("DerefMut (1st)".to_string(), {
+                measure!("Deref".to_string(), {
                     v += *b;
                 });
                 if v < 0 {
