@@ -36,11 +36,13 @@ fn main() {
         let s = *s * 8;
         let mut vec = Vec::with_capacity(cnt);
         for _ in 0..cnt {
-            vec.push({
-                measure!(format!("Alloc({})", s), {
-                    unsafe{ P::alloc(s) }
-                })
-            }); 
+            let m = measure!(format!("Alloc({})", s), {
+                unsafe{ P::alloc(s) }
+            });
+            if m.0.is_null() {
+                panic!("Could not alloc mem size {}", s);
+            }
+            vec.push(m); 
         }
         for i in 0..cnt {
             let off = vec[i].0;
@@ -135,7 +137,11 @@ fn main() {
         P::transaction(|j| unsafe {
             let mut vec = Vec::with_capacity(cnt);
             for _ in 0..cnt {
-                vec.push(P::alloc(8));
+                let m = P::alloc(8);
+                if m.0.is_null() {
+                    panic!("Could not alloc(2) mem size 8");
+                }
+                vec.push(m);
             }
             for i in 0..cnt {
                 let (_, off, len) = vec[i];
@@ -148,7 +154,11 @@ fn main() {
         P::transaction(|j| unsafe {
             let mut vec = Vec::with_capacity(cnt);
             for _ in 0..cnt {
-                vec.push(P::alloc(64));
+                let m = P::alloc(64);
+                if m.0.is_null() {
+                    panic!("Could not alloc(3) mem size 64");
+                }
+                vec.push(m);
             }
             for i in 0..cnt {
                 let (_, off, len) = vec[i];
@@ -161,7 +171,11 @@ fn main() {
         P::transaction(|j| unsafe {
             let mut vec = Vec::with_capacity(cnt);
             for _ in 0..cnt {
-                vec.push(P::alloc(2048));
+                let m = P::alloc(2048);
+                if m.0.is_null() {
+                    panic!("Could not alloc(4) mem size 2048");
+                }
+                vec.push(m);
             }
             for i in 0..cnt {
                 let (_, off, len) = vec[i];
@@ -174,7 +188,12 @@ fn main() {
         P::transaction(|j| unsafe {
             let mut vec = Vec::with_capacity(cnt);
             for _ in 0..cnt {
-                vec.push(P::alloc(8*1024));
+                let len = 8*1024;
+                let m = P::alloc(len);
+                if m.0.is_null() {
+                    panic!("Could not alloc(5) mem size {}", len);
+                }
+                vec.push(m);
             }
             for i in 0..cnt {
                 let (_, off, len) = vec[i];
@@ -187,7 +206,12 @@ fn main() {
         P::transaction(|j| unsafe {
             let mut vec = Vec::with_capacity(cnt);
             for _ in 0..cnt {
-                vec.push(P::alloc(32*1024));
+                let len = 32*1024;
+                let m = P::alloc(len);
+                if m.0.is_null() {
+                    panic!("Could not alloc(5) mem size {}", len);
+                }
+                vec.push(m);
             }
             for i in 0..cnt {
                 let (_, off, len) = vec[i];
