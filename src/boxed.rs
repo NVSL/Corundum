@@ -257,7 +257,7 @@ impl<T: PSafe, A: MemPool> Pbox<T, A> {
         );
         match boxed {
             Some(_) => Err("already initialized".to_string()),
-            None => {
+            None => if A::valid(boxed) {
                 unsafe {
                     let this = boxed as *const _ as *mut Option<Pbox<T, A>>;
                     let new = A::atomic_new(value);
@@ -266,6 +266,8 @@ impl<T: PSafe, A: MemPool> Pbox<T, A> {
                     A::perform(new.3);
                 }
                 Ok(())
+            } else {
+                Err("The box object is not in the PM".to_string())
             }
         }
     }

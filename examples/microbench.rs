@@ -21,7 +21,7 @@ fn main() {
     let sizes = vec![512, 128, 32, 8, 1];
     let cnt = args[2].parse::<usize>().expect("Expected a number");
 
-    let _pool = P::open_no_root(&args[1], O_CF | O_32GB).unwrap();
+    let root = P::open::<PRefCell<Option<Pbox<i32>>>>(&args[1], O_CF | O_32GB).unwrap();
     for _ in 0..cnt {
         // Warm-up the allocator
         let s = 8 + rand::random::<usize>() % 5000;
@@ -57,10 +57,23 @@ fn main() {
             for _ in 0..cnt {
                 let b = Pbox::new(PRefCell::new(10, j), j);
                 let mut b = b.borrow_mut(j);
-                measure!("DerefMut (1)".to_string(), {
+                measure!("DerefMut (1st)".to_string(), {
                     *b += 20;
                 });
             }
+        }).unwrap();
+        for _ in 0..cnt {
+            {
+                let b = &*root.borrow();
+                measure!("AtomicInit(8)".to_string(), {
+                    Pbox::initialize(b, 10).unwrap();
+                });
+            }
+            P::transaction(|j| {
+                root.replace(None, j);
+            }).unwrap();
+        }
+        P::transaction(|j| {
             let b = Pbox::new(PRefCell::new(10, j), j);
             let mut b = b.borrow_mut(j);
             let mut v = 0;
@@ -70,7 +83,7 @@ fn main() {
                     v += *b;
                 }
             });
-            measure!("DerefMut (>1)".to_string(), cnt, {
+            measure!("DerefMut (!1st)".to_string(), cnt, {
                 for _ in 0..cnt {
                     *b += 20;
                 }
