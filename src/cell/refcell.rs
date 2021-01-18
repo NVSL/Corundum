@@ -495,7 +495,6 @@ pub struct Ref<'b, T: 'b + PSafe + ?Sized, A: MemPool> {
 impl<T: ?Sized, A: MemPool> !TxOutSafe for Ref<'_, T, A> {}
 impl<T: ?Sized, A: MemPool> !Send for Ref<'_, T, A> {}
 impl<T: ?Sized, A: MemPool> !Sync for Ref<'_, T, A> {}
-unsafe impl<T: PSafe + ?Sized, A: MemPool> PSafe for Ref<'_, T, A> {}
 
 impl<'b, T: PSafe + ?Sized, A: MemPool> Ref<'b, T, A> {
     /// Copies a `Ref`.
@@ -605,7 +604,6 @@ pub struct RefMut<'b, T: 'b + PSafe + ?Sized, A: MemPool> {
 impl<T: ?Sized, A: MemPool> !TxOutSafe for RefMut<'_, T, A> {}
 impl<T: ?Sized, A: MemPool> !Send for RefMut<'_, T, A> {}
 impl<T: ?Sized, A: MemPool> !Sync for RefMut<'_, T, A> {}
-unsafe impl<T: PSafe + ?Sized, A: MemPool> PSafe for RefMut<'_, T, A> {}
 
 #[cfg(feature = "refcell_lifetime_change")]
 impl<T: PSafe + ?Sized, A: MemPool> RefMut<'_, T, A> {
