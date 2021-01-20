@@ -128,6 +128,8 @@
 #![allow(incomplete_features)]
 #![allow(type_alias_bounds)]
 
+pub(crate) const LOG_PAGE_SIZE: usize = 128;
+
 #[macro_use]
 extern crate lazy_static;
 extern crate crndm_derive;

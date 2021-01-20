@@ -1,11 +1,28 @@
 #![feature(asm)]
 
 use corundum::stm::*;
-use corundum::default::*;
+use corundum::default::{*, Journal};
 use corundum::stat::*;
 use std::time::Instant;
 
 type P = BuddyAlloc;
+
+macro_rules! datalog {
+    ($cnt:expr,$s:expr) => {
+        P::transaction(|j| unsafe {
+            let mut bvec = Vec::with_capacity($cnt);
+            for _ in 0..$cnt {
+                bvec.push(Pbox::new([0u8;$s], j));
+            }
+            measure!(format!("DataLog({})", $s), $cnt, {
+                for i in 0..$cnt {
+                    (&*bvec[i]).take_log(j, Notifier::None);
+                }
+            });
+            j.ignore();
+        }).unwrap();
+    };
+}
 
 fn main() {
     use std::env;
@@ -21,58 +38,70 @@ fn main() {
     let sizes = vec![512, 128, 32, 8, 1];
     let cnt = args[2].parse::<usize>().expect("Expected a number");
 
-    let root = P::open::<PRefCell<Option<Pbox<i32>>>>(&args[1], O_CF | O_32GB).unwrap();
+    struct Root {
+        val: PRefCell<PVec<Option<Pbox<i32>>>>
+    }
+
+    impl RootObj<P> for Root {
+        fn init(j: &Journal) -> Self {
+            let mut v = PVec::with_capacity(100000, j);
+            for _ in 0..100000 {
+                v.push(None, j);
+            }
+            Self {
+                val: PRefCell::new(v, j)
+            }
+        }
+    }
+
+    let root = P::open::<Root>(&args[1], O_CF | O_32GB).unwrap();
     for _ in 0..cnt {
         // Warm-up the allocator
         let s = 8 + rand::random::<usize>() % 5000;
         unsafe { P::alloc(s); }
     }
-    for _ in 0..cnt {
-        measure!("TxNop".to_string(), {
+    measure!("TxNop".to_string(), cnt, {
+        for _ in 0..cnt {
             P::transaction(|_| {unsafe { asm!("nop"); }}).unwrap();
-        });
-    }
+        }
+    });
     for s in &sizes {
         let s = *s * 8;
         let mut vec = Vec::with_capacity(cnt);
-        for _ in 0..cnt {
-            let m = measure!(format!("Alloc({})", s), {
-                unsafe{ P::alloc(s) }
-            });
-            if m.0.is_null() {
-                panic!("Could not alloc mem size {}", s);
-            }
-            vec.push(m); 
-        }
-        for i in 0..cnt {
-            let off = vec[i].0;
-            measure!(format!("Dealloc({})", s), {
-                unsafe{ P::dealloc(off, s); }
-            });
-        }
-    }
-    for _ in 0 .. cnt/50 {
-        let cnt = 50;
-        P::transaction(|j| {
+        measure!(format!("Alloc({})", s), cnt, {
             for _ in 0..cnt {
-                let b = Pbox::new(PRefCell::new(10, j), j);
-                let mut b = b.borrow_mut(j);
-                measure!("DerefMut(1st)".to_string(), {
-                    *b += 20;
-                });
+                unsafe{ vec.push(P::alloc(s)) }
             }
+        });
+        measure!(format!("Dealloc({})", s), cnt, {
+            for i in 0..cnt {
+                unsafe{ P::dealloc(vec[i].0, s); }
+            }
+        });
+    }
+
+    {
+        let b = &*root.val.borrow();
+        measure!("AtomicInit(8)".to_string(), cnt, {
+            for i in 0..cnt {
+                Pbox::initialize(&b[i], 10).unwrap();
+            }
+        });
+    }
+
+    for _ in 0 .. cnt/25 {
+        let cnt = 25;
+        P::transaction(|j| {
+            let mut bvec = Vec::with_capacity(cnt);
+            for _ in 0..cnt {
+                bvec.push(Pbox::new(10, j));
+            }
+            measure!("DerefMut(1st)".to_string(), cnt, {
+                for i in 0..cnt {
+                    *bvec[i] = 20;
+                }
+            });
         }).unwrap();
-        for _ in 0..cnt {
-            {
-                let b = &*root.borrow();
-                measure!("AtomicInit(8)".to_string(), {
-                    Pbox::initialize(b, 10).unwrap();
-                });
-            }
-            P::transaction(|j| {
-                root.replace(None, j);
-            }).unwrap();
-        }
         P::transaction(|j| {
             let b = Pbox::new(10, j);
             let mut v = 0;
@@ -98,245 +127,129 @@ fn main() {
                 println!("unreachable {}", m);
             }
         }).unwrap();
-        P::transaction(|j| unsafe {
-            let b = Pbox::new(0u64, j);
-            for _ in 0..cnt {
-                let b = &*b;
-                measure!("DataLog(8)".to_string(), {
-                    b.take_log(j, Notifier::None);
-                });
-            }
-            j.ignore();
-        }).unwrap();
+
+        datalog!(cnt, 8);
+        datalog!(cnt, 64);
+        datalog!(cnt, 256);
+        datalog!(cnt, 1024);
+        datalog!(cnt, 4096);
     
-        P::transaction(|j| unsafe {
-            let b = Pbox::new([0u64;8], j);
-            for _ in 0..cnt {
-                let b = &*b;
-                measure!("DataLog(64)".to_string(), {
-                    b.take_log(j, Notifier::None);
-                });
-            }
-            j.ignore();
-        }).unwrap();
-    
-        P::transaction(|j| unsafe {
-            let b = Pbox::new([0u64;32], j);
-            for _ in 0..cnt {
-                let b = &*b;
-                measure!("DataLog(2K)".to_string(), {
-                    b.take_log(j, Notifier::None);
-                });
-            }
-            j.ignore();
-        }).unwrap();
-    
-        P::transaction(|j| unsafe {
-            let b = Pbox::new([0u64;128], j);
-            for _ in 0..cnt {
-                let b = &*b;
-                measure!("DataLog(8K)".to_string(), {
-                    b.take_log(j, Notifier::None);
-                });
-            }
-            j.ignore();
-        }).unwrap();
-    
-        P::transaction(|j| unsafe {
-            let b = Pbox::new([0u64;512], j);
-            for _ in 0..cnt {
-                let b = &*b;
-                measure!("DataLog(32K)".to_string(), {
-                    b.take_log(j, Notifier::None);
-                });
-            }
-            j.ignore();
-        }).unwrap();
-    
-        P::transaction(|j| unsafe {
-            let mut vec = Vec::with_capacity(cnt);
-            for _ in 0..cnt {
-                let m = P::alloc(8);
-                if m.0.is_null() {
-                    panic!("Could not alloc(2) mem size 8");
+        for s in [8, 64, 2048, 8192, 32768].iter() {
+            P::transaction(|j| unsafe {
+                let mut vec = Vec::with_capacity(cnt);
+                for _ in 0..cnt {
+                    let m = P::alloc(*s);
+                    if m.0.is_null() {
+                        panic!("Could not alloc(2) mem size {}", s);
+                    }
+                    vec.push(m);
                 }
-                vec.push(m);
-            }
-            for i in 0..cnt {
-                let (_, off, len) = vec[i];
-                measure!("DropLog(8)".to_string(), {
-                    Log::drop_on_commit(off, len, j);
+                measure!(format!("DropLog({})", s), cnt, {
+                    for i in 0..cnt {
+                        let (_, off, len) = vec[i];
+                        Log::drop_on_commit(off, len, j);
+                    }
                 });
-            }
-        }).unwrap();
-    
-        P::transaction(|j| unsafe {
-            let mut vec = Vec::with_capacity(cnt);
-            for _ in 0..cnt {
-                let m = P::alloc(64);
-                if m.0.is_null() {
-                    panic!("Could not alloc(3) mem size 64");
-                }
-                vec.push(m);
-            }
-            for i in 0..cnt {
-                let (_, off, len) = vec[i];
-                measure!("DropLog(64)".to_string(), {
-                    Log::drop_on_commit(off, len, j);
-                });
-            }
-        }).unwrap();
-    
-        P::transaction(|j| unsafe {
-            let mut vec = Vec::with_capacity(cnt);
-            for _ in 0..cnt {
-                let m = P::alloc(2048);
-                if m.0.is_null() {
-                    panic!("Could not alloc(4) mem size 2048");
-                }
-                vec.push(m);
-            }
-            for i in 0..cnt {
-                let (_, off, len) = vec[i];
-                measure!("DropLog(2K)".to_string(), {
-                    Log::drop_on_commit(off, len, j);
-                });
-            }
-        }).unwrap();
-    
-        P::transaction(|j| unsafe {
-            let mut vec = Vec::with_capacity(cnt);
-            for _ in 0..cnt {
-                let len = 8*1024;
-                let m = P::alloc(len);
-                if m.0.is_null() {
-                    panic!("Could not alloc(5) mem size {}", len);
-                }
-                vec.push(m);
-            }
-            for i in 0..cnt {
-                let (_, off, len) = vec[i];
-                measure!("DropLog(8K)".to_string(), {
-                    Log::drop_on_commit(off, len, j);
-                });
-            }
-        }).unwrap();
-    
-        P::transaction(|j| unsafe {
-            let mut vec = Vec::with_capacity(cnt);
-            for _ in 0..cnt {
-                let len = 32*1024;
-                let m = P::alloc(len);
-                if m.0.is_null() {
-                    panic!("Could not alloc(5) mem size {}", len);
-                }
-                vec.push(m);
-            }
-            for i in 0..cnt {
-                let (_, off, len) = vec[i];
-                measure!("DropLog(32K)".to_string(), {
-                    Log::drop_on_commit(off, len, j);
-                });
-            }
-        }).unwrap();
+            }).unwrap();
+        }
     
         P::transaction(|j| {
             let b = Pbox::new(0u64, j);
-            let mut vec = Vec::<Pbox<u64>>::with_capacity(cnt);
-            for _ in 0..cnt {
-                vec.push(measure!("Pbox:clone".to_string(), {
-                    b.pclone(j)
-                }));
-            }
+            let mut vec = Vec::with_capacity(cnt);
+            measure!("Pbox:clone".to_string(), cnt, {
+                for _ in 0..cnt {
+                    vec.push(b.pclone(j));
+                }
+            });
         }).unwrap();
     
         P::transaction(|j| {
             let b = Prc::new(0u64, j);
-            let mut vec = Vec::<Prc<u64>>::with_capacity(cnt);
-            for _ in 0..cnt {
-                vec.push(measure!("Prc:clone".to_string(), {
-                    b.pclone(j)
-                }));
-            }
+            let mut vec = Vec::with_capacity(cnt);
+            measure!("Prc:clone".to_string(), cnt, {
+                for _ in 0..cnt {
+                    vec.push(b.pclone(j));
+                }
+            });
         }).unwrap();
-    
+
         P::transaction(|j| {
             let b = Parc::new(0u64, j);
-            let mut vec = Vec::<Parc<u64>>::with_capacity(cnt);
-            for _ in 0..cnt {
-                vec.push(measure!("Parc:clone".to_string(), {
-                    b.pclone(j)
-                }));
-            }
+            let mut vec = Vec::with_capacity(cnt);
+            measure!("Parc:clone".to_string(), cnt, {
+                for _ in 0..cnt {
+                    vec.push(b.pclone(j));
+                }
+            });
         }).unwrap();
     }
 
     P::transaction(|j| {
         let b = Prc::new(0u64, j);
-        let mut pvec = Vec::<prc::PWeak<u64>>::with_capacity(cnt);
-        for _ in 0..cnt {
-            pvec.push(measure!("Prc:downgrade".to_string(), {
-                Prc::downgrade(&b, j)
-            }));
-        }
-        for i in 0..cnt {
-            let p = &pvec[i];
-            let _p = measure!("Prc:upgrade".to_string(), {
-                p.upgrade(j)
-            }).unwrap();
-        }
+        let mut pvec = Vec::with_capacity(cnt);
+        measure!("Prc:downgrade".to_string(), cnt, {
+            for _ in 0..cnt {
+                pvec.push(Prc::downgrade(&b, j));
+            }
+        });
+        let mut bvec = Vec::with_capacity(cnt);
+        measure!("Prc:upgrade".to_string(), cnt, {
+            for i in 0..cnt {
+                bvec.push(pvec[i].upgrade(j))
+            }
+        });
     }).unwrap();
 
     P::transaction(|j| {
         let b = Prc::new(0u64, j);
         let mut vvec = Vec::<prc::VWeak<u64>>::with_capacity(cnt);
-        for _ in 0..cnt {
-            unsafe { 
-                vvec.push(measure!("Prc:demote".to_string(), {
-                    Prc::unsafe_demote(&b)
-                }))
+        unsafe { 
+            measure!("Prc:demote".to_string(), cnt, {
+                for _ in 0..cnt {
+                    vvec.push(Prc::unsafe_demote(&b));
+                }
+            })
+        }
+        let mut bvec = Vec::with_capacity(cnt);
+        measure!("Prc:promote".to_string(), cnt, {
+            for i in 0..cnt {
+                bvec.push(vvec[i].promote(j));
             }
-        }
-        for i in 0..cnt {
-            let p = &vvec[i];
-            let _p = measure!("Prc:promote".to_string(), {
-                p.promote(j)
-            }).unwrap();
-        }
+        });
     }).unwrap();
 
     P::transaction(|j| {
         let b = Parc::new(0u64, j);
         let mut pvec = Vec::<parc::PWeak<u64>>::with_capacity(cnt);
-        for _ in 0..cnt {
-            pvec.push(measure!("Parc:downgrade".to_string(), {
-                Parc::downgrade(&b, j)
-            }));
-        }
-        for i in 0..cnt {
-            let p = &pvec[i];
-            let _p = measure!("Parc:upgrade".to_string(), {
-                p.upgrade(j)
-            }).unwrap();
-        }
+        measure!("Parc:downgrade".to_string(), cnt, {
+            for _ in 0..cnt {
+                pvec.push(Parc::downgrade(&b, j));
+            }
+        });
+        let mut ppvec = Vec::with_capacity(cnt);
+        let _p = measure!("Parc:upgrade".to_string(), cnt, {
+            for i in 0..cnt {
+                ppvec.push(pvec[i].upgrade(j))
+            }
+        });
     }).unwrap();
 
     P::transaction(|j| {
         let b = Parc::new(0u64, j);
-        let mut vvec = Vec::<parc::VWeak<u64>>::with_capacity(cnt);
-        for _ in 0..cnt {
-            unsafe { 
-                vvec.push(measure!("Parc:demote".to_string(), {
-                    Parc::unsafe_demote(&b)
-                }))
+        let mut vvec = Vec::with_capacity(cnt);
+        unsafe { 
+            measure!("Parc:demote".to_string(), cnt, {
+                for _ in 0..cnt {
+                    vvec.push(Parc::unsafe_demote(&b));
+                }
+            })
+        }
+        let mut pvec = Vec::with_capacity(cnt);
+        measure!("Parc:promote".to_string(), cnt, {
+            for i in 0..cnt {
+                pvec.push(vvec[i].promote(j));
             }
-        }
-        for i in 0..cnt {
-            let p = &vvec[i];
-            let _p = measure!("Parc:promote".to_string(), {
-                p.promote(j)
-            }).unwrap();
-        }
+        })
     }).unwrap();
 
     for s in &sizes {

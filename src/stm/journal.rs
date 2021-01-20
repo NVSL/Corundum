@@ -67,14 +67,12 @@ impl<A: MemPool> !LooseTxInUnsafe for Journal<A> {}
 impl<A: MemPool> !std::panic::RefUnwindSafe for Journal<A> {}
 impl<A: MemPool> !std::panic::UnwindSafe for Journal<A> {}
 
-const PAGE_SIZE: usize = 64;
-
 #[derive(Clone, Copy)]
 struct Page<A: MemPool> {
     len: usize,
     head: usize,
     next: Ptr<Page<A>, A>,
-    logs: [Log<A>; PAGE_SIZE],
+    logs: [Log<A>; LOG_PAGE_SIZE],
 }
 
 impl<A: MemPool> Page<A> {
@@ -91,7 +89,7 @@ impl<A: MemPool> Page<A> {
 
     #[inline]
     fn is_full(&self) -> bool {
-        self.len == PAGE_SIZE
+        self.len == LOG_PAGE_SIZE
     }
 
     unsafe fn notify(&mut self) {
@@ -121,7 +119,7 @@ impl<A: MemPool> Page<A> {
     unsafe fn ignore(&mut self) {
         self.len = 0;
         self.head = 0;
-        self.logs = [Default::default(); PAGE_SIZE];
+        self.logs = [Default::default(); LOG_PAGE_SIZE];
     }
 
     unsafe fn clear(&mut self) {
@@ -226,7 +224,7 @@ impl<A: MemPool> Journal<A> {
                 len: 0,
                 head: 0,
                 next: self.pages,
-                logs: [Default::default(); PAGE_SIZE]
+                logs: [Default::default(); LOG_PAGE_SIZE]
             };
             let (_, off, _, z) = A::atomic_new(page);
             A::log64(A::off_unchecked(self.pages.off_ref()), off, z);
