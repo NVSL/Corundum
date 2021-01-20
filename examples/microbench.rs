@@ -372,5 +372,11 @@ fn main() {
         println!("unreachable {}", m);
     }
 
+    for _ in 0..cnt {
+        measure!(" nop".to_string(), {
+            unsafe { asm!("nop"); }
+        });
+    }
+
     println!("{}", report());
 }

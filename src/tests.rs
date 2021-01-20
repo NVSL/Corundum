@@ -100,6 +100,53 @@ pub(crate) mod problems {
     }
 
     #[test]
+    fn paper() {
+        use crate::default::*;
+        type P = BuddyAlloc;
+        struct Node { val: i32, next: PRefCell<Option<Pbox<Node>>> }
+        impl RootObj<P> for Node {
+            fn init(j: &Journal) -> Self { Self{
+                val: 0, next: PRefCell::new(None, j)
+            }}
+        }
+        fn append(n: &Node, v:i32, j: &Journal) {
+            let mut t = n.next.borrow_mut(j);
+            match &*t {
+                Some(succ) => append(succ, v, j),
+                None => *t = Some(Pbox::new(
+                    Node {
+                    val: v,
+                    next: PRefCell::new(None, j)
+                    }, j))
+            }
+        }
+        fn go(v: i32) {
+            let head = BuddyAlloc::open::<Node>("list.pool",O_CFNE).unwrap();
+            transaction(|j| {
+                append(&head, v, j);
+            }).unwrap();
+        }
+
+        fn print(n: &Node) {
+            let t = n.next.borrow();
+            print!("{} ", n.val);
+            match &*t {
+                Some(succ) => print(succ),
+                None => {}
+            }
+        }
+
+        fn print_all() {
+            let head = BuddyAlloc::open::<Node>("list.pool",O_CFNE).unwrap();
+            print(&head);
+            println!();
+        }
+
+        go(rand::random());
+        print_all();
+    }
+
+    #[test]
     #[ignore]
     fn memory_leak_problem() {
         use crate::default::*;
