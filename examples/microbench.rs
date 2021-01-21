@@ -100,11 +100,11 @@ fn main() {
             for i in 0..cnt {
                 pvec.push(bvec[i].borrow_mut(j));
             }
-            measure!("DerefMut(1st)".to_string(), cnt, {
-                for i in 0..cnt {
+            for i in 0..cnt {
+                measure!("DerefMut(1st)".to_string(), cnt, {
                     *pvec[i] = 20;
-                }
-            });
+                });
+            }
         }).unwrap();
         P::transaction(|j| {
             let b = Pbox::new(10, j);

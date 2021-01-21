@@ -417,7 +417,13 @@ macro_rules! measure {
         {
             let __tag = $tag;
             {
-                let _perf = Measure::<P>::Batch(Instant::now(), __tag, $n as u128);
+                let mut _perf = Measure::<P>::Batch(Instant::now(), __tag, $n as u128);
+                let mut _dummy = Instant::now();
+                let mut _rt = &mut _dummy;
+                if let Measure::<P>::Batch(t, _, _) = &mut _perf {
+                    _rt = t;
+                }
+                *_rt = Instant::now();
                 $f
             }
         }
@@ -426,7 +432,13 @@ macro_rules! measure {
         {
             let __tag = $tag;
             {
-                let _perf = Measure::<P>::Custom(Instant::now(), __tag);
+                let mut _perf = Measure::<P>::Custom(Instant::now(), __tag);
+                let mut _dummy = Instant::now();
+                let mut _rt = &mut _dummy;
+                if let Measure::<P>::Custom(t, _) = &mut _perf {
+                    _rt = t;
+                }
+                *_rt = Instant::now();
                 $f
             }
         }
