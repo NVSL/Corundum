@@ -94,11 +94,15 @@ fn main() {
         P::transaction(|j| {
             let mut bvec = Vec::with_capacity(cnt);
             for _ in 0..cnt {
-                bvec.push(Pbox::new(10, j));
+                bvec.push(Pbox::new(PRefCell::new(10, j), j));
+            }
+            let mut pvec = Vec::with_capacity(cnt);
+            for i in 0..cnt {
+                pvec.push(bvec[i].borrow_mut(j));
             }
             measure!("DerefMut(1st)".to_string(), cnt, {
                 for i in 0..cnt {
-                    *bvec[i] = 20;
+                    *pvec[i] = 20;
                 }
             });
         }).unwrap();
