@@ -178,6 +178,16 @@ fn main() {
         }).unwrap();
 
         P::transaction(|j| {
+            let b = Prc::new(0u64, j);
+            let mut vec = Vec::with_capacity(cnt);
+            for _ in 0..cnt {
+                vec.push(measure!("Prc:2clone".to_string(), {
+                    b.pclone(j)
+                }));
+            }
+        }).unwrap();
+
+        P::transaction(|j| {
             let b = Parc::new(0u64, j);
             let mut vec = Vec::with_capacity(cnt);
             measure!("Parc:clone".to_string(), cnt, {
