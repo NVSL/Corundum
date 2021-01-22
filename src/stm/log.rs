@@ -548,7 +548,7 @@ impl<A: MemPool> Log<A> {
             UnlockOnCommit(src) => {
                 if *src != u64::MAX {
                     log!(A, Magenta, "UNLOCK", "FOR:          v@{}", *src);
-                    #[cfg(feature = "pthread")] {
+                    #[cfg(not(any(feature = "no_pthread", windows)))] {
                         let b = &mut *(*src as *mut (bool, libc::pthread_mutex_t, libc::pthread_mutexattr_t));
                         b.0 = false;
                         let lock = &mut b.1;
@@ -558,7 +558,7 @@ impl<A: MemPool> Log<A> {
                             crate::sync::init_lock(lock, attr);
                         }
                     }
-                    #[cfg(not(feature = "pthread"))] {
+                    #[cfg(any(feature = "no_pthread", windows))] {
                         let b = &mut *(*src as *mut (bool, u64));
                         b.0 = false;
                         let lock = &mut b.1;

@@ -1,3 +1,5 @@
+#![cfg(target_arch = "x86_64")]
+
 use std::any::type_name;
 use std::any::Any;
 use std::marker::PhantomData;
@@ -6,76 +8,87 @@ use std::fmt::Display;
 use std::ops::AddAssign;
 use std::sync::Mutex;
 use std::thread::{current, ThreadId};
-use std::time::Instant;
+
+static mut FREQ: f64 = 1.0f64;
 
 #[derive(Clone)]
 struct Data {
-    sum: u128,
-    cnt: u128,
+    sum: u64,
+    cnt: u64,
     sum2: f64,
-    min: u128,
-    max: u128,
+    min: u64,
+    max: u64,
 
     #[cfg(features="plot_histogram")] 
-    points: HashMap<u128, u128>
+    points: HashMap<u64, u64>
 }
 
 impl Default for Data {
     fn default() -> Self {
-        Data { sum: 0, cnt: 0, sum2: 0f64, min: u128::MAX, max:0 }
+        Data { sum: 0, cnt: 0, sum2: 0f64, min: u64::MAX, max:0 }
+    }
+}
+
+#[inline(always)]
+pub fn tsc() -> u64 {
+    unsafe {
+        // Flush the pipeline
+        // llvm_asm!("xor %eax, %eax
+        // cpuid");
+        core::arch::x86_64::_rdtsc()
     }
 }
 
 #[derive(Default, Clone)]
 struct Stat {
-    sync: u128,
-    cnt_sync: u128,
-    alloc: u128,
-    cnt_alloc: u128,
-    dealloc: u128,
-    cnt_dealloc: u128,
-    deref: u128,
-    cnt_deref: u128,
-    drop_log: u128,
-    cnt_drop_log: u128,
-    data_log: u128,
-    cnt_data_log: u128,
-    mutex_log: u128,
-    cnt_mutex_log: u128,
-    commit: u128,
-    cnt_commit: u128,
-    rollback: u128,
-    cnt_rollback: u128,
-    clear: u128,
-    cnt_clear: u128,
-    new_page: u128,
-    cnt_new_page: u128,
-    new_jrnl: u128,
-    cnt_new_jrnl: u128,
-    logging: u128,
-    cnt_logging: u128,
-    nop: u128,
-    cnt_nop: u128,
+    sync: u64,
+    cnt_sync: u64,
+    alloc: u64,
+    cnt_alloc: u64,
+    dealloc: u64,
+    cnt_dealloc: u64,
+    deref: u64,
+    cnt_deref: u64,
+    drop_log: u64,
+    cnt_drop_log: u64,
+    data_log: u64,
+    cnt_data_log: u64,
+    mutex_log: u64,
+    cnt_mutex_log: u64,
+    commit: u64,
+    cnt_commit: u64,
+    rollback: u64,
+    cnt_rollback: u64,
+    clear: u64,
+    cnt_clear: u64,
+    new_page: u64,
+    cnt_new_page: u64,
+    new_jrnl: u64,
+    cnt_new_jrnl: u64,
+    logging: u64,
+    cnt_logging: u64,
+    nop: u64,
+    cnt_nop: u64,
     custom: HashMap<String, Data>
 }
 
 pub enum Measure<A: Any> {
-    Sync(Instant),
-    Alloc(Instant),
-    Dealloc(Instant),
-    Deref(Instant),
-    DropLog(Instant),
-    DataLog(Instant),
-    MutexLog(Instant),
-    CommitLog(Instant),
-    RollbackLog(Instant),
-    ClearLog(Instant),
-    NewPage(Instant),
-    NewJournal(Instant),
-    Logging(Instant),
-    Nop(Instant),
-    Custom(Instant, String),
-    Batch(Instant, String, u128),
+    Sync(u64),
+    Alloc(u64),
+    Dealloc(u64),
+    Deref(u64),
+    DropLog(u64),
+    DataLog(u64),
+    MutexLog(u64),
+    CommitLog(u64),
+    RollbackLog(u64),
+    ClearLog(u64),
+    NewPage(u64),
+    NewJournal(u64),
+    Logging(u64),
+    Nop(u64),
+    Custom(u64, String),
+    Batch(u64, String, u64),
     Transaction,
     Unknown(PhantomData<A>)
 }
@@ -86,7 +99,8 @@ lazy_static! {
 
 macro_rules! add {
     ($tp:ty,$s:ident,custom,$m:expr) => {
-        let t = $s.elapsed().as_nanos();
+        let mut t = tsc();
+        t -= *$s;
         let mut stat = match STAT.lock() {
             Ok(g) => g,
             Err(p) => p.into_inner(),
@@ -103,7 +117,8 @@ macro_rules! add {
         // *p += 1;
     };
     ($tp:ty,$s:ident,batch,$m:expr,$cnt:expr) => {
-        let t = $s.elapsed().as_nanos();
+        let mut t = tsc();
+        t -= *$s;
         let mut stat = match STAT.lock() {
             Ok(g) => g,
             Err(p) => p.into_inner(),
@@ -115,13 +130,14 @@ macro_rules! add {
         counter.sum += t;
         counter.cnt += $cnt;
         counter.sum2 += f64::powi(avg, 2) * $cnt as f64;
-        let min = f64::trunc(avg) as u128;
-        let max = f64::ceil(avg) as u128;
+        let min = f64::trunc(avg) as u64;
+        let max = f64::ceil(avg) as u64;
         if counter.max < max { counter.max = max; }
         if counter.min > min { counter.min = min; }
     };
     ($tp:ty,$s:ident,$id:ident,$cnt:ident) => {
-        let t = $s.elapsed().as_nanos();
+        let mut t = tsc();
+        t -= *$s;
         let mut stat = match STAT.lock() {
             Ok(g) => g,
             Err(p) => p.into_inner(),
@@ -132,7 +148,8 @@ macro_rules! add {
         stat.$cnt += 1;
     };
     ($tp:ty,$s:ident,$id:ident) => {
-        let t = $s.elapsed().as_nanos();
+        let mut t = tsc();
+        t -= *$s;
         let mut stat = match STAT.lock() {
             Ok(g) => g,
             Err(p) => p.into_inner(),
@@ -259,7 +276,7 @@ impl AddAssign<&Stat> for Stat {
     }
 }
 
-fn div(a: u128, b: u128) -> f64 {
+fn div(a: u64, b: u64) -> f64 {
     if b == 0 {
         0f64
     } else {
@@ -335,8 +352,16 @@ Logging       {:>14} ns    avg(ns): {:<8}    cnt: {}",
         for (k,v) in &self.custom {
             let avg = div(v.sum, v.cnt);
             let sd = f64::sqrt(v.sum2/(v.cnt as f64)-f64::powi(avg,2));
-            lns.push(format!("{:<15}{:>10} ns  avg(ns): {:<11.3} std(ns): {:<8.1} min(ns): {:<8} max(ns): {:<10} cnt: {}",
-                k, v.sum, avg, sd, v.min, v.max, v.cnt));
+            unsafe {
+                lns.push(format!("{:<15}{:>10.0} ns  avg(ns): {:<11.3} std(ns): {:<8.1} min(ns): {:<8.0} max(ns): {:<10.0} cnt: {}",
+                    k,
+                    v.sum as f64 / FREQ,
+                    avg as f64 / FREQ,
+                    sd as f64 / FREQ,
+                    v.min as f64 / FREQ,
+                    v.max as f64 / FREQ,
+                    v.cnt));
+            }
             #[cfg(features="plot_histogram")] {
                 if let Some(plt) = plot(&v.points) {
                     plots += &format!("┌{:─^40}┐\n", format!(" {} ", k));
@@ -368,28 +393,28 @@ pub fn report() -> String {
     let mut total = Stat::default();
     let mut res = String::new();
     let print_all_threads = stat.len() > 1;
-    for (tid, stat) in stat.iter() {
-        if print_all_threads {
-            res += &format!(
-                "
-{:-^113}
-{}",
-                format!("Performance Details {:?}", tid), stat
-            );
+    unsafe {
+        FREQ = executor::block_on(heim_cpu::frequency()).unwrap().current().get::<uom::si::frequency::hertz>() as f64;
+        FREQ *= 1e-9;
+        for (tid, stat) in stat.iter() {
+            if print_all_threads {
+                res += &format!(
+                    "\n{:-^113}\n{}",
+                    format!("Performance Details {:?} ({:.1} GHz)", tid, FREQ), stat
+                );
+            }
+            total += stat;
         }
-        total += stat;
+        format!(
+            "{}\n{:=^113}\n{}",
+            res, format!(" All Threads and Pool Types ({:.1} GHz) ", FREQ), total
+        )
     }
-    format!(
-        "{}
-{:=^113}
-{}",
-        res, " All Threads and Pool Types ", total
-    )
 }
 
 
 #[cfg(features="plot_histogram")]
-fn plot(data: &HashMap<u128, u128>) -> Option<Vec<String>> {
+fn plot(data: &HashMap<u64, u64>) -> Option<Vec<String>> {
     let mut res = vec!["                                        ".to_string(); 20];
     let mut freqs = vec![0; 40];
     let h_min = data.keys().min()?;
@@ -417,13 +442,13 @@ macro_rules! measure {
         {
             let __tag = $tag;
             {
-                let mut _perf = Measure::<P>::Batch(Instant::now(), __tag, $n as u128);
-                let mut _dummy = Instant::now();
+                let mut _perf = Measure::<P>::Batch(0, __tag, $n as u64);
+                let mut _dummy: u64 = 0;
                 let mut _rt = &mut _dummy;
                 if let Measure::<P>::Batch(t, _, _) = &mut _perf {
                     _rt = t;
                 }
-                *_rt = Instant::now();
+                *_rt = $crate::stat::tsc();
                 $f
             }
         }
@@ -432,13 +457,13 @@ macro_rules! measure {
         {
             let __tag = $tag;
             {
-                let mut _perf = Measure::<P>::Custom(Instant::now(), __tag);
-                let mut _dummy = Instant::now();
+                let mut _perf = Measure::<P>::Custom(0, __tag);
+                let mut _dummy: u64 = 0;
                 let mut _rt = &mut _dummy;
                 if let Measure::<P>::Custom(t, _) = &mut _perf {
                     _rt = t;
                 }
-                *_rt = Instant::now();
+                *_rt = $crate::stat::tsc();
                 $f
             }
         }

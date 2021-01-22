@@ -41,7 +41,7 @@ them to allocate persistent memory safely.
 Corundum depends on some unstable features of Rust. Therefore, it requires
 nightly Rust compiler [1.50.0-nightly](https://github.com/rust-lang/rust).
 Please run the following commands to download the latest version of Rust (See
-https://www.rust-lang.org/tools/install for more details).
+[https://www.rust-lang.org/tools/install] for more details).
 
 ```shell
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -66,6 +66,14 @@ Or
 ```toml
 [dependencies]
 corundum = { git = "https://github.com/NVSL/Corundum.git" }
+```
+
+If you wish to enable a feature like `pin_journals`, please a `features` list
+to the dependency integration section. For example:
+
+```toml
+[dependencies]
+corundum = {version="0.2.2", features=["pin_journal", "no_pthread"]}
 ```
 
 ### Memory Pools

@@ -14,30 +14,33 @@ categories = ["development-tools", "memory-management", "hardware-support"]
 [features]
 verbose = []
 capture_footprint = []
+access_violation_check = []
+cyclic_link_check = []
+pin_journals = []
+display_all_flushes = []
+replace_with_log = []
+perf_stat = []
 use_clflushopt = []
 use_clwb = []
 use_msync = []
 no_persist = []
-access_violation_check = []
-cyclic_link_check = []
 no_log_rc = []
-pin_journals = []
 no_flush_alloc = []
-display_all_flushes = []
 no_flush_updates = []
-replace_with_log = []
-pthread = []
-perf_stat = []
-default = ["pthread"]
+no_pthread = []
+default = []
 
 [dependencies]
 memmap = "0.7.0"
 term-painter = "0.3.0"
 libc = "0.2.81"
-num_cpus = "1.13.0"
+executor = "0.7.0"
 lazy_static = "1.4.0"
 impl-trait-for-tuples = "0.2.0"
 crndm_derive = "0.1.1"
+num_cpus = "1.13.0"
+heim-cpu = "0.0.11"
+uom = "0.30.0"
 
 # examples
 rand = "0.7.3"

@@ -96,11 +96,11 @@ pub struct BuddyAlg<A: MemPool> {
     /// The footprint of memory usage in bytes
     foot_print: usize,
 
-    #[cfg(feature = "pthread")]
+    #[cfg(not(any(feature = "no_pthread", windows)))]
     /// A mutex for atomic operations
     mutex: (libc::pthread_mutex_t, libc::pthread_mutexattr_t),
 
-    #[cfg(not(feature = "pthread"))]
+    #[cfg(any(feature = "no_pthread", windows))]
     /// A mutex for atomic operations
     mutex: u64,
 
@@ -139,11 +139,11 @@ impl<A: MemPool> BuddyAlg<A> {
         self.drop_log.clear();
         self.aux.clear();
 
-        #[cfg(feature = "pthread")] unsafe {
+        #[cfg(not(any(feature = "no_pthread", windows)))] unsafe {
         crate::sync::init_lock(&mut self.mutex.0, &mut self.mutex.1);
         }
 
-        #[cfg(not(feature = "pthread"))] {
+        #[cfg(any(feature = "no_pthread", windows))] {
         self.mutex = 0; }
     }
 
@@ -179,10 +179,10 @@ impl<A: MemPool> BuddyAlg<A> {
         unsafe { 
             // debug_assert!(self.aux.empty(), "locked before: aux is not empty");
 
-            #[cfg(feature = "pthread")]
+            #[cfg(not(any(feature = "no_pthread", windows)))]
             libc::pthread_mutex_lock(&mut self.mutex.0); 
 
-            #[cfg(not(feature = "pthread"))] {
+            #[cfg(any(feature = "no_pthread", windows))] {
                 let tid = std::thread::current().id().as_u64().get();
                 while std::intrinsics::atomic_cxchg_acqrel(&mut self.mutex, 0, tid).0 != tid {}
             }
@@ -192,10 +192,10 @@ impl<A: MemPool> BuddyAlg<A> {
     #[inline]
     fn unlock(&mut self) {
         unsafe { 
-            #[cfg(feature = "pthread")]
+            #[cfg(not(any(feature = "no_pthread", windows)))]
             libc::pthread_mutex_unlock(&mut self.mutex.0); 
 
-            #[cfg(not(feature = "pthread"))]
+            #[cfg(any(feature = "no_pthread", windows))]
             std::intrinsics::atomic_store_rel(&mut self.mutex, 0);
         }
     }
@@ -485,11 +485,11 @@ impl<A: MemPool> BuddyAlg<A> {
     /// 
     /// [`DropOnFailure`]: ../alloc/trait.MemPool.html#method.drop_on_failure
     pub fn recover(&mut self) {
-        #[cfg(feature = "pthread")] unsafe {
+        #[cfg(not(any(feature = "no_pthread", windows)))] unsafe {
         crate::sync::init_lock(&mut self.mutex.0, &mut self.mutex.1);
         }
 
-        #[cfg(not(feature = "pthread"))] {
+        #[cfg(any(feature = "no_pthread", windows))] {
         self.mutex = 0; }
 
         if self.aux_valid {

@@ -3,7 +3,6 @@
 use corundum::stm::*;
 use corundum::default::{*, Journal};
 use corundum::stat::*;
-use std::time::Instant;
 
 type P = BuddyAlloc;
 
@@ -14,11 +13,12 @@ macro_rules! datalog {
             for _ in 0..$cnt {
                 bvec.push(Pbox::new([0u8;$s], j));
             }
-            measure!(format!("DataLog({})", $s), $cnt, {
-                for i in 0..$cnt {
-                    (&*bvec[i]).take_log(j, Notifier::None);
-                }
-            });
+            for i in 0..$cnt {
+                let m = &*bvec[i];
+                measure!(format!("DataLog({})", $s), {
+                    m.take_log(j, Notifier::None);
+                });
+            }
             j.ignore();
         }).unwrap();
     };
@@ -65,32 +65,34 @@ fn main() {
             P::transaction(|_| {unsafe { asm!("nop"); }}).unwrap();
         }
     });
+
     for s in &sizes {
         let s = *s * 8;
         let mut vec = Vec::with_capacity(cnt);
-        measure!(format!("Alloc({})", s), cnt, {
-            for _ in 0..cnt {
-                unsafe{ vec.push(P::alloc(s)) }
-            }
-        });
-        measure!(format!("Dealloc({})", s), cnt, {
-            for i in 0..cnt {
+        for _ in 0..cnt {
+            vec.push(measure!(format!("Alloc({})", s), {
+                unsafe{ P::alloc(s) }
+            }));
+        }
+        for i in 0..cnt {
+            measure!(format!("Dealloc({})", s), {
                 unsafe{ P::dealloc(vec[i].0, s); }
-            }
-        });
+            });
+        }
     }
 
     {
         let b = &*root.val.borrow();
-        measure!("AtomicInit(8)".to_string(), cnt, {
-            for i in 0..cnt {
-                Pbox::initialize(&b[i], 10).unwrap();
-            }
-        });
+        for i in 0..cnt {
+            let b = &b[i];
+            measure!("AtomicInit(8)".to_string(), {
+                Pbox::initialize(b, 10)
+            }).unwrap();
+        }
     }
 
-    for _ in 0 .. cnt/25 {
-        let cnt = 25;
+    for _ in 0 .. cnt/50 {
+        let cnt = 50;
         P::transaction(|j| {
             let mut bvec = Vec::with_capacity(cnt);
             for _ in 0..cnt {
@@ -101,7 +103,7 @@ fn main() {
                 pvec.push(bvec[i].borrow_mut(j));
             }
             for i in 0..cnt {
-                measure!("DerefMut(1st)".to_string(), cnt, {
+                measure!("DerefMut(1st)".to_string(), {
                     *pvec[i] = 20;
                 });
             }
@@ -148,23 +150,23 @@ fn main() {
                     }
                     vec.push(m);
                 }
-                measure!(format!("DropLog({})", s), cnt, {
-                    for i in 0..cnt {
-                        let (_, off, len) = vec[i];
+                for i in 0..cnt {
+                    let (_, off, len) = vec[i];
+                    measure!(format!("DropLog({})", s), {
                         Log::drop_on_commit(off, len, j);
-                    }
-                });
+                    });
+                }
             }).unwrap();
         }
     
         P::transaction(|j| {
             let b = Pbox::new(0u64, j);
             let mut vec = Vec::with_capacity(cnt);
-            measure!("Pbox:clone".to_string(), cnt, {
-                for _ in 0..cnt {
-                    vec.push(b.pclone(j));
-                }
-            });
+            for _ in 0..cnt {
+                vec.push(measure!("Pbox:clone".to_string(), {
+                    b.pclone(j)
+                }));
+            }
         }).unwrap();
     
         P::transaction(|j| {
@@ -175,16 +177,6 @@ fn main() {
                     vec.push(b.pclone(j));
                 }
             });
-        }).unwrap();
-
-        P::transaction(|j| {
-            let b = Prc::new(0u64, j);
-            let mut vec = Vec::with_capacity(cnt);
-            for _ in 0..cnt {
-                vec.push(measure!("Prc:2clone".to_string(), {
-                    b.pclone(j)
-                }));
-            }
         }).unwrap();
 
         P::transaction(|j| {
