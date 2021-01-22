@@ -60,11 +60,11 @@ fn main() {
         let s = 8 + rand::random::<usize>() % 5000;
         unsafe { P::alloc(s); }
     }
-    measure!("TxNop".to_string(), cnt, {
-        for _ in 0..cnt {
+    for _ in 0..cnt {
+        measure!("TxNop".to_string(), {
             P::transaction(|_| {unsafe { asm!("nop"); }}).unwrap();
-        }
-    });
+        });
+    }
 
     for s in &sizes {
         let s = *s * 8;
