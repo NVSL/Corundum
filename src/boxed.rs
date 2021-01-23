@@ -226,7 +226,7 @@ impl<T: PSafe, A: MemPool> Pbox<mem::MaybeUninit<T>, A> {
 }
 
 impl<T: PSafe, A: MemPool> Pbox<T, A> {
-    /// Initializes boxed data with `value` inplace if it is `Null`
+    /// Initializes boxed data with `value` in-place if it is `None`
     ///
     /// This function should not be called from a transaction as it updates
     /// data without taking high-level logs. If transaction is unsuccessful,

@@ -7,6 +7,7 @@ use crate::cell::VCell;
 use crate::clone::*;
 use crate::ptr::Ptr;
 use crate::stm::*;
+use crate::ll::*;
 use crate::*;
 use std::cmp::Ordering;
 use std::hash::Hash;
@@ -545,6 +546,75 @@ impl<T: PSafe + ?Sized, A: MemPool> Deref for Prc<T, A> {
     #[inline(always)]
     fn deref(&self) -> &T {
         &self.inner().value
+    }
+}
+
+
+impl<T: PSafe, A: MemPool> Prc<T, A> {
+    /// Initializes boxed data with `value` in-place if it is `None`
+    ///
+    /// This function should not be called from a transaction as it updates
+    /// data without taking high-level logs. If transaction is unsuccessful,
+    /// there is no way to recover data.
+    /// However, it is safe to use it outside a transaction because it uses
+    /// low-level logs to provide safety for a single update without drop.
+    /// A dynamic check at the beginning makes sure of that.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use corundum::default::*;
+    /// 
+    /// type P = BuddyAlloc;
+    ///
+    /// let root = P::open::<Option<Prc<i32>>>("foo.pool", O_CF).unwrap();
+    ///
+    /// Prc::initialize(&*root, 25);
+    /// 
+    /// let value = **root.as_ref().unwrap();
+    /// assert_eq!(value, 25);
+    /// ```
+    ///
+    pub fn initialize(rc: &Option<Prc<T, A>>, value: T) -> crate::result::Result<()> {
+        assert!(
+            !Journal::<A>::is_running(),
+            "Pbox::initialize() cannot be used inside a transaction"
+        );
+        match rc {
+            Some(_) => Err("already initialized".to_string()),
+            None => if A::valid(rc) {
+                unsafe {
+                    let new = A::atomic_new(
+                        PrcBox::<T, A> {
+                            counter: Counter {
+                                strong: 1,
+                                weak: 1,
+        
+                                #[cfg(not(feature = "no_log_rc"))]
+                                has_log: 0,
+                            },
+        
+                            #[cfg(not(feature = "no_volatile_pointers"))]
+                            vlist: VCell::new(VWeakList::default()),
+        
+                            dummy: [],
+                            value,
+                        });
+                    let pnew = Some(Prc::<T, A>::from_inner(Ptr::from_off_unchecked(new.1)));
+                    let src = crate::utils::as_slice64(&pnew);
+                    let mut base = A::off_unchecked(rc);
+                    for i in src {
+                        A::log64(base, *i, new.3);
+                        base += 8;
+                    }
+                    persist_obj(rc);
+                    A::perform(new.3);
+                }
+                Ok(())
+            } else {
+                Err("The box object is not in the PM".to_string())
+            }
+        }
     }
 }
 

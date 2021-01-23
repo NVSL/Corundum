@@ -52,17 +52,19 @@ pub fn may_crash(ln: u32, cnt: i32) {
 
 pub fn as_slice<T: ?Sized>(x: &T) -> &[u8] {
     let ptr: *const T = x;
-    let ptr: *const u8 = ptr as *const u8;  // cast from ptr-to-SomeStruct to ptr-to-u8
+    let ptr: *const u8 = ptr as *const u8;
     unsafe {
         std::slice::from_raw_parts(ptr, std::mem::size_of_val(x))
     }
 }
 
 pub fn as_slice64<T: ?Sized>(x: &T) -> &[u64] {
+    let len = std::mem::size_of_val(x);
+    assert_eq!(len % 8, 0, "Cannot convert an object of size {} bytes to [u64]", len);
     let ptr: *const T = x;
-    let ptr: *const u64 = ptr as *const u64;  // cast from ptr-to-SomeStruct to ptr-to-u8
+    let ptr: *const u64 = ptr as *const u64;
     unsafe {
-        std::slice::from_raw_parts(ptr, std::mem::size_of_val(x)/8)
+        std::slice::from_raw_parts(ptr, len/8)
     }
 }
 
