@@ -413,12 +413,12 @@ impl<A: MemPool> Log<A> {
 
         log!(A, Yellow, "NEW LOG", "FOR:         v@{:<18} UnlockOnCommit", virt_addr);
         
-        if cfg!(feature = "pthread") {
-            let b = &mut *(virt_addr as *mut (bool, libc::pthread_mutex_t, 
-                libc::pthread_mutexattr_t));
+        if cfg!(feature = "no_pthread") {
+            let b = &mut *(virt_addr as *mut (bool, u64));
             if b.0 { return; }
         } else {
-            let b = &mut *(virt_addr as *mut (bool, u64));
+            let b = &mut *(virt_addr as *mut (bool, libc::pthread_mutex_t, 
+                libc::pthread_mutexattr_t));
             if b.0 { return; }
         };
 
