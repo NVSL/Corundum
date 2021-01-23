@@ -259,9 +259,14 @@ impl<T: PSafe, A: MemPool> Pbox<T, A> {
             Some(_) => Err("already initialized".to_string()),
             None => if A::valid(boxed) {
                 unsafe {
-                    let this = boxed as *const _ as *mut Option<Pbox<T, A>>;
                     let new = A::atomic_new(value);
-                    *this = Some(Pbox::from_raw(new.0));
+                    let bnew = Some(Pbox::<T, A>::from_raw(new.0));
+                    let src = crate::utils::as_slice64(&bnew);
+                    let mut base = A::off_unchecked(boxed);
+                    for i in src {
+                        A::log64(base, *i, new.3);
+                        base += 8;
+                    }
                     persist_obj(boxed);
                     A::perform(new.3);
                 }

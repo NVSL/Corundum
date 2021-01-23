@@ -72,7 +72,7 @@ struct Page<A: MemPool> {
     len: usize,
     head: usize,
     next: Ptr<Page<A>, A>,
-    logs: [Log<A>; LOG_PAGE_SIZE],
+    logs: [Log<A>; PAGE_LOG_SLOTS],
 }
 
 impl<A: MemPool> Page<A> {
@@ -89,7 +89,7 @@ impl<A: MemPool> Page<A> {
 
     #[inline]
     fn is_full(&self) -> bool {
-        self.len == LOG_PAGE_SIZE
+        self.len == PAGE_LOG_SLOTS
     }
 
     unsafe fn notify(&mut self) {
@@ -119,7 +119,7 @@ impl<A: MemPool> Page<A> {
     unsafe fn ignore(&mut self) {
         self.len = 0;
         self.head = 0;
-        self.logs = [Default::default(); LOG_PAGE_SIZE];
+        self.logs = [Default::default(); PAGE_LOG_SLOTS];
     }
 
     unsafe fn clear(&mut self) {
@@ -224,7 +224,7 @@ impl<A: MemPool> Journal<A> {
                 len: 0,
                 head: 0,
                 next: self.pages,
-                logs: [Default::default(); LOG_PAGE_SIZE]
+                logs: [Default::default(); PAGE_LOG_SLOTS]
             };
             let (_, off, _, z) = A::atomic_new(page);
             A::log64(A::off_unchecked(self.pages.off_ref()), off, z);

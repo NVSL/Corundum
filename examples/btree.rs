@@ -8,7 +8,6 @@ use std::fmt::{Display, Error, Formatter};
 type P = corundum::default::BuddyAlloc;
 //type P = Heap;
 type Pbox<T> = corundum::boxed::Pbox<T, P>;
-type Journal = corundum::stm::journal::Journal<P>;
 type Ptr = Option<Pbox<BTreeNode>>;
 
 struct FixStr {
@@ -60,14 +59,9 @@ impl Display for BTreeNode {
     }
 }
 
+#[derive(Root)]
 struct BTree {
     root: Ptr,
-}
-
-impl RootObj<P> for BTree {
-    fn init(_j: &Journal) -> Self {
-        Self { root: None }
-    }
 }
 
 impl BTree {

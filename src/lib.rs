@@ -128,7 +128,7 @@
 #![allow(incomplete_features)]
 #![allow(type_alias_bounds)]
 
-pub(crate) const LOG_PAGE_SIZE: usize = 128;
+pub(crate) const PAGE_LOG_SLOTS: usize = 128;
 
 #[macro_use]
 extern crate lazy_static;
