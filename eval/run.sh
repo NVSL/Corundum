@@ -288,6 +288,9 @@ function std() {
 }
 
 tags=(
+    "Deref"
+    "DerefMut\(1st\)"
+    "DerefMut\(!1st\)"
     "Alloc\(8\)"
     "Alloc\(256\)"
     "Alloc\(4096\)"
@@ -312,9 +315,6 @@ tags=(
     "Parc:demote"
     "Prc:promote"
     "Parc:promote"
-    "DerefMut\(1st\)"
-    "DerefMut\(!1st\)"
-    "Deref"
 )
 
 p=$dir_path/outputs/perf/micro-pmem.out
