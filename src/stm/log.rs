@@ -413,7 +413,7 @@ impl<A: MemPool> Log<A> {
 
         log!(A, Yellow, "NEW LOG", "FOR:         v@{:<18} UnlockOnCommit", virt_addr);
         
-        if cfg!(feature = "no_pthread") {
+        if cfg!(any(feature = "no_pthread", windows)) {
             let b = &mut *(virt_addr as *mut (bool, u64));
             if b.0 { return; }
         } else {
