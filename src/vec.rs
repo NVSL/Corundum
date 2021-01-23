@@ -896,9 +896,9 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
 impl<T: PSafe, A: MemPool> Drop for Vec<T, A> {
     fn drop(&mut self) {
         unsafe {
-            let s = self.buf.as_slice_mut();
+            let s = self.as_slice_mut();
             ptr::drop_in_place(s);
-            A::free_slice(Self::to_slice_mut(self.off(), self.capacity()));
+            A::free_slice(self.buf.as_slice_mut());
         }
     }
 }
