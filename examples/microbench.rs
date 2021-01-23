@@ -150,12 +150,12 @@ fn main() {
                     }
                     vec.push(m);
                 }
-                measure!(format!("DropLog({})", s), cnt, {
-                    for i in 0..cnt {
-                        let (_, off, len) = vec[i];
+                for i in 0..cnt {
+                    let (_, off, len) = vec[i];
+                    measure!(format!("DropLog({})", s), {
                         Log::drop_on_commit(off, len, j);
-                    }
-                });
+                    });
+                }
             }).unwrap();
         }
     
