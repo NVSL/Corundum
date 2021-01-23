@@ -204,10 +204,10 @@ if $all || $micro; then
     cd $dir_path/..
     rm -f $pool
     echo "Running microbenchmarks on PMEM ($pool)..."
-    CPUS=1 taskset -c 0 cargo run --release --example microbench --features="$features" -- $pool 100000 > $dir_path/outputs/perf/micro-pmem.out
+    CPUS=1 taskset -c 0 cargo run --release --example microbench --features="$features" -- $pool > $dir_path/outputs/perf/micro-pmem.out
     echo "Running microbenchmarks on PMEM (/dev/shm/m.pool)..."
     rm -f /dev/shm/m.pool
-    CPUS=1 taskset -c 0 cargo run --release --example microbench --features="$features" -- /dev/shm/m.pool 100000 > $dir_path/outputs/perf/micro-dram.out
+    CPUS=1 taskset -c 0 cargo run --release --example microbench --features="$features" -- /dev/shm/m.pool > $dir_path/outputs/perf/micro-dram.out
 fi
 
 function read_time() {
