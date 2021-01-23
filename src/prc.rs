@@ -578,7 +578,7 @@ impl<T: PSafe, A: MemPool> Prc<T, A> {
     pub fn initialize(rc: &Option<Prc<T, A>>, value: T) -> crate::result::Result<()> {
         assert!(
             !Journal::<A>::is_running(),
-            "Pbox::initialize() cannot be used inside a transaction"
+            "Prc::initialize() cannot be used inside a transaction"
         );
         match rc {
             Some(_) => Err("already initialized".to_string()),
@@ -612,7 +612,7 @@ impl<T: PSafe, A: MemPool> Prc<T, A> {
                 }
                 Ok(())
             } else {
-                Err("The box object is not in the PM".to_string())
+                Err("The object is not in the PM".to_string())
             }
         }
     }

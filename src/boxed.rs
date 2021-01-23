@@ -272,7 +272,7 @@ impl<T: PSafe, A: MemPool> Pbox<T, A> {
                 }
                 Ok(())
             } else {
-                Err("The box object is not in the PM".to_string())
+                Err("The object is not in the PM".to_string())
             }
         }
     }

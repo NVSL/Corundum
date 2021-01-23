@@ -39,17 +39,29 @@ fn main() {
     let cnt = args[2].parse::<usize>().expect("Expected a number");
 
     struct Root {
-        val: PRefCell<PVec<Option<Pbox<i32>>>>
+        bx: PRefCell<PVec<Option<Pbox<i32>>>>,
+        rc: PRefCell<PVec<Option<Prc<i32>>>>,
+        arc: PRefCell<PVec<Option<Parc<i32>>>>,
     }
 
     impl RootObj<P> for Root {
         fn init(j: &Journal) -> Self {
-            let mut v = PVec::with_capacity(100000, j);
+            let mut b = PVec::with_capacity(100000, j);
             for _ in 0..100000 {
-                v.push(None, j);
+                b.push(None, j);
+            }
+            let mut r = PVec::with_capacity(100000, j);
+            for _ in 0..100000 {
+                r.push(None, j);
+            }
+            let mut a = PVec::with_capacity(100000, j);
+            for _ in 0..100000 {
+                a.push(None, j);
             }
             Self {
-                val: PRefCell::new(v, j)
+                bx: PRefCell::new(b, j),
+                rc: PRefCell::new(r, j),
+                arc: PRefCell::new(a, j),
             }
         }
     }
@@ -82,11 +94,25 @@ fn main() {
     }
 
     {
-        let b = &*root.val.borrow();
+        let b = &*root.bx.borrow();
         for i in 0..cnt {
             let b = &b[i];
-            measure!("AtomicInit(8)".to_string(), {
+            measure!("Pbox:AtomicInit".to_string(), {
                 Pbox::initialize(b, 10)
+            }).unwrap();
+        }
+        let r = &*root.rc.borrow();
+        for i in 0..cnt {
+            let r = &r[i];
+            measure!("Prc:AtomicInit".to_string(), {
+                Prc::initialize(r, 10)
+            }).unwrap();
+        }
+        let a = &*root.arc.borrow();
+        for i in 0..cnt {
+            let a = &a[i];
+            measure!("Parc:AtomicInit".to_string(), {
+                Parc::initialize(a, 10)
             }).unwrap();
         }
     }
