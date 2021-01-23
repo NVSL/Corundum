@@ -46,16 +46,16 @@ fn main() {
 
     impl RootObj<P> for Root {
         fn init(j: &Journal) -> Self {
-            let mut b = PVec::with_capacity(100000, j);
-            for _ in 0..100000 {
+            let mut b = PVec::with_capacity(50000, j);
+            for _ in 0..50000 {
                 b.push(None, j);
             }
-            let mut r = PVec::with_capacity(100000, j);
-            for _ in 0..100000 {
+            let mut r = PVec::with_capacity(50000, j);
+            for _ in 0..50000 {
                 r.push(None, j);
             }
-            let mut a = PVec::with_capacity(100000, j);
-            for _ in 0..100000 {
+            let mut a = PVec::with_capacity(50000, j);
+            for _ in 0..50000 {
                 a.push(None, j);
             }
             Self {
@@ -95,21 +95,21 @@ fn main() {
 
     {
         let b = &*root.bx.borrow();
-        for i in 0..cnt {
+        for i in 0..50000 {
             let b = &b[i];
             measure!("Pbox:AtomicInit".to_string(), {
                 Pbox::initialize(b, 10)
             }).unwrap();
         }
         let r = &*root.rc.borrow();
-        for i in 0..cnt {
+        for i in 0..50000 {
             let r = &r[i];
             measure!("Prc:AtomicInit".to_string(), {
                 Prc::initialize(r, 10)
             }).unwrap();
         }
         let a = &*root.arc.borrow();
-        for i in 0..cnt {
+        for i in 0..50000 {
             let a = &a[i];
             measure!("Parc:AtomicInit".to_string(), {
                 Parc::initialize(a, 10)
