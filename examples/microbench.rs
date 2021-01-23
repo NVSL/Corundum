@@ -5,6 +5,7 @@ use corundum::default::{*, Journal};
 use corundum::stat::*;
 
 type P = BuddyAlloc;
+const CNT: usize = 50000;
 
 macro_rules! datalog {
     ($cnt:expr,$s:expr) => {
@@ -30,13 +31,12 @@ fn main() {
 
     let args: StdVec<String> = env::args().collect();
 
-    if args.len() < 3 {
-        println!("usage: {} file-name iterations", args[0]);
+    if args.len() < 2 {
+        println!("usage: {} file-name", args[0]);
         return;
     }
 
     let sizes = vec![512, 128, 32, 8, 1];
-    let cnt = args[2].parse::<usize>().expect("Expected a number");
 
     struct Root {
         bx: PRefCell<PVec<Option<Pbox<i32>>>>,
@@ -46,16 +46,16 @@ fn main() {
 
     impl RootObj<P> for Root {
         fn init(j: &Journal) -> Self {
-            let mut b = PVec::with_capacity(50000, j);
-            for _ in 0..50000 {
+            let mut b = PVec::with_capacity(CNT, j);
+            for _ in 0..CNT {
                 b.push(None, j);
             }
-            let mut r = PVec::with_capacity(50000, j);
-            for _ in 0..50000 {
+            let mut r = PVec::with_capacity(CNT, j);
+            for _ in 0..CNT {
                 r.push(None, j);
             }
-            let mut a = PVec::with_capacity(50000, j);
-            for _ in 0..50000 {
+            let mut a = PVec::with_capacity(CNT, j);
+            for _ in 0..CNT {
                 a.push(None, j);
             }
             Self {
@@ -67,6 +67,7 @@ fn main() {
     }
 
     let root = P::open::<Root>(&args[1], O_CF | O_32GB).unwrap();
+    let cnt = CNT;
     for _ in 0..cnt {
         // Warm-up the allocator
         let s = 8 + rand::random::<usize>() % 5000;
@@ -95,21 +96,21 @@ fn main() {
 
     {
         let b = &*root.bx.borrow();
-        for i in 0..50000 {
+        for i in 0..cnt {
             let b = &b[i];
             measure!("Pbox:AtomicInit".to_string(), {
                 Pbox::initialize(b, 10)
             }).unwrap();
         }
         let r = &*root.rc.borrow();
-        for i in 0..50000 {
+        for i in 0..cnt {
             let r = &r[i];
             measure!("Prc:AtomicInit".to_string(), {
                 Prc::initialize(r, 10)
             }).unwrap();
         }
         let a = &*root.arc.borrow();
-        for i in 0..50000 {
+        for i in 0..cnt {
             let a = &a[i];
             measure!("Parc:AtomicInit".to_string(), {
                 Parc::initialize(a, 10)
@@ -117,7 +118,7 @@ fn main() {
         }
     }
 
-    for _ in 0 .. cnt/50 {
+    for _ in 0 .. CNT/50 {
         let cnt = 50;
         P::transaction(|j| {
             let mut bvec = Vec::with_capacity(cnt);
