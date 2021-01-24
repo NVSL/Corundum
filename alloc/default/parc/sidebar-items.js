@@ -1,0 +1,1 @@
+initSidebarItems({"type":[["PWeak","Compact form of `sync::Weak` `<``BuddyAlloc``>`."],["VWeak","Compact form of `sync::VWeak` `<``BuddyAlloc``>`."]]});
