@@ -7,7 +7,6 @@ use crate::cell::VCell;
 use crate::clone::*;
 use crate::ptr::Ptr;
 use crate::stm::*;
-use crate::ll::*;
 use crate::*;
 use std::cmp::Ordering;
 use std::hash::Hash;
@@ -607,7 +606,6 @@ impl<T: PSafe, A: MemPool> Prc<T, A> {
                         A::log64(base, *i, new.3);
                         base += 8;
                     }
-                    persist_obj(rc);
                     A::perform(new.3);
                 }
                 Ok(())

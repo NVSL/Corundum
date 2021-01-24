@@ -5,7 +5,6 @@ use crate::cell::RootObj;
 use crate::clone::*;
 use crate::ptr::Ptr;
 use crate::stm::*;
-use crate::ll::*;
 use crate::{PSafe, VSafe, TxOutSafe};
 use std::cmp::Ordering;
 use std::convert::From;
@@ -267,7 +266,6 @@ impl<T: PSafe, A: MemPool> Pbox<T, A> {
                         A::log64(base, *i, new.3);
                         base += 8;
                     }
-                    persist_obj(boxed);
                     A::perform(new.3);
                 }
                 Ok(())
