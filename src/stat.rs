@@ -117,14 +117,11 @@ macro_rules! add {
         let tid = current().id();
         let stat = stat.entry((tid,type_name::<$tp>())).or_default();
         let counter = stat.custom.entry($m).or_default();
-        let avg = t as f64/$cnt as f64;
         counter.sum += t;
         counter.cnt += $cnt;
-        counter.sum2 += f64::powi(avg, 2) * $cnt as f64;
-        let min = f64::trunc(avg) as u64;
-        let max = f64::ceil(avg) as u64;
-        if counter.max < max { counter.max = max; }
-        if counter.min > min { counter.min = min; }
+        counter.sum2 = 0f64;
+        counter.min = 0;
+        counter.max = 0;
     };
     ($tp:ty,$s:ident,$id:ident,$cnt:ident) => {
         // let mut t = tsc();

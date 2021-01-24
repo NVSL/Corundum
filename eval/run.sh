@@ -284,7 +284,7 @@ function avg() {
 }
 
 function std() {
-    echo $(cat $1 | grep -oP "$2 .+std\\(ns\\): \\d+\\.\\d " | grep -oP '(\d+\.\d) ')
+    echo $(cat $1 | grep -oP "$2 .+std\\(ns\\): \\d+\\.\\d |$2 .+std\\(ns\\): NaN" | grep -oP '(\d+\.\d) |(NaN)')
 }
 
 tags=(
