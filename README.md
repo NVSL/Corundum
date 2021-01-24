@@ -68,8 +68,8 @@ Or
 corundum = { git = "https://github.com/NVSL/Corundum.git" }
 ```
 
-If you wish to enable a feature like `pin_journals`, please a `features` list
-to the dependency integration section. For example:
+If you wish to enable a feature like `pin_journals`, please add it to the
+`features` attribute. For example:
 
 ```toml
 [dependencies]
