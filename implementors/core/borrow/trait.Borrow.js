@@ -1,0 +1,3 @@
+(function() {var implementors = {};
+implementors["corundum"] = [{"text":"impl&lt;T:&nbsp;PSafe + ?Sized, A:&nbsp;MemPool&gt; Borrow&lt;T&gt; for Prc&lt;T, A&gt;","synthetic":false,"types":[]},{"text":"impl&lt;T:&nbsp;PSafe + ?Sized, A:&nbsp;MemPool&gt; Borrow&lt;T&gt; for Parc&lt;T, A&gt;","synthetic":false,"types":[]}];
+if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()
