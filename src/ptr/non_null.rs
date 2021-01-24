@@ -86,8 +86,8 @@ impl<T: fmt::Debug + PSafe + ?Sized> fmt::Debug for NonNull<T> {
 /// 
 /// This type is `!PSafe` and its constructor functions are `unsafe`. This is
 /// because of `LogNonNull` treating like a raw pointer. `LogNonNull` objects are
-/// useful for obtaining performance. [`LogRefCell`]`::`[`as_non_null_mut()`] 
-/// is an alternative to [`LogRefCell`]`::`[`borrow_mut()`] which provides unsafe
+/// useful for obtaining performance. [`PRefCell`]`::`[`as_non_null_mut()`] 
+/// is an alternative to [`PRefCell`]`::`[`borrow_mut()`] which provides unsafe
 /// mutable access to the underlying data.
 /// 
 /// [`PNonNullMut`] is an alias name in the pool module for `LogNonNullMut`.
@@ -126,9 +126,9 @@ impl<T: fmt::Debug + PSafe + ?Sized> fmt::Debug for NonNull<T> {
 /// assert_eq!(*root.borrow(), 50);
 /// ```
 ///
-/// [`LogRefCell`]: ../cell/struct.LogRefCell.html
-/// [`as_non_null_mut()`]: ../cell/struct.LogRefCell.html#method.as_non_null_mut
-/// [`borrow_mut()`]: ../cell/struct.LogRefCell.html#method.borrow_mut
+/// [`PRefCell`]: ../cell/struct.PRefCell.html
+/// [`as_non_null_mut()`]: ../cell/struct.PRefCell.html#method.as_non_null_mut
+/// [`borrow_mut()`]: ../cell/struct.PRefCell.html#method.borrow_mut
 /// [`PNonNullMut`]: ../alloc/default/type.PNonNullMut.html
 /// 
 pub struct LogNonNull<T: PSafe + ?Sized, A: MemPool> {

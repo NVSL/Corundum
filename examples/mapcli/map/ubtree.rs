@@ -4,7 +4,7 @@
 // //! [btree example]: https://github.com/pmem/pmdk/blob/master/src/examples/libpmemobj/tree_map/btree_map.c
 
 // use crate::map::*;
-// use corundum::alloc::*;
+// use corundum::alloc::heap::*;
 // use corundum::boxed::Pbox;
 // use corundum::cell::*;
 // use corundum::clone::PClone;
@@ -14,7 +14,7 @@
 // use std::fmt::Debug;
 // use std::panic::UnwindSafe;
 
-// type PmemObj<T> = Pbox<LogRefCell<T, P>, P>;
+// type PmemObj<T> = Pbox<PRefCell<T, P>, P>;
 
 // const BTREE_ORDER: usize = 8;
 // const BTREE_MIN: usize = (BTREE_ORDER / 2) - 1;
@@ -32,17 +32,17 @@
 // // use std::ops::Deref;
 // // use std::fmt::Debug;
 // // use std::panic::UnwindSafe;
-// // struct LogRefCell<T: ?Sized, A: MemPool> (PhantomData<A>,UnsafeCell<T>);
-// // impl<T, A: MemPool> LogRefCell<T, A> {
+// // struct PRefCell<T: ?Sized, A: MemPool> (PhantomData<A>,UnsafeCell<T>);
+// // impl<T, A: MemPool> PRefCell<T, A> {
 // //     pub fn new(n: T, _j: &Journal<A>) -> Self {
 // //         Self(PhantomData,UnsafeCell::new(n))
 // //     }
 // // }
-// // impl<T: ?Sized, A: MemPool> PSafe for LogRefCell<T, A> {}
-// // unsafe impl<T: ?Sized, A: MemPool> TxInSafe for LogRefCell<T, A> {}
-// // impl<T: ?Sized, A: MemPool> UnwindSafe for LogRefCell<T, A> {}
-// // impl<T: ?Sized, A: MemPool> RefUnwindSafe for LogRefCell<T, A> {}
-// // impl<T: ?Sized, A: MemPool> LogRefCell<T, A> {
+// // impl<T: ?Sized, A: MemPool> PSafe for PRefCell<T, A> {}
+// // unsafe impl<T: ?Sized, A: MemPool> TxInSafe for PRefCell<T, A> {}
+// // impl<T: ?Sized, A: MemPool> UnwindSafe for PRefCell<T, A> {}
+// // impl<T: ?Sized, A: MemPool> RefUnwindSafe for PRefCell<T, A> {}
+// // impl<T: ?Sized, A: MemPool> PRefCell<T, A> {
 // //     pub fn borrow(&self) -> &T {
 // //         unsafe {&*self.1.get()}
 // //     }
@@ -50,19 +50,19 @@
 // //         unsafe {LogRefMut{data: &mut *self.1.get()}}
 // //     }
 // // }
-// // impl<T: ?Sized, A: MemPool> Deref for LogRefCell<T, A> {
+// // impl<T: ?Sized, A: MemPool> Deref for PRefCell<T, A> {
 // //     type Target = T;
 // //     fn deref(&self) -> &T { unsafe {&*self.1.get()} }
 // // }
-// // impl<T: PClone<A>, A: MemPool> PClone<A> for LogRefCell<T, A> {
+// // impl<T: PClone<A>, A: MemPool> PClone<A> for PRefCell<T, A> {
 // //     fn pclone(&self, j: &Journal<A>) -> Self {
 // //         Self(PhantomData,UnsafeCell::new(self.borrow().pclone(j)))
 // //     }
 // // }
-// // impl<T: ?Sized + Default, A: MemPool> Default for LogRefCell<T, A> {
+// // impl<T: ?Sized + Default, A: MemPool> Default for PRefCell<T, A> {
 // //     fn default() -> Self { Self(PhantomData,Default::default()) }
 // // }
-// // impl<T: ?Sized + Debug, A: MemPool> Debug for LogRefCell<T, A> {
+// // impl<T: ?Sized + Debug, A: MemPool> Debug for PRefCell<T, A> {
 // // fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> { todo!() }
 // // }
 // // struct LogRefMut<'a, T: ?Sized> {
@@ -109,7 +109,7 @@
 // }
 
 // pub struct UBTree<V: PSafe> {
-//     root: LogRefCell<Option<PmemObj<Node<V>>>, P>,
+//     root: PRefCell<Option<PmemObj<Node<V>>>, P>,
 // }
 
 // impl<V: PSafe + Default> Default for NodeItem<V> {
@@ -140,8 +140,8 @@
 //     }
 
 //     #[inline]
-//     fn new(j: &Journal<P>) -> Pbox<LogRefCell<Self, P>, P> {
-//         Pbox::new(LogRefCell::new(Self::def(), j), j)
+//     fn new(j: &Journal<P>) -> Pbox<PRefCell<Self, P>, P> {
+//         Pbox::new(PRefCell::new(Self::def(), j), j)
 //     }
 
 //     #[inline]
@@ -199,7 +199,7 @@
 //             self.slots[i] = None;
 //         }
 //         self.n = c - 1;
-//         Pbox::new(LogRefCell::new(right, j), j)
+//         Pbox::new(PRefCell::new(right, j), j)
 //     }
 
 //     #[inline]
@@ -386,7 +386,7 @@
 //                 slots[0] = Some((&*n).pclone(j));
 //                 slots[1] = Some(right);
 //                 let up = Pbox::new(
-//                     LogRefCell::new(
+//                     PRefCell::new(
 //                         Node {
 //                             n: 1,
 //                             items: items,
@@ -413,7 +413,7 @@
 //         let mut items: [NodeItem<V>; BTREE_ORDER - 1] = Default::default();
 //         items[0] = item;
 //         *root = Some(Pbox::new(
-//             LogRefCell::new(
+//             PRefCell::new(
 //                 Node {
 //                     n: 1,
 //                     items,
@@ -638,7 +638,7 @@
 // impl<V: PSafe> RootObj<P> for UBTree<V> {
 //     fn init(j: &Journal<P>) -> Self {
 //         UBTree {
-//             root: LogRefCell::new(None, j),
+//             root: PRefCell::new(None, j),
 //         }
 //     }
 // }

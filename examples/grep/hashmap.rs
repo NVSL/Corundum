@@ -35,11 +35,11 @@ where
     pub fn new(j: &Journal) -> Self {
         let mut buckets = PVec::with_capacity(BUCKETS_MAX, j);
         for _ in 0..BUCKETS_MAX {
-            buckets.push(PRefCell::new(PVec::new(j), j), j)
+            buckets.push(PRefCell::new(PVec::new()), j)
         }
         Self {
             buckets,
-            values: PVec::new(j),
+            values: PVec::new(),
         }
     }
 
@@ -71,8 +71,8 @@ where
             }
         }
 
-        self.values.push(PCell::new(val, j), j);
-        bucket.push(PRefCell::new((key, self.values.len() - 1), j), j);
+        self.values.push(PCell::new(val), j);
+        bucket.push(PRefCell::new((key, self.values.len() - 1)), j);
     }
 
     pub fn update_with<F: FnOnce(V) -> V>(&mut self, key: &K, j: &Journal, f: F)
@@ -93,9 +93,9 @@ where
             }
         }
 
-        self.values.push(PCell::new(f(V::default()), j), j);
+        self.values.push(PCell::new(f(V::default())), j);
         bucket.push(
-            PRefCell::new((key.pclone(j), self.values.len() - 1), j),
+            PRefCell::new((key.pclone(j), self.values.len() - 1)),
             j,
         );
     }

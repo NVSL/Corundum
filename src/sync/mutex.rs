@@ -84,7 +84,7 @@ use std::{fmt, intrinsics};
 /// [`sync`]: std::sync
 /// [`std`]: std
 ///
-pub struct Mutex<T, A: MemPool> {
+pub struct PMutex<T, A: MemPool> {
     heap: PhantomData<A>,
     inner: VCell<MutexInner, A>,
     data: UnsafeCell<(u8, T)>,
@@ -132,31 +132,30 @@ impl MutexInner {
     }
 }
 
-impl<T: ?Sized, A: MemPool> !TxOutSafe for Mutex<T, A> {}
-impl<T, A: MemPool> UnwindSafe for Mutex<T, A> {}
-impl<T, A: MemPool> RefUnwindSafe for Mutex<T, A> {}
+impl<T: ?Sized, A: MemPool> !TxOutSafe for PMutex<T, A> {}
+impl<T, A: MemPool> UnwindSafe for PMutex<T, A> {}
+impl<T, A: MemPool> RefUnwindSafe for PMutex<T, A> {}
 
-unsafe impl<T, A: MemPool> TxInSafe for Mutex<T, A> {}
-unsafe impl<T, A: MemPool> PSafe for Mutex<T, A> {}
-unsafe impl<T: Send, A: MemPool> Send for Mutex<T, A> {}
-unsafe impl<T: Send, A: MemPool> Sync for Mutex<T, A> {}
-unsafe impl<T, A: MemPool> PSend for Mutex<T, A> {}
+unsafe impl<T, A: MemPool> TxInSafe for PMutex<T, A> {}
+unsafe impl<T, A: MemPool> PSafe for PMutex<T, A> {}
+unsafe impl<T: Send, A: MemPool> Send for PMutex<T, A> {}
+unsafe impl<T: Send, A: MemPool> Sync for PMutex<T, A> {}
+unsafe impl<T, A: MemPool> PSend for PMutex<T, A> {}
 
-impl<T, A: MemPool> Mutex<T, A> {
+impl<T, A: MemPool> PMutex<T, A> {
     /// Creates a new `Mutex`
     /// 
     /// # Examples
     /// 
     /// ```
-    /// # use corundum::alloc::*;
-    /// use corundum::sync::{Parc,Mutex};
+    /// # use corundum::alloc::heap::*;
     /// 
     /// Heap::transaction(|j| {
-    ///     let p = Parc::new(Mutex::new(10, j), j);
+    ///     let p = Parc::new(PMutex::new(10), j);
     /// }).unwrap();
     /// ```
-    pub fn new(data: T, _journal: &Journal<A>) -> Mutex<T, A> {
-        Mutex {
+    pub fn new(data: T) -> PMutex<T, A> {
+        PMutex {
             heap: PhantomData,
             inner: VCell::new(MutexInner::default()),
             data: UnsafeCell::new((0, data)),
@@ -164,14 +163,16 @@ impl<T, A: MemPool> Mutex<T, A> {
     }
 }
 
-impl<T: PSafe, A: MemPool> Mutex<T, A> {
+impl<T: PSafe, A: MemPool> PMutex<T, A> {
     #[inline]
     #[allow(clippy::mut_from_ref)]
+    #[track_caller]
     /// Takes a log and returns a `&mut T` for interior mutability
     pub(crate) fn get_mut(&self, journal: &Journal<A>) -> &mut T {
         unsafe {
             let inner = &mut *self.data.get();
             if inner.0 == 0 {
+                assert!(A::valid(inner), "The object is not in the pool's valid range");
                 inner.1.take_log(journal, Notifier::NonAtomic(Ptr::from_ref(&inner.0)));
             }
             &mut inner.1
@@ -188,7 +189,7 @@ impl<T: PSafe, A: MemPool> Mutex<T, A> {
     }
 }
 
-impl<T, A: MemPool> Mutex<T, A> {
+impl<T, A: MemPool> PMutex<T, A> {
     #[inline]
     fn raw_lock(&self, journal: &Journal<A>) {
         unsafe {
@@ -231,12 +232,11 @@ impl<T, A: MemPool> Mutex<T, A> {
     /// 
     /// ```
     /// use corundum::default::*;
-    /// use corundum::sync::{Parc,Mutex};
     /// use std::thread;
     /// 
     /// type P = BuddyAlloc;
     /// 
-    /// let obj = P::open::<Parc<Mutex<i32,P>,P>>("foo.pool", O_CF).unwrap();
+    /// let obj = P::open::<Parc<PMutex<i32>>>("foo.pool", O_CF).unwrap();
     /// 
     /// // Using short forms in the pool module, there is no need to specify the
     /// // pool type, as follows:
@@ -346,20 +346,20 @@ impl<T, A: MemPool> Mutex<T, A> {
     }
 }
 
-impl<T: RootObj<A>, A: MemPool> RootObj<A> for Mutex<T, A> {
+impl<T: RootObj<A>, A: MemPool> RootObj<A> for PMutex<T, A> {
     fn init(journal: &Journal<A>) -> Self {
-        Mutex::new(T::init(journal), journal)
+        PMutex::new(T::init(journal))
     }
 }
 
-impl<T: fmt::Debug, A: MemPool> fmt::Debug for Mutex<T, A> {
+impl<T: fmt::Debug, A: MemPool> fmt::Debug for PMutex<T, A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.data.fmt(f)
     }
 }
 
 pub struct MutexGuard<'a, T: 'a, A: MemPool> {
-    lock: &'a Mutex<T, A>,
+    lock: &'a PMutex<T, A>,
     journal: *const Journal<A>,
 }
 
@@ -381,7 +381,7 @@ impl<T: fmt::Display, A: MemPool> fmt::Display for MutexGuard<'_, T, A> {
 
 impl<'mutex, T, A: MemPool> MutexGuard<'mutex, T, A> {
     unsafe fn new(
-        lock: &'mutex Mutex<T, A>,
+        lock: &'mutex PMutex<T, A>,
         journal: &'mutex Journal<A>,
     ) -> MutexGuard<'mutex, T, A> {
         MutexGuard { lock, journal }
@@ -397,6 +397,7 @@ impl<T, A: MemPool> Deref for MutexGuard<'_, T, A> {
 }
 
 impl<T: PSafe, A: MemPool> DerefMut for MutexGuard<'_, T, A> {
+    #[track_caller]
     fn deref_mut(&mut self) -> &mut T {
         unsafe { self.lock.get_mut(&*self.journal) }
     }

@@ -79,7 +79,7 @@ pub unsafe auto trait LooseTxInUnsafe {}
 /// fact represent a bug or not. 
 ///
 /// ```
-/// use corundum::alloc::*;
+/// use corundum::alloc::heap::*;
 /// use corundum::AssertTxInSafe;
 ///
 /// let mut variable = 4;

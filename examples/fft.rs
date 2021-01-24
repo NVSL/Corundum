@@ -81,16 +81,16 @@ pub fn fft_persistent(filename: &str) -> Vec<Complex<f64>> {
     }
 
     impl RootObj<P> for FFT {
-        fn init(j: &Journal) -> Self {
+        fn init(_j: &Journal) -> Self {
             Self {
-                a: PRefCell::new(PVec::new(j), j),
-                c: PRefCell::new(PVec::new(j), j),
-                n: PCell::new(0, j),
-                is: PCell::new(0, j),
-                k: PCell::new(0, j),
-                x: PCell::new(0, j),
-                s: PCell::new(Complex::new(0.0, 0.0), j),
-                filled: PCell::new(false, j),
+                a: PRefCell::new(PVec::new()),
+                c: PRefCell::new(PVec::new()),
+                n: PCell::new(0),
+                is: PCell::new(0),
+                k: PCell::new(0),
+                x: PCell::new(0),
+                s: PCell::new(Complex::new(0.0, 0.0)),
+                filled: PCell::new(false),
             }
         }
     }
@@ -103,8 +103,8 @@ pub fn fft_persistent(filename: &str) -> Vec<Complex<f64>> {
                 buf_a.reserve(input.len(), j);
                 buf_b.reserve(input.len(), j);
                 for c in input {
-                    buf_a.push(PCell::new(*c, j), j);
-                    buf_b.push(PCell::new(*c, j), j);
+                    buf_a.push(PCell::new(*c), j);
+                    buf_b.push(PCell::new(*c), j);
                 }
                 self.n.set(n, j);
                 self.is.set(step, j);

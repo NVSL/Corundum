@@ -59,9 +59,9 @@ fn main() {
                 a.push(None, j);
             }
             Self {
-                bx: PRefCell::new(b, j),
-                rc: PRefCell::new(r, j),
-                arc: PRefCell::new(a, j),
+                bx: PRefCell::new(b),
+                rc: PRefCell::new(r),
+                arc: PRefCell::new(a),
             }
         }
     }
@@ -123,7 +123,7 @@ fn main() {
         P::transaction(|j| {
             let mut bvec = Vec::with_capacity(cnt);
             for _ in 0..cnt {
-                bvec.push(Pbox::new(PRefCell::new(10, j), j));
+                bvec.push(Pbox::new(PRefCell::new(10), j));
             }
             let mut pvec = Vec::with_capacity(cnt);
             for i in 0..cnt {

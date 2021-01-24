@@ -42,7 +42,7 @@ use crate::PSafe;
 /// 
 /// ```
 /// # use corundum::*;
-/// # use corundum::alloc::*;
+/// # use corundum::alloc::heap::*;
 /// # pool!(p); type P = p::BuddyAlloc;
 /// # pool!(q); type Q = q::BuddyAlloc;
 /// // `derive` implements PClone<P> and PClone<Q> for Reading<T> when T is 

@@ -1,15 +1,16 @@
 use std::sync::Arc;
 use crate::cell::RootCell;
 use crate::utils::*;
-use crate::alloc::MemPool;
 use crate::result::Result;
-use crate::stm::{Chaperon, Journal};
+use crate::stm::Chaperon;
 use crate::*;
 use std::alloc::{alloc, dealloc, Layout};
 use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::Mutex;
 use std::thread::ThreadId;
+
+pub  use crate::alloc::*;
 
 /// A pass-through allocator for demote memory
 pub struct Heap {}
@@ -152,7 +153,7 @@ unsafe impl MemPool for Heap {
 
     unsafe fn recover() {}
 
-    unsafe fn drop_journal(journal: &mut Journal<Self>) {
+    unsafe fn drop_journal(journal: &mut Journal) {
         let tid = std::thread::current().id();
         JOURNALS.as_mut().unwrap().remove(&tid);
         Self::free_nolog(journal);
@@ -175,3 +176,74 @@ unsafe impl MemPool for Heap {
     }
 }
 
+/// Compact form of [`Pbox`](../../boxed/struct.Pbox.html)
+/// `<T,`[`Heap`](./struct.Heap.html)`>`.
+pub type Pbox<T> = crate::boxed::Pbox<T, Heap>;
+
+/// Compact form of [`Prc`](../../prc/struct.Prc.html)
+/// `<T,`[`Heap`](./struct.Heap.html)`>`.
+pub type Prc<T> = crate::prc::Prc<T, Heap>;
+
+/// Compact form of [`Parc`](../../sync/struct.Parc.html)
+/// `<T,`[`Heap`](./struct.Heap.html)`>`.
+pub type Parc<T> = crate::sync::Parc<T, Heap>;
+
+/// Compact form of [`Mutex`](../../sync/struct.Mutex.html)
+/// `<T,`[`Heap`](./struct.Heap.html)`>`.
+pub type PMutex<T> = crate::sync::PMutex<T, Heap>;
+
+/// Compact form of [`PCell`](../../cell/struct.PCell.html)
+/// `<T,`[`Heap`](./struct.Heap.html)`>`.
+pub type PCell<T> = crate::cell::PCell<T, Heap>;
+
+/// Compact form of [`LogNonNull`](../../ptr/struct.LogNonNull.html)
+/// `<T,`[`Heap`](./struct.Heap.html)`>`.
+pub type PNonNull<T> = crate::ptr::LogNonNull<T, Heap>;
+
+/// Compact form of [`PRefCell`](../../cell/struct.PRefCell.html)
+/// `<T,`[`Heap`](./struct.Heap.html)`>`.
+pub type PRefCell<T> = crate::cell::PRefCell<T, Heap>;
+
+/// Compact form of [`Ref`](../../cell/struct.Ref.html)
+/// `<'b, T, `[`Heap`](./struct.Heap.html)`>`.
+pub type PRef<'b, T> = crate::cell::Ref<'b, T, Heap>;
+
+/// Compact form of [`RefMut`](../../cell/struct.Mut.html)
+/// `<'b, T, `[`Heap`](./struct.Heap.html)`>`.
+pub type PRefMut<'b, T> = crate::cell::RefMut<'b, T, Heap>;
+
+/// Compact form of `[VCell](../../cell/struct.VCell.html)
+/// `<T,`[`Heap`](./struct.Heap.html)`>`.
+pub type VCell<T> = crate::cell::VCell<T, Heap>;
+
+/// Compact form of [`Vec`](../../vec/struct.Vec.html)
+/// `<T,`[`Heap`](./struct.Heap.html)`>`.
+pub type PVec<T> = crate::vec::Vec<T, Heap>;
+
+/// Compact form of [`String`](../../str/struct.String.html)
+/// `<`[`Heap`](./struct.Heap.html)`>`.
+pub type PString = crate::str::String<Heap>;
+
+/// Compact form of [`Journal`](../../stm/struct.Journal.html)
+/// `<`[`Heap`](./struct.Heap.html)`>`.
+pub type Journal = crate::stm::Journal<Heap>;
+
+pub mod prc {
+    /// Compact form of [`prc::Weak`](../../../prc/struct.Weak.html)
+    /// `<`[`Heap`](./struct.Heap.html)`>`.
+    pub type PWeak<T> = crate::prc::Weak<T, super::Heap>;
+
+    /// Compact form of [`prc::VWeak`](../../../prc/struct.VWeak.html)
+    /// `<`[`Heap`](../struct.Heap.html)`>`.
+    pub type VWeak<T> = crate::prc::VWeak<T, super::Heap>;
+}
+
+pub mod parc {
+    /// Compact form of [`sync::Weak`](../../../sync/struct.Weak.html)
+    /// `<`[`Heap`](../struct.Heap.html)`>`.
+    pub type PWeak<T> = crate::sync::Weak<T, super::Heap>;
+
+    /// Compact form of [`sync::VWeak`](../../../sync/struct.VWeak.html)
+    /// `<`[`Heap`](../struct.Heap.html)`>`.
+    pub type VWeak<T> = crate::sync::VWeak<T, super::Heap>;
+}

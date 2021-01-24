@@ -19,100 +19,99 @@ use std::{fmt, mem, ptr};
 /// update data, you can use [`set()`](#method.set) which writes a log to the
 /// given journal before mutation.
 ///
-/// It does not implement [`Sync`], so it is not possible to share `LogCell`
+/// It does not implement [`Sync`], so it is not possible to share `PCell`
 /// between threads. To provide thread-safe interior mutability, use
 /// [`Mutex`].
 /// 
-/// [`PCell`] is a compact version of `LogCell` tha can be find in the pool
+/// [`PCell`] is a compact version of `PCell` tha can be find in the pool
 /// module.
 ///
 /// [`Sync`]: std::marker::Sync
 /// [`Mutex`]: ../sync/mutex/struct.Mutex.html
 /// [`PCell`]: ../alloc/default/type.PCell.html
 /// 
-pub struct LogCell<T: PSafe + ?Sized, A: MemPool> {
+pub struct PCell<T: PSafe + ?Sized, A: MemPool> {
     heap: PhantomData<A>,
     value: UnsafeCell<(u8, T)>,
 }
 
-unsafe impl<T: PSafe + Send + ?Sized, A: MemPool> Send for LogCell<T, A> {}
-impl<T: PSafe + ?Sized, A: MemPool> RefUnwindSafe for LogCell<T, A> {}
-impl<T: PSafe + ?Sized, A: MemPool> UnwindSafe for LogCell<T, A> {}
-unsafe impl<T: PSafe + ?Sized, A: MemPool> TxInSafe for LogCell<T, A> {}
-unsafe impl<T: PSafe + ?Sized, A: MemPool> PSafe for LogCell<T, A> {}
+unsafe impl<T: PSafe + Send + ?Sized, A: MemPool> Send for PCell<T, A> {}
+impl<T: PSafe + ?Sized, A: MemPool> RefUnwindSafe for PCell<T, A> {}
+impl<T: PSafe + ?Sized, A: MemPool> UnwindSafe for PCell<T, A> {}
+unsafe impl<T: PSafe + ?Sized, A: MemPool> TxInSafe for PCell<T, A> {}
+unsafe impl<T: PSafe + ?Sized, A: MemPool> PSafe for PCell<T, A> {}
 
-impl<T: ?Sized, A: MemPool> !TxOutSafe for LogCell<T, A> {}
-impl<T: ?Sized, A: MemPool> !Sync for LogCell<T, A> {}
-impl<T: ?Sized, A: MemPool> !PSend for LogCell<T, A> {}
+impl<T: ?Sized, A: MemPool> !TxOutSafe for PCell<T, A> {}
+impl<T: ?Sized, A: MemPool> !Sync for PCell<T, A> {}
+impl<T: ?Sized, A: MemPool> !PSend for PCell<T, A> {}
 
-impl<T: PSafe + Default, A: MemPool> Default for LogCell<T, A> {
+impl<T: PSafe + Default, A: MemPool> Default for PCell<T, A> {
     fn default() -> Self {
-        LogCell {
+        PCell {
             heap: PhantomData,
             value: UnsafeCell::new((0, T::default())),
         }
     }
 }
 
-impl<T: PSafe + PartialEq + Copy, A: MemPool> PartialEq for LogCell<T, A> {
+impl<T: PSafe + PartialEq + Copy, A: MemPool> PartialEq for PCell<T, A> {
     #[inline]
-    fn eq(&self, other: &LogCell<T, A>) -> bool {
+    fn eq(&self, other: &PCell<T, A>) -> bool {
         self.get() == other.get()
     }
 }
 
-impl<T: PSafe + Eq + Copy, A: MemPool> Eq for LogCell<T, A> {}
+impl<T: PSafe + Eq + Copy, A: MemPool> Eq for PCell<T, A> {}
 
-impl<T: PSafe + PartialOrd + Copy, A: MemPool> PartialOrd for LogCell<T, A> {
+impl<T: PSafe + PartialOrd + Copy, A: MemPool> PartialOrd for PCell<T, A> {
     #[inline]
-    fn partial_cmp(&self, other: &LogCell<T, A>) -> Option<Ordering> {
+    fn partial_cmp(&self, other: &PCell<T, A>) -> Option<Ordering> {
         self.get().partial_cmp(&other.get())
     }
 
     #[inline]
-    fn lt(&self, other: &LogCell<T, A>) -> bool {
+    fn lt(&self, other: &PCell<T, A>) -> bool {
         self.get() < other.get()
     }
 
     #[inline]
-    fn le(&self, other: &LogCell<T, A>) -> bool {
+    fn le(&self, other: &PCell<T, A>) -> bool {
         self.get() <= other.get()
     }
 
     #[inline]
-    fn gt(&self, other: &LogCell<T, A>) -> bool {
+    fn gt(&self, other: &PCell<T, A>) -> bool {
         self.get() > other.get()
     }
 
     #[inline]
-    fn ge(&self, other: &LogCell<T, A>) -> bool {
+    fn ge(&self, other: &PCell<T, A>) -> bool {
         self.get() >= other.get()
     }
 }
 
-impl<T: PSafe + Ord + Copy, A: MemPool> Ord for LogCell<T, A> {
+impl<T: PSafe + Ord + Copy, A: MemPool> Ord for PCell<T, A> {
     #[inline]
-    fn cmp(&self, other: &LogCell<T, A>) -> Ordering {
+    fn cmp(&self, other: &PCell<T, A>) -> Ordering {
         self.get().cmp(&other.get())
     }
 }
 
-impl<T: PSafe, A: MemPool> LogCell<T, A> {
-    /// Creates a new `LogCell` containing the given value.
+impl<T: PSafe, A: MemPool> PCell<T, A> {
+    /// Creates a new `PCell` containing the given value.
     ///
     /// # Examples
     ///
     /// ```
-    /// use corundum::alloc::*;
-    /// use corundum::cell::LogCell;
+    /// use corundum::alloc::heap::*;
     ///
     /// Heap::transaction(|j| {
-    ///     let c = LogCell::new(5, j);
+    ///     let c = PCell::new(5);
     /// }).unwrap();
     /// ```
     #[inline]
-    pub const fn new(value: T, _j: &Journal<A>) -> LogCell<T, A> {
-        LogCell {
+    pub const fn new(value: T) -> PCell<T, A> {
+        PCell {
             heap: PhantomData,
             value: UnsafeCell::new((0, value)),
         }
@@ -123,24 +122,25 @@ impl<T: PSafe, A: MemPool> LogCell<T, A> {
     /// # Examples
     ///
     /// ```
-    /// use corundum::alloc::*;
+    /// use corundum::alloc::heap::*;
     /// use corundum::boxed::Pbox;
-    /// use corundum::cell::LogCell;
+    /// use corundum::cell::PCell;
     ///
     /// Heap::transaction(|j| {
-    ///     let c = Pbox::new(LogCell::new(5, j), j);
+    ///     let c = Pbox::new(PCell::new(5), j);
     ///     c.set(10, j);
     /// }).unwrap();
     /// ```
     ///
     /// # Errors
     ///
-    /// If `LogCell` is not in the persistent memory, it will raise an 'invalid
-    /// address' error. To make sure that the `LogCell` is in the persistent
+    /// If `PCell` is not in the persistent memory, it will raise an 'invalid
+    /// address' error. To make sure that the `PCell` is in the persistent
     /// memory, use dynamic allocation using [`Pbox`] as shown above.
     ///
     /// [`Pbox`]: ../../boxed/struct.Pbox.html
     #[inline]
+    #[track_caller]
     pub fn set(&self, val: T, journal: &Journal<A>) {
         let old = self.replace(val, journal);
         drop(old);
@@ -156,13 +156,12 @@ impl<T: PSafe, A: MemPool> LogCell<T, A> {
     ///
     /// ```
     /// use corundum::default::*;
-    /// use corundum::cell::LogCell;
     ///
     /// let _pool = BuddyAlloc::open_no_root("foo.pool", O_CF).unwrap();
     ///     
     /// BuddyAlloc::transaction(|j| {
-    ///     let c1 = Pbox::new(LogCell::new(5i32, j), j);
-    ///     let c2 = Pbox::new(LogCell::new(10i32, j), j);
+    ///     let c1 = Pbox::new(PCell::new(5i32), j);
+    ///     let c2 = Pbox::new(PCell::new(10i32), j);
     ///     c1.swap(&c2, j);
     ///     assert_eq!(10, c1.get());
     ///     assert_eq!(5, c2.get());
@@ -178,26 +177,28 @@ impl<T: PSafe, A: MemPool> LogCell<T, A> {
         self.take_log(journal);
         other.take_log(journal);
 
-        // SAFETY: This can be risky if called from separate threads, but `LogCell`
+        // SAFETY: This can be risky if called from separate threads, but `PCell`
         // is `!Sync` so this won't happen. This also won't invalidate any
-        // pointers since `LogCell` makes sure nothing else will be pointing into
-        // either of these `LogCell`s.
+        // pointers since `PCell` makes sure nothing else will be pointing into
+        // either of these `PCell`s.
         unsafe {
             ptr::swap(this, that);
         }
     }
 
+    #[inline]
+    #[track_caller]
     /// Replaces the contained value, and returns it.
     ///
     /// # Examples
     ///
     /// ```
-    /// use corundum::alloc::*;
+    /// use corundum::alloc::heap::*;
     /// use corundum::boxed::Pbox;
-    /// use corundum::cell::LogCell;
+    /// use corundum::cell::PCell;
     ///
     /// Heap::transaction(|j| {
-    ///     let cell = Pbox::new(LogCell::new(5, j), j);
+    ///     let cell = Pbox::new(PCell::new(5), j);
     ///     assert_eq!(cell.get(), 5);
     ///     assert_eq!(cell.replace(10, j), 5);
     ///     assert_eq!(cell.get(), 10);
@@ -206,7 +207,7 @@ impl<T: PSafe, A: MemPool> LogCell<T, A> {
     pub fn replace(&self, val: T, journal: &Journal<A>) -> T {
         self.take_log(journal);
         // SAFETY: This can cause data races if called from a separate thread,
-        // but `LogCell` is `!Sync` so this won't happen.
+        // but `PCell` is `!Sync` so this won't happen.
         mem::replace(unsafe { &mut (*self.value.get()).1 }, val)
     }
 
@@ -215,11 +216,10 @@ impl<T: PSafe, A: MemPool> LogCell<T, A> {
     /// # Examples
     ///
     /// ```
-    /// use corundum::alloc::*;
-    /// use corundum::cell::LogCell;
+    /// use corundum::alloc::heap::*;
     ///
     /// Heap::transaction(|j| {
-    ///     let c = LogCell::new(5, j);
+    ///     let c = PCell::new(5);
     ///     let five = c.into_inner();
     ///
     ///     assert_eq!(five, 5);
@@ -285,17 +285,16 @@ impl<T: PSafe, A: MemPool> LogCell<T, A> {
     }
 }
 
-impl<T: PSafe, A: MemPool> LogCell<T, A> {
+impl<T: PSafe, A: MemPool> PCell<T, A> {
     /// Returns a copy of the contained value.
     ///
     /// # Examples
     ///
     /// ```
-    /// use corundum::alloc::*;
-    /// use corundum::cell::LogCell;
+    /// use corundum::alloc::heap::*;
     ///
     /// Heap::transaction(|j| {
-    ///     let c = LogCell::new(5, j);
+    ///     let c = PCell::new(5);
     ///     let five = c.get();
     ///     
     ///     assert_eq!(five, 5);
@@ -304,14 +303,14 @@ impl<T: PSafe, A: MemPool> LogCell<T, A> {
     #[inline]
     pub fn get(&self) -> T where T: Copy {
         // SAFETY: This can cause data races if called from a separate thread,
-        // but `LogCell` is `!Sync` so this won't happen.
+        // but `PCell` is `!Sync` so this won't happen.
         unsafe { (*self.value.get()).1 }
     }
 
     #[inline]
     pub fn get_ref(&self) -> &T {
         // SAFETY: This can cause data races if called from a separate thread,
-        // but `LogCell` is `!Sync` so this won't happen.
+        // but `PCell` is `!Sync` so this won't happen.
         unsafe { &(*self.value.get()).1 }
     }
 
@@ -322,12 +321,11 @@ impl<T: PSafe, A: MemPool> LogCell<T, A> {
     /// ```
     /// #![feature(cell_update)]
     ///
-    /// use corundum::alloc::*;
+    /// use corundum::alloc::heap::*;
     /// use corundum::boxed::Pbox;
-    /// use corundum::cell::LogCell;
     ///
     /// Heap::transaction(|j| {
-    ///     let c = Pbox::new(LogCell::new(5, j), j);
+    ///     let c = Pbox::new(PCell::new(5), j);
     ///     let new = c.update(j, |x| x + 1);
     ///
     ///     assert_eq!(new, 6);
@@ -352,12 +350,11 @@ impl<T: PSafe, A: MemPool> LogCell<T, A> {
     /// # Examples
     ///
     /// ```
-    /// use corundum::alloc::*;
+    /// use corundum::alloc::heap::*;
     /// use corundum::boxed::Pbox;
-    /// use corundum::cell::LogCell;
     ///
     /// Heap::transaction(|j| {
-    ///     let c = Pbox::new(LogCell::new(LogCell::new(5, j), j), j);
+    ///     let c = Pbox::new(PCell::new(PCell::new(5)), j);
     ///     c.update_inplace(|x| x.set(6, j));
     ///
     ///     assert_eq!(c.get_ref().get(), 6);
@@ -378,12 +375,11 @@ impl<T: PSafe, A: MemPool> LogCell<T, A> {
     /// ```
     /// #![feature(cell_update)]
     ///
-    /// use corundum::alloc::*;
+    /// use corundum::alloc::heap::*;
     /// use corundum::boxed::Pbox;
-    /// use corundum::cell::LogCell;
     ///
     /// Heap::transaction(|j| {
-    ///     let c = Pbox::new(LogCell::new(5, j), j);
+    ///     let c = Pbox::new(PCell::new(5), j);
     ///     c.update_inplace_mut(j, |x| { *x = 6 });
     ///
     ///     assert_eq!(c.get(), 6);
@@ -398,12 +394,14 @@ impl<T: PSafe, A: MemPool> LogCell<T, A> {
     }
 }
 
-impl<T: PSafe + ?Sized, A: MemPool> LogCell<T, A> {
+impl<T: PSafe + ?Sized, A: MemPool> PCell<T, A> {
     #[inline]
+    #[track_caller]
     pub(crate) fn take_log(&self, journal: &Journal<A>) {
         unsafe {
             let inner = &mut *self.value.get();
             if inner.0 == 0 {
+                assert!(A::valid(inner), "The object is not in the pool's valid range");
                 inner.1.take_log(journal, Notifier::NonAtomic(Ptr::from_ref(&inner.0)));
             }
         }
@@ -411,18 +409,18 @@ impl<T: PSafe + ?Sized, A: MemPool> LogCell<T, A> {
 
     /// Returns a mutable reference to the underlying data.
     ///
-    /// This call borrows `LogCell` mutably (at compile-time) which guarantees
+    /// This call borrows `PCell` mutably (at compile-time) which guarantees
     /// that we possess the only reference.
     ///
     /// # Examples
     ///
     /// ```
-    /// use corundum::alloc::*;
+    /// use corundum::alloc::heap::*;
     /// use corundum::boxed::Pbox;
-    /// use corundum::cell::LogCell;
+    /// use corundum::cell::PCell;
     ///
     /// Heap::transaction(|j| {
-    ///     let mut c = Pbox::new(LogCell::new(5, j), j);
+    ///     let mut c = Pbox::new(PCell::new(5), j);
     ///     let mut n = c.get_mut(j);
     ///     *n += 1;
     ///
@@ -432,7 +430,7 @@ impl<T: PSafe + ?Sized, A: MemPool> LogCell<T, A> {
     #[inline]
     pub fn get_mut(&mut self, journal: &Journal<A>) -> &mut T {
         // SAFETY: This can cause data races if called from a separate thread,
-        // but `LogCell` is `!Sync` so this won't happen, and `&mut` guarantees
+        // but `PCell` is `!Sync` so this won't happen, and `&mut` guarantees
         // unique access.
         self.take_log(journal);
         unsafe { &mut (*self.value.get()).1 }
@@ -449,11 +447,11 @@ impl<T: PSafe + ?Sized, A: MemPool> LogCell<T, A> {
     ///
     /// ```
     /// use corundum::default::*;
-    /// use corundum::cell::LogCell;
+    /// use corundum::cell::PCell;
     /// 
     /// type P = BuddyAlloc;
     /// 
-    /// let root = P::open::<LogCell<i32,P>>("foo.pool", O_CF).unwrap();
+    /// let root = P::open::<PCell<i32,P>>("foo.pool", O_CF).unwrap();
     /// 
     /// unsafe {
     ///     let mut data = root.as_mut();
@@ -467,38 +465,45 @@ impl<T: PSafe + ?Sized, A: MemPool> LogCell<T, A> {
     }
 }
 
-impl<T: PSafe + Default, A: MemPool> LogCell<T, A> {
+impl<T: PSafe + Default, A: MemPool> PCell<T, A> {
     /// Takes the value of the cell, leaving `Default::default()` in its place.
     ///
     /// # Examples
     ///
     /// ```
-    /// use corundum::alloc::*;
+    /// use corundum::alloc::heap::*;
     /// use corundum::boxed::Pbox;
-    /// use corundum::cell::LogCell;
     ///
     /// Heap::transaction(|j| {
-    ///     let c = Pbox::new(LogCell::new(5, j), j);
+    ///     let c = Pbox::new(PCell::new(5), j);
     ///     let five = c.take(j);
     ///
     ///     assert_eq!(five, 5);
     ///     assert_eq!(c.get(), 0);
     /// }).unwrap();
     /// ```
+    #[track_caller]
     pub fn take(&self, journal: &Journal<A>) -> T {
         self.replace(Default::default(), journal)
     }
 }
 
-impl<T: fmt::Debug + PSafe, A: MemPool> fmt::Debug for LogCell<T, A> {
+impl<T: fmt::Debug + PSafe, A: MemPool> fmt::Debug for PCell<T, A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         unsafe { (*self.value.get()).1.fmt(f) }
     }
 }
 
-impl<T: PSafe + Logger<A> + Copy, A: MemPool> PClone<A> for LogCell<T, A> {
+impl<T: PSafe + Logger<A> + Copy, A: MemPool> PClone<A> for PCell<T, A> {
     #[inline]
-    fn pclone(&self, j: &Journal<A>) -> LogCell<T, A> {
-        unsafe { LogCell::new((*self.value.get()).1, j) }
+    fn pclone(&self, _j: &Journal<A>) -> PCell<T, A> {
+        unsafe { PCell::new((*self.value.get()).1) }
+    }
+}
+
+impl<T: PSafe + Logger<A> + Clone, A: MemPool> Clone for PCell<T, A> {
+    #[inline]
+    fn clone(&self) -> PCell<T, A> {
+        unsafe { PCell::new((*self.value.get()).1.clone()) }
     }
 }

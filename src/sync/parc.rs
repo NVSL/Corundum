@@ -177,7 +177,7 @@ impl<T: PSafe, A: MemPool> Parc<T, A> {
     /// # Examples
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// use corundum::sync::Parc;
     ///
     /// Heap::transaction(|j| {
@@ -213,7 +213,7 @@ impl<T: PSafe, A: MemPool> Parc<T, A> {
     /// # Examples
     ///
     /// ```
-    /// use corundum::alloc::*;
+    /// use corundum::alloc::heap::*;
     /// use corundum::sync::Parc;
     ///
     /// corundum::transaction(|j| {
@@ -261,7 +261,7 @@ impl<T: PSafe, A: MemPool> Parc<T, A> {
     /// # Examples
     ///
     /// ```
-    /// use corundum::alloc::*;
+    /// use corundum::alloc::heap::*;
     /// use corundum::sync::Parc;
     ///
     /// Heap::transaction(|j| {
@@ -340,7 +340,7 @@ impl<T: PSafe, A: MemPool> Parc<mem::MaybeUninit<T>, A> {
     /// # Examples
     ///
     /// ```
-    /// use corundum::alloc::*;
+    /// use corundum::alloc::heap::*;
     /// use corundum::sync::Parc;
     ///
     /// corundum::transaction(|j| {
@@ -375,7 +375,7 @@ impl<T: PSafe, A: MemPool> Parc<MaybeUninit<T>, A> {
     /// # Examples
     ///
     /// ```
-    /// use corundum::alloc::*;
+    /// use corundum::alloc::heap::*;
     /// use corundum::sync::Parc;
     ///
     /// corundum::transaction(|j| {
@@ -415,7 +415,7 @@ impl<T: PSafe, A: MemPool> Parc<MaybeUninit<T>, A> {
     /// # Examples
     ///
     /// ```
-    /// use corundum::alloc::*;
+    /// use corundum::alloc::heap::*;
     /// use corundum::sync::Parc;
     ///
     /// corundum::transaction(|j| {
@@ -444,7 +444,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Parc<T, A> {
     /// # Examples
     ///
     /// ```
-    /// use corundum::alloc::*;
+    /// use corundum::alloc::heap::*;
     /// use corundum::sync::Parc;
     ///
     /// Heap::transaction(|j| {
@@ -544,7 +544,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Parc<T, A> {
     /// # Examples
     ///
     /// ```
-    /// use corundum::alloc::*;
+    /// use corundum::alloc::heap::*;
     /// use corundum::sync::Parc;
     ///
     /// Heap::transaction(|j| {
@@ -571,7 +571,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Parc<T, A> {
     /// # Examples
     ///
     /// ```
-    /// use corundum::alloc::*;
+    /// use corundum::alloc::heap::*;
     /// use corundum::sync::Parc;
     /// use corundum::clone::PClone;
     ///
@@ -597,7 +597,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Parc<T, A> {
     /// # Examples
     ///
     /// ```
-    /// use corundum::alloc::*;
+    /// use corundum::alloc::heap::*;
     /// use corundum::sync::Parc;
     /// use corundum::clone::PClone;
     ///
@@ -713,7 +713,7 @@ unsafe impl<#[may_dangle] T: PSafe + ?Sized, A: MemPool> Drop for Parc<T, A> {
     /// # Examples
     ///
     /// ```
-    /// use corundum::alloc::*;
+    /// use corundum::alloc::heap::*;
     /// use corundum::sync::Parc;
     /// use corundum::clone::PClone;
     ///
@@ -969,7 +969,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Weak<T, A> {
     /// # Examples
     ///
     /// ```
-    /// use corundum::alloc::*;
+    /// use corundum::alloc::heap::*;
     /// use corundum::sync::Parc;
     ///
     /// Heap::transaction(|j| {
@@ -1280,7 +1280,7 @@ impl<T: PSafe + ?Sized, A: MemPool> VWeak<T, A> {
     /// struct Root(PRefCell<Option<Parc<i32>>>);
     /// impl RootObj<P> for Root {
     ///     fn init(j: &Journal) -> Self {
-    ///         Root(PRefCell::new(Some(Parc::new(10, j)),j))
+    ///         Root(PRefCell::new(Some(Parc::new(10, j))))
     ///     }
     /// }
     ///

@@ -310,10 +310,10 @@ impl Chaperon {
     /// # Examples
     ///
     /// ```
-    /// use corundum::alloc::*;
-    /// use corundum::stm::*;
-    /// use corundum::cell::*;
-    /// use corundum::boxed::*;
+    /// use corundum::alloc::heap::*;
+    /// use corundum::stm::{Chaperon, Journal};
+    /// use corundum::cell::{PCell, RootObj};
+    /// use corundum::boxed::Pbox;
     ///
     /// corundum::pool!(pool1);
     /// corundum::pool!(pool2);
@@ -322,12 +322,12 @@ impl Chaperon {
     /// type P2 = pool2::BuddyAlloc;
     ///
     /// struct Root<M: MemPool> {
-    ///     val: Pbox<LogCell<i32, M>, M>
+    ///     val: Pbox<PCell<i32, M>, M>
     /// }
     ///
     /// impl<M: MemPool> RootObj<M> for Root<M> {
     ///     fn init(j: &Journal<M>) -> Self {
-    ///         Root { val: Pbox::new(LogCell::new(0, j), j) }
+    ///         Root { val: Pbox::new(PCell::new(0), j) }
     ///     }
     /// }
     ///

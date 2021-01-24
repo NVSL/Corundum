@@ -20,7 +20,7 @@ use std::ptr::{self, NonNull};
 ///
 /// If `Pbox` is mutable, the underlying data can mutate after taking a log.
 /// It is necessary because compound types containing a `Pbox` may provide
-/// interior mutability (via [`LogCell`] or [`LogRefCell`]) though which the
+/// interior mutability (via [`PCell`] or [`PRefCell`]) though which the
 /// `Pbox` become mutably available. The log taken for interior mutability works
 /// only on the pointer value and does not include the referent object. Therefore,
 /// `Pbox` provides a logging mechanism to provide mutable dereferencing.
@@ -102,8 +102,8 @@ use std::ptr::{self, NonNull};
 /// for a `Cons`. By introducing a `Pbox<T>`, which has a defined size, we know
 /// how big `Cons` needs to be.
 /// 
-/// [`LogCell`]: ../cell/struct.LogCell.html
-/// [`LogRefCell`]: ../cell/struct.LogRefCell.html
+/// [`PCell`]: ../cell/struct.PCell.html
+/// [`PRefCell`]: ../cell/struct.PRefCell.html
 /// [`Logger`]: ../stm/trait.Logger.html
 pub struct Pbox<T: PSafe + ?Sized, A: MemPool>(Ptr<T, A>, u8);
 
@@ -121,7 +121,7 @@ impl<T: PSafe, A: MemPool> Pbox<T, A> {
     /// # Examples
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # use corundum::boxed::Pbox;
     /// Heap::transaction(|j| {
     ///     let five = Pbox::new(5, j);
@@ -381,7 +381,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Pbox<T, A> {
     /// Simple usage:
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # use corundum::boxed::Pbox;
     /// Heap::transaction(|j| unsafe {
     ///     let x = Pbox::new(41, j);
@@ -453,7 +453,7 @@ impl<T: PSafe + PClone<A> + ?Sized, A: MemPool> PClone<A> for Pbox<T, A> {
     /// # Examples
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # use corundum::boxed::Pbox;
     /// use corundum::clone::PClone;
     ///
@@ -623,6 +623,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Deref for Pbox<T, A> {
 }
 
 impl<T: PSafe, A: MemPool> DerefMut for Pbox<T, A> {
+    #[track_caller]
     fn deref_mut(&mut self) -> &mut T {
         let d = self.0.as_mut();
         if self.1 == 0 && A::valid(&self.1) {

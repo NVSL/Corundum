@@ -27,11 +27,11 @@ where
     pub fn new(j: &Journal) -> Self {
         let mut buckets = PVec::with_capacity(BUCKETS_MAX, j);
         for _ in 0..BUCKETS_MAX {
-            buckets.push(PRefCell::new(PVec::new(j), j), j)
+            buckets.push(PRefCell::new(PVec::new()), j)
         }
         Self {
             buckets,
-            values: PRefCell::new(PVec::new(j), j),
+            values: PRefCell::new(PVec::new()),
         }
     }
 
@@ -63,13 +63,13 @@ where
             }
         }
 
-        self.values.borrow_mut(j).push(PCell::new(val, j), j);
-        bucket.push(PRefCell::new((key, self.values.borrow().len() - 1), j), j);
+        self.values.borrow_mut(j).push(PCell::new(val), j);
+        bucket.push(PRefCell::new((key, self.values.borrow().len() - 1)), j);
     }
 
     pub fn clear(&self, j: &Journal) {
         for i in 0..BUCKETS_MAX {
-            *self.buckets[i].borrow_mut(j) = PVec::new(j);
+            *self.buckets[i].borrow_mut(j) = PVec::new();
         }
         self.values.borrow_mut(j).clear();
     }

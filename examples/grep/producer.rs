@@ -31,7 +31,7 @@ impl Producer {
         Self {
             filenames,
             lines,
-            pos: PMutex::new((0, 0), j),
+            pos: PMutex::new((0, 0)),
         }
     }
 

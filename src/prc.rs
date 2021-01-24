@@ -69,7 +69,7 @@ unsafe fn set_data_ptr<T: ?Sized, U>(mut ptr: *mut T, data: *mut U) -> *mut T {
 /// # Examples
 ///
 /// ```
-/// # use corundum::alloc::*;
+/// # use corundum::alloc::heap::*;
 /// # type P = Heap;
 /// use corundum::prc::Prc;
 /// use corundum::clone::PClone;
@@ -134,7 +134,7 @@ impl<T: PSafe, A: MemPool> Prc<T, A> {
     /// # Examples
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # type P = Heap;
     /// use corundum::prc::Prc;
     ///
@@ -173,7 +173,7 @@ impl<T: PSafe, A: MemPool> Prc<T, A> {
     /// # Examples
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # type P = Heap;
     /// use corundum::prc::Prc;
     ///
@@ -222,7 +222,7 @@ impl<T: PSafe, A: MemPool> Prc<T, A> {
     /// # Examples
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # type P = Heap;
     /// use corundum::prc::Prc;
     ///
@@ -289,7 +289,7 @@ impl<T: PSafe, A: MemPool> Prc<mem::MaybeUninit<T>, A> {
     /// # Examples
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # type P = Heap;
     /// use corundum::prc::Prc;
     ///
@@ -325,7 +325,7 @@ impl<T: PSafe, A: MemPool> Prc<MaybeUninit<T>, A> {
     /// # Examples
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # type P = Heap;
     /// use corundum::prc::Prc;
     ///
@@ -367,7 +367,7 @@ impl<T: PSafe, A: MemPool> Prc<MaybeUninit<T>, A> {
     /// # Examples
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # type P = Heap;
     /// use corundum::prc::Prc;
     ///
@@ -399,7 +399,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Prc<T, A> {
     /// # Examples
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # type P = Heap;
     /// use corundum::prc::Prc;
     ///
@@ -423,7 +423,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Prc<T, A> {
     /// # Examples
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # type P = Heap;
     /// use corundum::prc::Prc;
     ///
@@ -458,7 +458,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Prc<T, A> {
     /// # Examples
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # type P = Heap;
     /// use corundum::prc::Prc;
     ///
@@ -479,7 +479,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Prc<T, A> {
     /// # Examples
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # type P = Heap;
     /// use corundum::prc::Prc;
     /// use corundum::clone::PClone;
@@ -506,7 +506,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Prc<T, A> {
     /// # Examples
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # type P = Heap;
     /// use corundum::prc::Prc;
     /// use corundum::clone::PClone;
@@ -626,7 +626,7 @@ unsafe impl<#[may_dangle] T: PSafe + ?Sized, A: MemPool> Drop for Prc<T, A> {
     /// # Examples
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # type P = Heap;
     /// use corundum::prc::Prc;
     /// use corundum::clone::PClone;

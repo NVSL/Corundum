@@ -31,12 +31,11 @@ impl Consumer {
             lines,
             data: PMutex::new(
                 ConsumerData {
-                    buf: PString::new(j),
+                    buf: PString::new(),
                     private_lines: Stack::new(),
                     local: HashMap::new(j),
                     active: true,
-                },
-                j,
+                }
             ),
         }
     }

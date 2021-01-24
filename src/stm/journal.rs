@@ -22,12 +22,10 @@ pub const JOURNAL_COMMITTED: u64 = 0x0000_0001;
 /// transaction around your code. For example:
 ///
 /// ```
-/// use corundum::alloc::*;
-/// use corundum::boxed::Pbox;
-/// use corundum::cell::LogCell;
+/// use corundum::alloc::heap::*;
 ///
 /// let cell = Heap::transaction(|journal| {
-///     let cell = Pbox::new(LogCell::new(10, journal), journal);
+///     let cell = Pbox::new(PCell::new(10), journal);
 /// 
 ///     assert_eq!(cell.get(), 10);
 /// }).unwrap();

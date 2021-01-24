@@ -63,13 +63,13 @@ fn main() {
             consumers.clear();
             for _ in 0..t-1 {
                 consumers.push(Parc::new(Consumer{
-                    buf: PMutex::new(quota, j),
+                    buf: PMutex::new(quota),
                     volume: r.volume.pclone(j)
                 }, j), j);
                 init_val -= quota;
             }
             consumers.push(Parc::new(Consumer{
-                buf: PMutex::new(init_val, j),
+                buf: PMutex::new(init_val),
                 volume: r.volume.pclone(j)
             }, j), j);
         }).unwrap();

@@ -685,10 +685,10 @@ mod test {
         struct Root {
             vec: PRefCell<PVec<Parc<(i32, PMutex<PString>)>>>
         }
-        impl RootObj<P> for Root {
-            fn init(j: &Journal) -> Self {
+        impl Default for Root {
+            fn default() -> Self {
                 Root {
-                    vec: PRefCell::new(PVec::new(j), j)
+                    vec: PRefCell::new(PVec::new())
                 }
             }
         }
@@ -715,7 +715,7 @@ mod test {
         P::transaction(|j| {
             let mut b = root.vec.borrow_mut(j);
             for i in 0..2 {
-                b.push(Parc::new((i, PMutex::new(format!("item {}", i).to_pstring(j), j)), j), j);
+                b.push(Parc::new((i, PMutex::new(format!("item {}", i).to_pstring(j))), j), j);
             }
         }).unwrap();
 
@@ -765,8 +765,8 @@ mod test {
 /// * `Prc<T>` = [`corundum::prc::Prc`]`<T, `[`BuddyAlloc`]`>`
 /// * `Parc<T>` = [`corundum::sync::Parc`]`<T, `[`BuddyAlloc`]`>`
 /// * `PMutex<T>` = [`corundum::sync::Mutex`]`<T, `[`BuddyAlloc`]`>`
-/// * `PCell<T>` = [`corundum::cell::LogCell`]`<T, `[`BuddyAlloc`]`>`
-/// * `PRefCell<T>` = [`corundum::cell::LogRefCell`]`<T, `[`BuddyAlloc`]`>`
+/// * `PCell<T>` = [`corundum::cell::PCell`]`<T, `[`BuddyAlloc`]`>`
+/// * `PRefCell<T>` = [`corundum::cell::PRefCell`]`<T, `[`BuddyAlloc`]`>`
 /// * `VCell<T>` = [`corundum::cell::VCell`]`<T, `[`BuddyAlloc`]`>`
 /// * `PVec<T>` = [`corundum::vec::Vec`]`<T, `[`BuddyAlloc`]`>`
 /// * `PString` = [`corundum::str::String`]`<`[`BuddyAlloc`]`>`
@@ -794,7 +794,7 @@ mod test {
 /// If multiple pools are needed, multiple pool modules can be defined and used.
 /// 
 /// ```
-/// use corundum::alloc::*;
+/// use corundum::alloc::heap::*;
 /// 
 /// corundum::pool!(pool1);
 /// corundum::pool!(pool2);
@@ -818,8 +818,8 @@ mod test {
 /// [`corundum::prc::Prc`]: ./prc/struct.Prc.html
 /// [`corundum::sync::Parc`]: ./sync/struct.Parc.html
 /// [`corundum::sync::Mutex`]: ./sync/struct.Mutex.html
-/// [`corundum::cell::LogCell`]: ./cell/struct.LogCell.html
-/// [`corundum::cell::LogRefCell`]: ./cell/struct.LogRefCell.html
+/// [`corundum::cell::PCell`]: ./cell/struct.PCell.html
+/// [`corundum::cell::PRefCell`]: ./cell/struct.PRefCell.html
 /// [`corundum::cell::VCell`]: ./cell/struct.VCell.html
 /// [`corundum::vec::Vec`]: ./vec/struct.Vec.html
 /// [`corundum::str::String`]: ./str/struct.String.html
@@ -1007,7 +1007,7 @@ macro_rules! pool {
 
                             let base = raw_offset as *mut _ as u64;
                             unsafe {
-                                inner.gen = MAX_GEN.max(inner.gen) + 1;
+                                inner.gen = MAX_GEN.max(inner.gen + 1);
                                 MAX_GEN = inner.gen;
                                 BUDDY_START = base;
                                 BUDDY_VALID_START = base
@@ -1415,74 +1415,74 @@ macro_rules! pool {
                 }
             }
 
-            /// Compact form of [`Pbox`](../boxed/struct.Pbox.html)
+            /// Compact form of [`Pbox`](../../boxed/struct.Pbox.html)
             /// `<T,`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
             pub type Pbox<T> = $crate::boxed::Pbox<T, BuddyAlloc>;
 
-            /// Compact form of [`Prc`](../prc/struct.Prc.html)
+            /// Compact form of [`Prc`](../../prc/struct.Prc.html)
             /// `<T,`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
             pub type Prc<T> = $crate::prc::Prc<T, BuddyAlloc>;
 
-            /// Compact form of [`Parc`](../sync/struct.Parc.html)
+            /// Compact form of [`Parc`](../../sync/struct.Parc.html)
             /// `<T,`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
             pub type Parc<T> = $crate::sync::Parc<T, BuddyAlloc>;
 
-            /// Compact form of [`Mutex`](../sync/struct.Mutex.html)
+            /// Compact form of [`Mutex`](../../sync/struct.Mutex.html)
             /// `<T,`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
-            pub type PMutex<T> = $crate::sync::Mutex<T, BuddyAlloc>;
+            pub type PMutex<T> = $crate::sync::PMutex<T, BuddyAlloc>;
 
-            /// Compact form of [`LogCell`](../cell/struct.LogCell.html)
+            /// Compact form of [`PCell`](../../cell/struct.PCell.html)
             /// `<T,`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
-            pub type PCell<T> = $crate::cell::LogCell<T, BuddyAlloc>;
+            pub type PCell<T> = $crate::cell::PCell<T, BuddyAlloc>;
 
-            /// Compact form of [`LogNonNull`](../ptr/struct.LogNonNull.html)
+            /// Compact form of [`LogNonNull`](../../ptr/struct.LogNonNull.html)
             /// `<T,`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
             pub type PNonNull<T> = $crate::ptr::LogNonNull<T, BuddyAlloc>;
 
-            /// Compact form of [`LogRefCell`](../cell/struct.LogRefCell.html)
+            /// Compact form of [`PRefCell`](../../cell/struct.PRefCell.html)
             /// `<T,`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
-            pub type PRefCell<T> = $crate::cell::LogRefCell<T, BuddyAlloc>;
+            pub type PRefCell<T> = $crate::cell::PRefCell<T, BuddyAlloc>;
 
-            /// Compact form of [`Ref`](../cell/struct.Ref.html)
+            /// Compact form of [`Ref`](../../cell/struct.Ref.html)
             /// `<'b, T, `[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
             pub type PRef<'b, T> = $crate::cell::Ref<'b, T, BuddyAlloc>;
 
-            /// Compact form of [`RefMut`](../cell/struct.Mut.html)
+            /// Compact form of [`RefMut`](../../cell/struct.Mut.html)
             /// `<'b, T, `[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
             pub type PRefMut<'b, T> = $crate::cell::RefMut<'b, T, BuddyAlloc>;
 
-            /// Compact form of `[VCell](../cell/struct.VCell.html)
+            /// Compact form of [`VCell`](../../cell/struct.VCell.html)
             /// `<T,`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
             pub type VCell<T> = $crate::cell::VCell<T, BuddyAlloc>;
 
-            /// Compact form of [`Vec`](../vec/struct.Vec.html)
+            /// Compact form of [`Vec`](../../vec/struct.Vec.html)
             /// `<T,`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
             pub type PVec<T> = $crate::vec::Vec<T, BuddyAlloc>;
 
-            /// Compact form of [`String`](../str/struct.String.html)
+            /// Compact form of [`String`](../../str/struct.String.html)
             /// `<`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
             pub type PString = $crate::str::String<BuddyAlloc>;
 
-            /// Compact form of [`Journal`](../stm/struct.Journal.html)
+            /// Compact form of [`Journal`](../../stm/struct.Journal.html)
             /// `<`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
             pub type Journal = $crate::stm::Journal<BuddyAlloc>;
 
             pub mod prc {
-                /// Compact form of [`prc::Weak`](../prc/struct.Weak.html)
+                /// Compact form of [`prc::Weak`](../../../prc/struct.Weak.html)
                 /// `<`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
                 pub type PWeak<T> = $crate::prc::Weak<T, super::BuddyAlloc>;
 
-                /// Compact form of [`sync::VWeak`](../../prc/struct.VWeak.html)
+                /// Compact form of [`prc::VWeak`](../../../prc/struct.VWeak.html)
                 /// `<`[`BuddyAlloc`](../struct.BuddyAlloc.html)`>`.
                 pub type VWeak<T> = $crate::prc::VWeak<T, super::BuddyAlloc>;
             }
 
             pub mod parc {
-                /// Compact form of [`sync::Weak`](../../sync/struct.Weak.html)
+                /// Compact form of [`sync::Weak`](../../../sync/struct.Weak.html)
                 /// `<`[`BuddyAlloc`](../struct.BuddyAlloc.html)`>`.
                 pub type PWeak<T> = $crate::sync::Weak<T, super::BuddyAlloc>;
 
-                /// Compact form of [`sync::VWeak`](../../sync/struct.VWeak.html)
+                /// Compact form of [`sync::VWeak`](../../../sync/struct.VWeak.html)
                 /// `<`[`BuddyAlloc`](../struct.BuddyAlloc.html)`>`.
                 pub type VWeak<T> = $crate::sync::VWeak<T, super::BuddyAlloc>;
             }

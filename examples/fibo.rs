@@ -9,14 +9,14 @@ type P1 = pool1::BuddyAlloc;
 type P2 = pool2::BuddyAlloc;
 
 struct Root<P: MemPool> {
-    val: LogRefCell<f64, P>,
-    idx: LogRefCell<u64, P>,
+    val: PRefCell<f64, P>,
+    idx: PRefCell<u64, P>,
 }
-impl<M: MemPool> RootObj<M> for Root<M> {
-    fn init(j: &Journal<M>) -> Self {
+impl<M: MemPool> Default for Root<M> {
+    fn default() -> Self {
         Root {
-            val: LogRefCell::new(0.0, j),
-            idx: LogRefCell::new(0, j),
+            val: PRefCell::new(0.0),
+            idx: PRefCell::new(0),
         }
     }
 }

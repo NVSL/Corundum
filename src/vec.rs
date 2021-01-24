@@ -27,9 +27,9 @@ use std::{mem, ptr, slice};
 ///
 /// ```
 /// # use corundum::vec::Vec;
-/// # use corundum::alloc::*;
+/// # use corundum::alloc::heap::*;
 /// Heap::transaction(|j| {
-///     let mut vec = Vec::new(j);
+///     let mut vec = Vec::new();
 ///     vec.push(1, j);
 ///     vec.push(2, j);
 ///
@@ -61,7 +61,7 @@ impl<T, A: MemPool> !VSafe for Vec<T, A> {}
 
 impl<T: PSafe, A: MemPool> Vec<T, A> {
     /// Creates an empty vector with zero capacity for the pool of the give `Journal`
-    pub const fn new(_j: &Journal<A>) -> Self {
+    pub const fn new() -> Self {
         Self::empty()
     }
 
@@ -71,7 +71,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
     ///     let mut vec = Vec::from_slice(&[1, 2], j);
     ///
@@ -122,7 +122,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
     ///     let mut vec = Vec::with_capacity(10, j);
     ///
@@ -161,9 +161,9 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
-    ///     let mut v = Vec::new(j);
+    ///     let mut v = Vec::new();
     ///     assert!(v.is_empty());
     ///
     ///     v.push(1, j);
@@ -188,7 +188,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
     ///     let mut vec = Vec::from_slice(&[1,2,3], j);
     ///     let vec2 = vec.split_off(1, j);
@@ -339,7 +339,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
     ///     let mut vec = Vec::from_slice(&[1, 2, 3], j);
     ///     let mut other = vec![4, 5, 6];
@@ -396,7 +396,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
     ///     let mut vec = Vec::with_capacity(10, j);
     ///     vec.extend_from_slice(&[1, 2, 3], j);
@@ -421,7 +421,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
     ///     let mut vec = Vec::from_slice(&[1, 2, 3], j);
     ///     let mut other = vec![4, 5, 6];
@@ -437,7 +437,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
 
         let cap = self.buf.capacity();
         let len = self.len;
-        let new_cap = len + additional.max(cap);
+        let new_cap = cap.max(len + additional);
         if get_idx(new_cap * mem::size_of::<T>()) == get_idx(len * mem::size_of::<T>()) {
             self.buf.set_cap(new_cap);
         } else {
@@ -468,7 +468,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
     ///     let mut vec = Vec::from_slice(&[1, 2, 3, 4, 5], j);
     ///
@@ -487,7 +487,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
     ///     let mut vec = Vec::from_slice(&[1, 2, 3], j);
     ///     vec.truncate(8);
@@ -500,7 +500,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
     ///     let mut vec = Vec::from_slice(&[1, 2, 3], j);
     ///     vec.truncate(0);
@@ -545,7 +545,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
     ///     let mut v = Vec::from_slice(&[1, 2, 3, 4], j);
     ///
@@ -580,7 +580,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
     ///     let mut vec = Vec::from_slice(&[1, 2, 3], j);
     ///     vec.insert(1, 4, j);
@@ -625,7 +625,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
     ///     let mut v = Vec::from_slice(&[1, 2, 3], j);
     ///     assert_eq!(v.remove(1), 2);
@@ -663,7 +663,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
     ///     let mut vec = Vec::from_slice(&[1, 2, 3, 4], j);
     ///     vec.retain(|&x| x % 2 == 0);
@@ -675,7 +675,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
     ///     let mut vec = Vec::from_slice(&[1, 2, 3, 4, 5], j);
     ///     let keep = [false, true, true, false, true];
@@ -715,7 +715,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     // ///
     // /// ```
     // /// # use corundum::vec::Vec;
-    // /// # use corundum::alloc::*;
+    // /// # use corundum::alloc::heap::*;
 /// Heap::transaction(|j| {
     // ///     let mut vec = Vec::from_slice(&[10, 20, 21, 30, 20], j);
     // ///
@@ -747,7 +747,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     // /// ```
     // /// # use corundum::vec::Vec;
     // /// # use corundum::str::*;
-    // /// # use corundum::alloc::*;
+    // /// # use corundum::alloc::heap::*;
 /// Heap::transaction(|j| {
     // ///     let mut vec = Vec::from_slice(&["foo", "bar", "Bar", "baz", "bar"], j);
     // ///
@@ -777,7 +777,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
     ///     let mut vec = Vec::from_slice(&[1, 2], j);
     ///     vec.push(3, j);
@@ -807,7 +807,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
     ///     let mut vec = Vec::from_slice(&[1, 2, 3], j);
     ///     assert_eq!(vec.pop(), Some(3));
@@ -836,7 +836,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
     ///     let mut vec = Vec::from_slice(&[1, 2, 3], j);
     ///     let mut vec2 = Vec::from_slice(&[4, 5, 6], j);
@@ -862,7 +862,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
     ///     let mut v = Vec::from_slice(&[1, 2, 3], j);
     ///     v.clear();
@@ -1199,7 +1199,7 @@ mod test {
         impl RootObj<A> for Root {
             fn init(j: &Journal) -> Self {
                 Self {
-                    buf: Pbox::new(PRefCell::new(PVec::default(), j), j),
+                    buf: Pbox::new(PRefCell::new(PVec::default()), j),
                 }
             }
         }
@@ -1239,7 +1239,7 @@ mod test {
         impl RootObj<A> for Root {
             fn init(j: &Journal) -> Self {
                 Self {
-                    buf: Pbox::new(PRefCell::new(PVec::empty(), j), j),
+                    buf: Pbox::new(PRefCell::new(PVec::empty()), j),
                 }
             }
         }
@@ -1267,7 +1267,7 @@ mod test {
     #[test]
     fn test_clear() {
         use crate::vec::Vec;
-        Heap::transaction::<_, _>(|j| {
+        heap::Heap::transaction::<_, _>(|j| {
             let mut vec = Vec::from_slice(&[1, 2, 3], j);
             vec.truncate(0);
             assert_eq!(vec, []);

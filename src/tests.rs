@@ -14,13 +14,13 @@ pub(crate) mod problems {
         type P = BuddyAlloc;
 
         struct Root {
-            v1: Parc<Mutex<i32, P>, P>,
+            v1: Parc<PMutex<i32, P>, P>,
         }
 
         impl RootObj<P> for Root {
             fn init(j: &Journal<P>) -> Self {
                 Root {
-                    v1: Parc::new(Mutex::new(0, j), j),
+                    v1: Parc::new(PMutex::new(0), j),
                 }
             }
         }
@@ -53,13 +53,13 @@ pub(crate) mod problems {
         type P = BuddyAlloc;
 
         struct Root {
-            v1: Parc<Mutex<Vec<String<P>, P>, P>, P>,
+            v1: Parc<PMutex<Vec<String<P>, P>, P>, P>,
         }
 
         impl RootObj<P> for Root {
             fn init(j: &Journal<P>) -> Self {
                 Root {
-                    v1: Parc::new(Mutex::new(Vec::new(j), j), j),
+                    v1: Parc::new(PMutex::new(Vec::new()), j),
                 }
             }
         }
@@ -105,8 +105,8 @@ pub(crate) mod problems {
         type P = BuddyAlloc;
         struct Node { val: i32, next: PRefCell<Option<Pbox<Node>>> }
         impl RootObj<P> for Node {
-            fn init(j: &Journal) -> Self { Self{
-                val: 0, next: PRefCell::new(None, j)
+            fn init(_j: &Journal) -> Self { Self{
+                val: 0, next: PRefCell::new(None)
             }}
         }
         fn append(n: &Node, v:i32, j: &Journal) {
@@ -116,7 +116,7 @@ pub(crate) mod problems {
                 None => *t = Some(Pbox::new(
                     Node {
                     val: v,
-                    next: PRefCell::new(None, j)
+                    next: PRefCell::new(None)
                     }, j))
             }
         }
@@ -191,7 +191,7 @@ pub(crate) mod problems {
         impl RootObj<P> for Root {
             fn init(j: &Journal<P>) -> Self {
                 Root {
-                    data: Parc::new(PMutex::new(Parc::new(10, j), j), j),
+                    data: Parc::new(PMutex::new(Parc::new(10, j)), j),
                 }
             }
         }
@@ -267,21 +267,19 @@ pub(crate) mod problems {
 
     #[test]
     fn ref_cycle_mem_leak() {
-        use crate::prc::*;
-        use crate::clone::PClone;
-
+        use crate::alloc::default::*;
         type P = BuddyAlloc;
 
         #[derive(Debug)]
         enum List {
-            Cons(i32, LogRefCell<Prc<List,P>,P>),
+            Cons(i32, PRefCell<Prc<List>>),
             Nil,
         }
 
         use List::*;
 
         impl List {
-            fn tail(&self) -> Option<&LogRefCell<Prc<List,P>,P>> {
+            fn tail(&self) -> Option<&PRefCell<Prc<List>>> {
                 match self {
                     Cons(_, item) => Some(item),
                     Nil => None,
@@ -292,12 +290,12 @@ pub(crate) mod problems {
         let _img = P::open_no_root("ref_cycle_mem_leak.pool", O_CF).unwrap();
         println!("usage 1: {}", P::used());
         P::transaction(|j| {
-            let a = Prc::new(Cons(5, LogRefCell::new(Prc::new(Nil, j), j)), j);
+            let a = Prc::new(Cons(5, PRefCell::new(Prc::new(Nil, j))), j);
 
             println!("a initial rc count = {}", Prc::strong_count(&a));
             println!("a next item = {:?}", a.tail());
         
-            let b = Prc::new(Cons(10, LogRefCell::new(Prc::pclone(&a, j), j)), j);
+            let b = Prc::new(Cons(10, PRefCell::new(Prc::pclone(&a, j))), j);
         
             println!("a rc count after b creation = {}", Prc::strong_count(&a));
             println!("b initial rc count = {}", Prc::strong_count(&b));
@@ -315,18 +313,17 @@ pub(crate) mod problems {
 
     #[test]
     fn test_vweak() {
-        use crate::prc::*;
-
+        use crate::alloc::default::*;
         type P = BuddyAlloc;
 
         struct Root {
-            v: LogRefCell<Prc<u32, P>, P>,
+            v: PRefCell<Prc<u32>>,
         }
 
         impl RootObj<P> for Root {
-            fn init(j: &Journal<P>) -> Self {
+            fn init(j: &Journal) -> Self {
                 Root {
-                    v: LogRefCell::new(Prc::new(10, j), j),
+                    v: PRefCell::new(Prc::new(10, j)),
                 }
             }
         }
@@ -389,13 +386,16 @@ pub(crate) mod problems {
 
     #[test]
     fn trans_inside_fn() {
+        use crate::cell::PRefCell as RefCell;
+        use crate::boxed::Pbox;
+
         crate::pool!(pool1);
         crate::pool!(pool2);
 
         type P1 = pool1::BuddyAlloc;
         type P2 = pool2::BuddyAlloc;
 
-        fn foo<M: MemPool>(root: &LogRefCell<i32, M>, v: i32) -> i32 {
+        fn foo<M: MemPool>(root: &RefCell<i32, M>, v: i32) -> i32 {
             M::transaction(|j| {
                 let mut root = root.borrow_mut(j);
                 *root = v;
@@ -403,8 +403,8 @@ pub(crate) mod problems {
             }).unwrap()
         }
 
-        let root1 = P1::open::<Pbox<LogRefCell<i32, P1>, P1>>("pool5.pool", O_CFNE).unwrap();
-        let root2 = P2::open::<Pbox<LogRefCell<i32, P2>, P2>>("pool6.pool", O_CFNE).unwrap();
+        let root1 = P1::open::<Pbox<RefCell<i32, P1>, P1>>("pool5.pool", O_CFNE).unwrap();
+        let root2 = P2::open::<Pbox<RefCell<i32, P2>, P2>>("pool6.pool", O_CFNE).unwrap();
         let _res = Chaperon::session("foo1.pool", || {
             let other = foo::<P2>(&root2, 10); // <-- foo commits here
             P1::transaction(|j| {
@@ -444,9 +444,9 @@ pub(crate) mod problems {
             // let e = root.borrow_mut(j); <-- Error: multiple mutable borrows
             // let f = root.borrow(); <-- Error: already mutably borrowed
 
-            let new = Pbox::new(LogRefCell::pfrom(d, j), j); // A new `LogRefCell`
+            let new = Pbox::new(PRefCell::pfrom(d, j), j); // A new `PRefCell`
             let mut e = new.borrow_mut(j);
-            *e = 30; // The original LogRefCell won't change
+            *e = 30; // The original PRefCell won't change
 
             // `d` is still available here 
         }).unwrap();
@@ -457,7 +457,6 @@ pub(crate) mod problems {
     #[test]
     fn test_concurrent() {
         use crate::alloc::*;
-        use crate::boxed::Pbox;
         use std::time::Instant;
 
         let _pool = BuddyAlloc::open_no_root("conc.pool", O_CF).unwrap();
@@ -500,13 +499,13 @@ pub(crate) mod problems {
 
 #[cfg(test)]
 pub(crate) mod test {
+    use crate::alloc::heap::Heap;
     use crate::default::*;
     use crate::cell::*;
-    use crate::clone::*;
     use crate::prc::*;
     use crate::stm::*;
     use crate::stm::Journal;
-    use crate::sync::Mutex;
+    use crate::sync::PMutex;
     use crate::*;
 
     type A = BuddyAlloc;
@@ -517,15 +516,15 @@ pub(crate) mod test {
         // Race condition problem (cyclic locks) is still possible
 
         struct Root {
-            a: Mutex<u32, A>,
-            b: Mutex<u32, A>,
+            a: PMutex<u32, A>,
+            b: PMutex<u32, A>,
         }
 
         impl RootObj<A> for Root {
-            fn init(j: &Journal<A>) -> Self {
+            fn init(_j: &Journal<A>) -> Self {
                 Self {
-                    a: Mutex::new(0, j),
-                    b: Mutex::new(0, j),
+                    a: PMutex::new(0),
+                    b: PMutex::new(0),
                 }
             }
         }
@@ -574,14 +573,14 @@ pub(crate) mod test {
         }
         pub struct Consumer {
             pattern: String<A>,
-            data: Mutex<String<A>, A>,
+            data: PMutex<String<A>, A>,
         }
 
         impl RootObj<A> for Consumer {
-            fn init(j: &Journal<A>) -> Self {
+            fn init(_j: &Journal<A>) -> Self {
                 Self {
-                    pattern: String::new(j),
-                    data: Mutex::new(String::new(j), j),
+                    pattern: String::new(),
+                    data: PMutex::new(String::new()),
                 }
             }
         }
@@ -615,15 +614,13 @@ pub(crate) mod test {
 
     #[test]
     fn multiple_transactions() {
-        use crate::boxed::Pbox;
-
         let _image = A::open_no_root("nosb.pool", O_CF).unwrap();
 
         A::transaction(|j1| {
-            let b1 = Pbox::new(LogCell::new(1, j1), j1);
+            let b1 = Pbox::new(default::PCell::new(1), j1);
             b1.set(
                 Heap::transaction(move |j2| {
-                    let b2 = Pbox::new(LogCell::new(1, j2), j2);
+                    let b2 = Pbox::new(heap::PCell::new(1), j2);
                     b2.get()
                 })
                 .unwrap(),
@@ -636,18 +633,16 @@ pub(crate) mod test {
     #[test]
     #[ignore]
     fn multiple_open() {
-        use crate::boxed::Pbox;
-
         let mut threads = vec![];
 
         for _ in 0..10 {
             threads.push(std::thread::spawn(move || {
                 let _image = A::open_no_root("nosb.pool", O_CF).unwrap();
                 A::transaction(|j1| {
-                    let b1 = Pbox::new(LogRefCell::new(1, j1), j1);
+                    let b1 = Pbox::new(default::PRefCell::new(1), j1);
                     let mut b1 = b1.borrow_mut(j1);
                     *b1 = Heap::transaction(move |j2| {
-                        let b2 = Pbox::new(LogRefCell::new(1, j2), j2);
+                        let b2 = Pbox::new(heap::PRefCell::new(1), j2);
                         b2.read()
                     })
                     .unwrap();
@@ -681,6 +676,8 @@ pub(crate) mod test {
 
     #[test]
     fn multiple_pools() {
+        use crate::cell::PRefCell;
+
         crate::pool!(pool1);
         crate::pool!(pool2);
 
@@ -688,12 +685,12 @@ pub(crate) mod test {
         type P2 = pool2::BuddyAlloc;
 
         struct Root<P: MemPool> {
-            val: Pbox<LogRefCell<i32, P>, P>,
+            val: Pbox<PRefCell<i32, P>, P>,
         }
         impl<M: MemPool> RootObj<M> for Root<M> {
             fn init(j: &Journal<M>) -> Self {
                 Root {
-                    val: Pbox::new(LogRefCell::new(0, j), j),
+                    val: Pbox::new(PRefCell::new(0), j),
                 }
             }
         }
@@ -741,17 +738,19 @@ pub(crate) mod test {
 
     #[test]
     fn concat_test() {
+        use crate::alloc::default::*;
+
         type P = BuddyAlloc;
-        type Ptr = Option<Prc<LogRefCell<Node, P>, P>>;
+        type Ptr = Option<Prc<PRefCell<Node>>>;
         struct Node {
             val: i32,
             next: Ptr,
         }
         fn remove_all(k: i32) {
-            let root = P::open::<Pbox<LogRefCell<Ptr, P>, P>>("foo3.pool", 0).unwrap();
+            let root = P::open::<Pbox<PRefCell<Ptr>>>("foo3.pool", 0).unwrap();
             P::transaction(|j| {
                 let mut curr = root.borrow().pclone(j);
-                let mut prev = Weak::<LogRefCell<Node, P>, P>::new();
+                let mut prev = prc::PWeak::<PRefCell<Node>>::new();
                 while let Some(n) = curr {
                     let p = n.borrow();
                     if p.val == k {
@@ -772,26 +771,28 @@ pub(crate) mod test {
 
     #[test]
     fn prc_test() {
+        use crate::alloc::default::*;
+
         let _image = A::open_no_root("nosb.pool", O_CF).unwrap();
 
         struct Cell {
             k: i32,
-            next: Option<Prc<LogRefCell<Cell, A>, A>>,
+            next: Option<Prc<PRefCell<Cell>>>,
         }
 
         impl Cell {
             pub fn new(x: i32) -> Self {
                 Cell { k: x, next: None }
             }
-            pub fn add(&mut self, v: i32, j: &Journal<A>) {
+            pub fn add(&mut self, v: i32, j: &Journal) {
                 if let Some(next) = &self.next {
                     let mut next = next.borrow_mut(j);
                     next.add(v, j);
                 } else {
-                    self.next = Some(Prc::new(LogRefCell::new(Cell::new(v), j), j));
+                    self.next = Some(Prc::new(PRefCell::new(Cell::new(v)), j));
                 }
             }
-            pub fn sum(&self, j: &Journal<A>) -> i32 {
+            pub fn sum(&self, j: &Journal) -> i32 {
                 if let Some(next) = &self.next {
                     self.k + next.borrow().sum(j)
                 } else {
@@ -801,8 +802,8 @@ pub(crate) mod test {
         }
 
         transaction(|j| {
-            let shared_root: Prc<LogRefCell<Cell, A>, A> =
-                Prc::new(LogRefCell::new(Cell::new(10), j), j);
+            let shared_root: Prc<PRefCell<Cell>> =
+                Prc::new(PRefCell::new(Cell::new(10)), j);
             // Create a new block to limit the scope of the dynamic borrow
             {
                 let mut root = shared_root.borrow_mut(j);
@@ -838,17 +839,17 @@ pub(crate) mod test {
             next: PRefCell<Option<Prc<Cell>>>,
         }
 
-        impl RootObj<A> for Cell {
-            fn init(j: &Journal<A>) -> Self {
-                Cell::new(0, j)
+        impl Default for Cell {
+            fn default() -> Self {
+                Cell::new(0)
             }
         }
 
         impl Cell {
-            pub fn new(x: i32, j: &Journal<A>) -> Self {
+            pub fn new(x: i32) -> Self {
                 Cell {
                     k: VCell::new(RefCell::new(Some(Box::new(x)))),
-                    next: LogRefCell::new(None, j),
+                    next: PRefCell::new(None),
                 }
             }
             pub fn add(&self, v: i32, j: &Journal<A>) {
@@ -856,7 +857,7 @@ pub(crate) mod test {
                     next.add(v, j);
                     return;
                 }
-                *self.next.borrow_mut(j) = Some(Prc::new(Cell::new(v, j), j));
+                *self.next.borrow_mut(j) = Some(Prc::new(Cell::new(v), j));
             }
             pub fn sum(&self, j: &Journal<A>) -> i32 {
                 let mut k = if let Some(g) = &*self.k.borrow() {
@@ -957,7 +958,7 @@ pub(crate) mod test {
                     } else {
                         *next = Some(Node {
                             val,
-                            next: Prc::new(PRefCell::new(None, j), j)
+                            next: Prc::new(PRefCell::new(None), j)
                         })
                     }
                 }).unwrap()
@@ -967,6 +968,8 @@ pub(crate) mod test {
 
     #[test]
     fn test_gadget_owners() {
+        use crate::alloc::default::*;
+
         let _image = A::open_no_root("nosb.pool", O_CF);
         struct Owner {
             name: [u8; 8],
@@ -974,7 +977,7 @@ pub(crate) mod test {
         }
         struct Gadget {
             id: i32,
-            owner: Prc<LogRefCell<Owner, A>, A>,
+            owner: Prc<PRefCell<Owner>>,
         }
         impl Owner {
             fn new(name: &str) -> Self {
@@ -999,8 +1002,8 @@ pub(crate) mod test {
             // Create a reference-counted `Owner`. Note that we've put the `Owner`'s
             // vector of `Gadget`s inside a `RefCell` so that we can mutate it through
             // a shared reference.
-            let gadget_owner: Prc<LogRefCell<Owner, A>, A> =
-                Prc::new(LogRefCell::new(Owner::new("Dany"), j), j);
+            let gadget_owner: Prc<PRefCell<Owner>> =
+                Prc::new(PRefCell::new(Owner::new("Dany")), j);
             print_usage(1);
 
             // Create `Gadget`s belonging to `gadget_owner`, as before.
@@ -1084,20 +1087,22 @@ pub(crate) mod test {
     #[test]
     #[allow(clippy::comparison_chain)]
     fn test_dblist() {
+        use crate::alloc::default::{*, prc::PWeak};
+
         struct SB {
-            root: Prc<LogRefCell<Node<i32>, A>, A>,
+            root: Prc<PRefCell<Node<i32>>>,
         }
         impl RootObj<A> for SB {
-            fn init(j: &Journal<A>) -> Self {
+            fn init(j: &Journal) -> Self {
                 Self {
-                    root: Prc::new(LogRefCell::new(Node::new(0), j), j),
+                    root: Prc::new(PRefCell::new(Node::new(0)), j),
                 }
             }
         }
         struct Node<T: PSafe + std::fmt::Display> {
             value: T,
-            next: Option<Prc<LogRefCell<Node<T>, A>, A>>,
-            prev: Weak<LogRefCell<Node<T>, A>, A>,
+            next: Option<Prc<PRefCell<Node<T>>>>,
+            prev: PWeak<PRefCell<Node<T>>>,
         }
         impl<T: PSafe + std::fmt::Display> Node<T> {
             fn new(x: T) -> Self {
@@ -1131,10 +1136,10 @@ pub(crate) mod test {
             match cmd {
                 AddNewRndNum => {
                     println!("adding new element {}", value);
-                    let new = Prc::new(LogRefCell::new(Node::new(value),j),j);
+                    let new = Prc::new(PRefCell::new(Node::new(value)),j);
                     if let Some(root) = &sb.next {
                         let mut curr = Prc::downgrade(&root, j);
-                        let mut last = Weak::<LogRefCell<Node<i32>,A>,A>::new();
+                        let mut last = PWeak::<PRefCell<Node<i32>>>::new();
                         let mut added = false;
                         while let Some(pnode) = curr.upgrade(j) {
                             let node = pnode.borrow_mut(j);
@@ -1320,9 +1325,11 @@ pub(crate) mod test {
 
     #[test]
     fn test_transaction() {
+        use crate::alloc::default::*;
+
         let _heap = A::open_no_root("nosb.pool", O_CF);
         A::transaction(|j| {
-            let data = Pbox::new(LogRefCell::new(1, j), j);
+            let data = Pbox::new(PRefCell::new(1), j);
             let mut data = data.borrow_mut(j);
             *data = 2;
             println!("data = {}", data);
@@ -1332,15 +1339,17 @@ pub(crate) mod test {
 
     #[test]
     fn test_logs() {
+        use crate::alloc::default::*;
+
         struct Root {
-            head: Option<LogRefCell<i32, A>>,
+            head: Option<PRefCell<i32>>,
         }
         impl Default for Root {
             fn default() -> Self {
                 Root { head: None }
             }
         }
-        let root = A::open::<Pbox<LogRefCell<Root, A>, A>>("sb7.pool", O_CFNE).unwrap();
+        let root = A::open::<Pbox<PRefCell<Root>>>("sb7.pool", O_CFNE).unwrap();
         let data = A::transaction(|j| {
             let mut root = root.borrow_mut(j);
             if let Some(obj) = &root.head {
@@ -1349,10 +1358,10 @@ pub(crate) mod test {
                 *obj
             } else {
                 // let _root = root.borrow_mut();
-                // let _new_node = LogRefCell::new(1);
+                // let _new_node = PRefCell::new(1);
                 // std::process::exit(0);
 
-                let new_node = LogRefCell::new(1, j); //std::process::exit(0)
+                let new_node = PRefCell::new(1); //std::process::exit(0)
                 root.head = Some(new_node);
                 1
             }
@@ -1364,7 +1373,6 @@ pub(crate) mod test {
     // Parc tests
 
     use crate::boxed::Pbox;
-    use crate::prc::Prc;
     use crate::sync::Parc;
 
     use std::thread;
@@ -1382,7 +1390,7 @@ pub(crate) mod test {
             //
             // Here we're using an Arc to share memory among threads, and the data inside
             // the Arc is protected with a mutex.
-            let data = Parc::new(Mutex::new(0, j), j);
+            let data = Parc::new(PMutex::new(0), j);
             let (tx, rx) = channel();
             for _ in 0..N {
                 let (data, tx) = (data.demote(), tx.clone());
@@ -1420,13 +1428,13 @@ pub(crate) mod test {
             next: Option<Parc<Node, A>>,
         }
         struct Root {
-            root: Parc<Mutex<Option<Node>, A>, A>,
+            root: Parc<PMutex<Option<Node>, A>, A>,
         }
         impl RootObj<A> for Root {
             fn init(j: &Journal<A>) -> Self {
                 let node = Node { id: 0, next: None };
                 Self {
-                    root: Parc::new(Mutex::new(Some(node), j), j),
+                    root: Parc::new(PMutex::new(Some(node)), j),
                 }
             }
         }
@@ -1456,19 +1464,21 @@ pub(crate) mod test {
 
     #[test]
     fn test_mutex() {
+        use crate::alloc::default::*;
+
         struct SB {
-            root: Option<Prc<Mutex<i32, A>, A>>,
+            root: Option<Prc<PMutex<i32>>>,
         }
         impl Default for SB {
             fn default() -> Self {
                 SB { root: None }
             }
         }
-        let sb = A::open::<Pbox<LogRefCell<SB, A>, A>>("sb9.pool", O_CFNE).unwrap();
+        let sb = A::open::<Pbox<PRefCell<SB>>>("sb9.pool", O_CFNE).unwrap();
         transaction(|j| {
             let mut sb = sb.borrow_mut(j);
             if sb.root.is_none() {
-                sb.root = Some(Prc::new(Mutex::new(12, j), j));
+                sb.root = Some(Prc::new(PMutex::new(12), j));
             }
             let mut val = sb.root.as_ref().unwrap().lock(j);
             println!("data is {}", val);
@@ -1483,12 +1493,12 @@ pub(crate) mod test {
     #[test]
     fn test_mutex_mt() {
         struct SB {
-            value: Parc<Mutex<i32, A>, A>,
+            value: Parc<PMutex<i32, A>, A>,
         }
         impl RootObj<A> for SB {
             fn init(j: &stm::journal::Journal<A>) -> Self {
                 SB {
-                    value: Parc::new(Mutex::new(0, j), j),
+                    value: Parc::new(PMutex::new(0), j),
                 }
             }
         }
@@ -1572,12 +1582,12 @@ pub(crate) mod test {
     #[test]
     fn test_tramutex_mt() {
         struct SB {
-            value: Parc<Mutex<i32, A>, A>,
+            value: Parc<PMutex<i32, A>, A>,
         }
         impl RootObj<A> for SB {
             fn init(j: &stm::journal::Journal<A>) -> Self {
                 SB {
-                    value: Parc::new(Mutex::new(0, j), j),
+                    value: Parc::new(PMutex::new(0), j),
                 }
             }
         }
@@ -1669,21 +1679,23 @@ pub(crate) mod test {
     //     type P1 = pool1::BuddyAlloc;
     //     type P2 = pool2::BuddyAlloc;
 
-    //     type Root = Pbox<LogRefCell<Option<Pbox<i32,P2>>,P1>,P1>;
+    //     type Root = Pbox<PRefCell<Option<Pbox<i32,P2>>,P1>,P1>;
     //     let root = P1::open::<Root>("interpool.pool", O_CFNE).unwrap();
     //     let _p = P2::open_no_root("interpool2.pool", O_CFNE).unwrap();
     //     let _ = P2::transaction(|j2| {
     //         let mut root = root.borrow_mut(j2);
-    //         let b: Pbox<LogRefCell<Option<Pbox<i32,P2>>,P1>,P1>;
-    //         b = Pbox::new(LogRefCell::new(None, j1), j1);
+    //         let b: Pbox<PRefCell<Option<Pbox<i32,P2>>,P1>,P1>;
+    //         b = Pbox::new(PRefCell::new(None, j1), j1);
     //     });
     // }
 
     #[test]
     fn propagate_panic() {
+        use crate::alloc::default::*;
+
         let _image = A::open_no_root("nosb.pool", O_CF);
         if A::transaction(|j| {
-            let ptr = Parc::new(Mutex::new(1, j), j);
+            let ptr = Parc::new(PMutex::new(1), j);
             print_usage(1);
             let _ = transaction(|j| {
                 let _k = ptr.pclone(j);
@@ -1704,6 +1716,24 @@ pub(crate) mod test {
         //     let _k = p.clone();
         //     // panic!("yes");
         // });
+    }
+
+    #[test]
+    #[should_panic]
+    fn outside_tx() {
+        use crate::alloc::default::*;
+
+        let _image = A::open_no_root("nosb.pool", O_CF);
+        let b = PRefCell::new(10);
+        let c = PCell::new(10);
+        let m = PMutex::new(10);
+        A::transaction(|j| {
+            let mut b = b.borrow_mut(j);
+            *b = 20;
+            c.set(20, j);
+            let mut m = m.lock(j);
+            *m = 20;
+        }).unwrap();
     }
 }
 
@@ -2053,7 +2083,7 @@ mod temp_test {
         struct Root(PRefCell<Option<Parc<i32>>>);
         impl RootObj<P> for Root {
             fn init(j: &Journal) -> Self {
-                Root(PRefCell::new(Some(Parc::new(10, j)),j))
+                Root(PRefCell::new(Some(Parc::new(10, j))))
             }
         }
 

@@ -41,9 +41,9 @@
 //! safety. Mutable objects are allowed via interior mutability of any of the
 //! following memory cells:
 //! 
-//! * [`LogCell<T,P>`] (or [`PCell<T>`]): An unborrowable, mutable persistent
+//! * [`PCell<T,P>`] (or [`PCell<T>`]): An unborrowable, mutable persistent
 //! memory location for a value of type `T` in pool `P`.
-//! * [`LogRefCell<T,P>`] (or [`PRefCell<T>`]): A mutable persistent memory location
+//! * [`PRefCell<T,P>`] (or [`PRefCell<T>`]): A mutable persistent memory location
 //! with dynamically checked borrow rules for a value of type `T` in pool `P`.
 //! * [`Mutex<T,P>`] (or [`PMutex<T>`]): A mutual exclusion primitive useful for
 //! protecting shared persistent data of type `T` in pool `P`.
@@ -87,9 +87,9 @@
 //! [`MemPool`]: ./alloc/trait.MemPool.html
 //! [`default`]: ./alloc/default/index.html
 //! [`BuddyAlloc`]: ./alloc/default/struct.BuddyAlloc.html
-//! [`LogCell<T,P>`]: ./cell/struct.LogCell.html
+//! [`PCell<T,P>`]: ./cell/struct.PCell.html
 //! [`PCell<T>`]: ./alloc/default/type.PCell.html
-//! [`LogRefCell<T,P>`]: ./cell/struct.LogRefCell.html 
+//! [`PRefCell<T,P>`]: ./cell/struct.PRefCell.html 
 //! [`PRefCell<T>`]: ./alloc/default/type.PRefCell.html
 //! [`Mutex<T,P>`]: ./sync/struct.Mutex.html
 //! [`PMutex<T>`]: ./alloc/default/type.PMutex.html

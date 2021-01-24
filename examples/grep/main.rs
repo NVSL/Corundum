@@ -118,10 +118,10 @@ fn main() {
     impl RootObj<P> for Root {
         fn init(j: &Journal) -> Self {
             Root {
-                lines: Parc::new(PMutex::new(Stack::new(), j), j),
-                words: Parc::new(PMutex::new(HashMap::new(j), j), j),
-                producers: PRefCell::new(PVec::new(j), j),
-                consumers: PRefCell::new(PVec::new(j), j),
+                lines: Parc::new(PMutex::new(Stack::new()), j),
+                words: Parc::new(PMutex::new(HashMap::new(j)), j),
+                producers: PRefCell::new(PVec::new()),
+                consumers: PRefCell::new(PVec::new()),
             }
         }
     }
