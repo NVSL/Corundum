@@ -1504,10 +1504,6 @@
 <span id="1501">1501</span>
 <span id="1502">1502</span>
 <span id="1503">1503</span>
-<span id="1504">1504</span>
-<span id="1505">1505</span>
-<span id="1506">1506</span>
-<span id="1507">1507</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">alloc</span>::<span class="ident">MemPool</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">ll</span>::<span class="kw-2">*</span>;
@@ -3000,10 +2996,6 @@
         }
     };
 }
-
-<span class="comment">// This is an example of defining a new buddy allocator type</span>
-<span class="comment">// `BuddyAlloc` is the default allocator with Buddy Allocation</span>
-<span class="kw">crate</span>::<span class="macro">pool</span><span class="macro">!</span>(<span class="ident">default</span>);
 
 <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;verbose&quot;</span>)]</span>
 <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">debug_alloc</span><span class="op">&lt;</span><span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span>(<span class="ident">addr</span>: <span class="ident">u64</span>, <span class="ident">len</span>: <span class="ident">usize</span>, <span class="ident">pre</span>: <span class="ident">usize</span>, <span class="ident">post</span>: <span class="ident">usize</span>) {

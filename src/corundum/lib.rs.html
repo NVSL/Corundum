@@ -175,6 +175,9 @@
 <span id="172">172</span>
 <span id="173">173</span>
 <span id="174">174</span>
+<span id="175">175</span>
+<span id="176">176</span>
+<span id="177">177</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! *Corundum* is a crate with an idiomatic persistent memory programming</span>
 <span class="doccomment">//! interface and leverages Rust’s type system to statically avoid</span>
@@ -334,9 +337,12 @@
 <span class="kw">pub</span> <span class="kw">use</span> <span class="ident">cell</span>::<span class="ident">RootObj</span>;
 <span class="kw">pub</span> <span class="kw">use</span> <span class="ident">marker</span>::<span class="kw-2">*</span>;
 
-<span class="kw">pub</span> <span class="kw">use</span> <span class="ident">alloc</span>::<span class="ident">default</span>;
 <span class="kw">pub</span> <span class="kw">use</span> <span class="ident">crndm_derive</span>::<span class="kw-2">*</span>;
 <span class="kw">pub</span> <span class="kw">use</span> <span class="ident">stm</span>::<span class="ident">transaction</span>;
+
+<span class="comment">// This is an example of defining a new buddy allocator type</span>
+<span class="comment">// `BuddyAlloc` is the default allocator with Buddy Allocation</span>
+<span class="kw">crate</span>::<span class="macro">pool</span><span class="macro">!</span>(<span class="ident">default</span>);
 
 <span class="doccomment">/// A `Result` type with string error messages</span>
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">result</span> {
