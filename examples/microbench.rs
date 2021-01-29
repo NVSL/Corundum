@@ -209,11 +209,9 @@ fn main() {
         P::transaction(|j| {
             let b = Parc::new(0u64, j);
             let mut vec = Vec::with_capacity(cnt);
-            measure!("Parc:clone".to_string(), cnt, {
-                for _ in 0..cnt {
-                    vec.push(b.pclone(j));
-                }
-            });
+            for _ in 0..cnt {
+                vec.push(measure!("Parc:clone".to_string(), { b.pclone(j) }));
+            }
         }).unwrap();
     }
 
@@ -254,35 +252,27 @@ fn main() {
     P::transaction(|j| {
         let b = Parc::new(0u64, j);
         let mut pvec = Vec::<parc::PWeak<u64>>::with_capacity(cnt);
-        measure!("Parc:downgrade".to_string(), cnt, {
-            for _ in 0..cnt {
-                pvec.push(Parc::downgrade(&b, j));
-            }
-        });
+        for _ in 0..cnt {
+            pvec.push(measure!("Parc:downgrade".to_string(), { Parc::downgrade(&b, j) }));
+        }
         let mut ppvec = Vec::with_capacity(cnt);
-        let _p = measure!("Parc:upgrade".to_string(), cnt, {
-            for i in 0..cnt {
-                ppvec.push(pvec[i].upgrade(j))
-            }
-        });
+        for i in 0..cnt {
+            ppvec.push(measure!("Parc:upgrade".to_string(), { pvec[i].upgrade(j) }))
+        }
     }).unwrap();
 
     P::transaction(|j| {
         let b = Parc::new(0u64, j);
         let mut vvec = Vec::with_capacity(cnt);
         unsafe { 
-            measure!("Parc:demote".to_string(), cnt, {
-                for _ in 0..cnt {
-                    vvec.push(Parc::unsafe_demote(&b));
-                }
-            })
+            for _ in 0..cnt {
+                vvec.push(measure!("Parc:demote".to_string(), { Parc::unsafe_demote(&b) }));
+            }
         }
         let mut pvec = Vec::with_capacity(cnt);
-        measure!("Parc:promote".to_string(), cnt, {
-            for i in 0..cnt {
-                pvec.push(vvec[i].promote(j));
-            }
-        })
+        for i in 0..cnt {
+            pvec.push(measure!("Parc:promote".to_string(), { vvec[i].promote(j) }));
+        }
     }).unwrap();
 
     for s in &sizes {

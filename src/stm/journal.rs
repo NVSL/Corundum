@@ -216,7 +216,6 @@ impl<A: MemPool> Journal<A> {
     fn new_page(&self) -> Ptr<Page<A>, A> {
         #[cfg(feature = "perf_stat")]
         let _perf = crate::stat::Measure::<A>::NewPage(std::time::Instant::now());
-
         unsafe {
             let page = Page::<A> {
                 len: 0,
