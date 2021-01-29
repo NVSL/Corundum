@@ -203,7 +203,6 @@ impl<A: MemPool> BuddyAlg<A> {
     #[inline]
     /// Adds a new low-level 64-bit log entry
     pub unsafe fn log(&mut self, off: u64, data: u64) {
-        self.aux_valid = true;
         self.log64.push((off, data));
     }
 
@@ -246,6 +245,14 @@ impl<A: MemPool> BuddyAlg<A> {
         });
         self.log64.clear();
         self.available = self.available_log;
+    }
+
+    #[inline(always)]
+    /// Begins a failure-atomic section
+    pub unsafe fn prepare(&mut self) {
+        self.lock();
+        self.log64.clear();
+        self.aux_valid = true;
     }
 
     #[inline]
@@ -1187,6 +1194,15 @@ macro_rules! pool {
                 fn zone(off: u64) -> usize {
                     static_inner!(BUDDY_INNER, inner, {
                         off as usize / inner.zone.quota()
+                    })
+                }
+
+                #[inline]
+                #[allow(unused_unsafe)]
+                #[track_caller]
+                unsafe fn prepare(z: usize) {
+                    static_inner!(BUDDY_INNER, inner, {
+                        inner.zone[z].prepare();
                     })
                 }
 

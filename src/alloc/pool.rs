@@ -728,6 +728,15 @@ where
     /// 
     unsafe fn drop_on_failure(_off: u64, _len: usize, _zone: usize) {}
 
+
+    /// In case of not using [`pre_alloc`] or [`pre_dealloc`], starts a low-level
+    /// atomic section on a given zone.
+    /// 
+    /// [`pre_alloc`]: #method.pre_alloc
+    /// [`pre_dealloc`]: #method.pre_dealloc
+    /// 
+    unsafe fn prepare(_zone: usize) { }
+
     /// Performs the prepared operations
     /// 
     /// It materializes the changes made by [`pre_alloc`](#method.pre_alloc),

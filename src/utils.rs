@@ -253,6 +253,23 @@ mod test {
     }
 }
 
+pub struct SpinLock {
+    lock: *mut u8
+}
+
+impl SpinLock {
+    pub fn acquire(lock: *mut u8) -> Self {
+        unsafe { while std::intrinsics::atomic_cxchg_acqrel(lock, 0, 1).0 == 1 {} }
+        Self { lock }
+    }
+}
+
+impl Drop for SpinLock {
+    fn drop(&mut self) {
+        unsafe { std::intrinsics::atomic_store_rel(self.lock, 0); }
+    }
+}
+
 #[macro_export]
 macro_rules! log {
     ($p:tt, $c:tt, $tag:expr, $msg:expr, $($args:tt)*) => {

@@ -1,3 +1,4 @@
+use crate::utils::SpinLock;
 use std::panic::RefUnwindSafe;
 use std::panic::UnwindSafe;
 use crate::alloc::{MemPool, PmemUsage};
@@ -574,7 +575,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Parc<T, A> {
     /// ```
     pub fn strong_count(this: &Self) -> usize {
         let inner = this.inner();
-        load(inner.counter.lock.as_mut(), &this.inner().counter.strong)
+        load(inner.counter.lock.as_mut(), &inner.counter.strong)
     }
 
     #[inline]
@@ -737,8 +738,6 @@ unsafe impl<#[may_dangle] T: PSafe + ?Sized, A: MemPool> Drop for Parc<T, A> {
             {
                 return;
             }
-
-            atomic::fence(Acquire);
 
             self.drop_slow(journal);
         }
@@ -1091,7 +1090,6 @@ impl<T: PSafe + ?Sized, A: MemPool> Drop for Weak<T, A> {
             if fetch_dec(inner.counter.lock.as_mut(),
                 &mut inner.counter.weak, j) == 1 
             {
-                atomic::fence(Acquire);
                 unsafe {
                     A::free(self.ptr.as_mut());
                 }
@@ -1143,18 +1141,14 @@ trait ParcBoxPtr<T: PSafe + ?Sized, A: MemPool> {
 
 #[inline]
 fn load(lock: *mut u8, cnt: &usize) -> usize {
-    unsafe {
-        while std::intrinsics::atomic_cxchg_acqrel(lock, 0, 1).0 == 1 {}
-        let res = *cnt;
-        std::intrinsics::atomic_store_rel(lock, 0);
-        res
-    }
+    let _lock = SpinLock::acquire(lock);
+    *cnt
 }
 
 #[inline]
 fn fetch_inc<A: MemPool>(lock: *mut u8, cnt: &mut usize, journal: &Journal<A>) -> usize {
     unsafe {
-        while std::intrinsics::atomic_cxchg_acqrel(lock, 0, 1).0 == 1 {}
+        let _lock = SpinLock::acquire(lock);
 
         let mut log = if cfg!(not(feature = "no_log_rc")) {
             if A::valid(cnt) {
@@ -1172,12 +1166,12 @@ fn fetch_inc<A: MemPool>(lock: *mut u8, cnt: &mut usize, journal: &Journal<A>) -
         } else {
             let off = A::off_unchecked(cnt);
             let z = A::zone(off);
+            A::prepare(z);
             A::log64(off, res as u64 + 1, z);
             log.set(off, 1, z);
             A::perform(z);
         }
 
-        std::intrinsics::atomic_store_rel(lock, 0);
         res
     }
 }
@@ -1185,8 +1179,8 @@ fn fetch_inc<A: MemPool>(lock: *mut u8, cnt: &mut usize, journal: &Journal<A>) -
 #[inline]
 fn fetch_dec<A: MemPool>(lock: *mut u8, cnt: &mut usize, journal: &Journal<A>) -> usize {
     unsafe {
-        while std::intrinsics::atomic_cxchg_acqrel(lock, 0, 1).0 == 1 {}
-        
+        let _lock = SpinLock::acquire(lock);
+
         let mut log = if cfg!(not(feature = "no_log_rc")) {
             if A::valid(cnt) {
                 Log::recount_on_failure(u64::MAX, true, journal)
@@ -1203,12 +1197,11 @@ fn fetch_dec<A: MemPool>(lock: *mut u8, cnt: &mut usize, journal: &Journal<A>) -
         } else {
             let off = A::off_unchecked(cnt);
             let z = A::zone(off);
+            A::prepare(z);
             A::log64(off, res as u64 - 1, z);
             log.set(off, 1, z);
             A::perform(z);
         }
-
-        std::intrinsics::atomic_store_rel(lock, 0);
         res
     }
 }
@@ -1222,8 +1215,7 @@ fn compare_exchange_weak<A: MemPool>(
     journal: &Journal<A>) -> Result<usize, usize> 
 {
     unsafe {
-        while std::intrinsics::atomic_cxchg_acqrel(lock, 0, 1).0 == 1 {}
-
+        let _lock = SpinLock::acquire(lock);
 
         let mut log = if cfg!(not(feature = "no_log_rc")) {
             if A::valid(cnt) {
@@ -1241,6 +1233,7 @@ fn compare_exchange_weak<A: MemPool>(
             } else {
                 let off = A::off_unchecked(cnt);
                 let z = A::zone(off);
+                A::prepare(z);
                 A::log64(off, new as u64, z);
                 log.set(off, 1, z);
                 A::perform(z);
@@ -1249,8 +1242,6 @@ fn compare_exchange_weak<A: MemPool>(
         } else {
             Err(*cnt)
         };
-
-        std::intrinsics::atomic_store_rel(lock, 0);
         res
     }
 }

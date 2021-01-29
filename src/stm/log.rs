@@ -1,4 +1,3 @@
-use std::sync::atomic::AtomicUsize;
 use crate::alloc::MemPool;
 use crate::ll::*;
 use crate::ptr::Ptr;
@@ -511,14 +510,15 @@ impl<A: MemPool> Log<A> {
                 }
             }
             RecountOnFailure(src, inc) => {
-                if *src != u64::MAX {
-                    debug_assert!(A::allocated(*src, 1), "Access Violation");
-                    let c = A::get_mut_unchecked::<AtomicUsize>(*src).get_mut();
-                    let z = A::zone(*src);
+                let off = *src;
+                if off != u64::MAX {
+                    debug_assert!(A::allocated(off, 1), "Access Violation");
+                    let c = A::get_mut_unchecked::<usize>(off);
+                    let z = A::zone(off);
                     if *inc {
-                        A::log64(A::off_unchecked(c), *c as u64 + 1, z);
+                        A::log64(off, *c as u64 + 1, z);
                     } else {
-                        A::log64(A::off_unchecked(c), *c as u64 - 1, z);
+                        A::log64(off, *c as u64 - 1, z);
                     }
                     A::log64(A::off_unchecked(src), u64::MAX, z);
                     A::perform(z);
