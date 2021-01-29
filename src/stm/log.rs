@@ -437,7 +437,7 @@ impl<A: MemPool> Log<A> {
     /// log and writes it on `journal`
     #[inline]
     #[track_caller]
-    pub fn recount_on_failure(offset: u64, inc: bool, journal: &Journal<A>) -> Ptr<Log<A>, A> {
+    pub unsafe fn recount_on_failure(offset: u64, inc: bool, journal: &Journal<A>) -> Ptr<Log<A>, A> {
         log!(A, Yellow, "NEW LOG", "FOR:         ({:>4}..{:<4}) = {:<5} RecountOnFailure({})",
             offset_to_str(offset),
             offset_to_str((offset as usize + 7) as u64),

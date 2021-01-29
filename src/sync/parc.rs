@@ -448,40 +448,11 @@ impl<T: PSafe + ?Sized, A: MemPool> Parc<T, A> {
     /// [`upgrade`]: ./struct.Weak.html#method.upgrade
     pub fn downgrade(this: &Self, j: &Journal<A>) -> Weak<T, A> {
         let inner = this.inner();
-        // This Relaxed is OK because we're checking the value in the CAS
-        // below.
-        let mut cur = load(inner.counter.lock.as_mut(), &mut inner.counter.weak);
+        let _lock = SpinLock::acquire(inner.counter.lock.as_mut());
 
-        loop {
-            // check if the weak counter is currently "locked"; if so, spin.
-            if cur == usize::MAX {
-                cur = load(inner.counter.lock.as_mut(), &mut inner.counter.weak);
-                continue;
-            }
-
-            // NOTE: this code currently ignores the possibility of overflow
-            // into usize::MAX; in general both Rc and Arc need to be adjusted
-            // to deal with overflow.
-
-            // Unlike with Clone(), we need this to be an Acquire read to
-            // synchronize with the write coming from `is_unique`, so that the
-            // events prior to that write happen before this read.
-            match compare_exchange_weak(
-                inner.counter.lock.as_mut(),
-                &mut inner.counter.weak,
-                cur,
-                cur + 1,
-                j)
-            {
-                Ok(_) => {
-                    // Make sure we do not create a dangling Weak
-                    debug_assert!(!this.ptr.is_dangling());
-                    return Weak {
-                        ptr: this.ptr.clone(),
-                    };
-                }
-                Err(old) => cur = old,
-            }
+        lock_free_fetch_inc(&mut inner.counter.weak, j);
+        Weak {
+            ptr: this.ptr.clone(),
         }
     }
 
@@ -973,34 +944,22 @@ impl<T: PSafe + ?Sized, A: MemPool> Weak<T, A> {
     /// }).unwrap()
     /// ```
     pub fn upgrade(&self, j: &Journal<A>) -> Option<Parc<T, A>> {
-        // We use a CAS loop to increment the strong count instead of a
-        // fetch_add because once the count hits 0 it must never be above 0.
         let inner = self.inner()?;
 
-        // Relaxed load because any write of 0 that we can observe
-        // leaves the field in a permanently zero state (so a
-        // "stale" read of 0 is fine), and any other value is
-        // confirmed via the CAS below.
-        let mut n = load(inner.counter.lock.as_mut(), &inner.counter.strong);
+        let _lock = SpinLock::acquire(inner.counter.lock.as_mut());
+        let n = inner.counter.strong;
 
-        loop {
-            if n == 0 {
-                return None;
-            }
-
-            // See comments in `Arc::clone` for why we do this (for `mem::forget`).
-            if n > MAX_REFCOUNT {
-                std::process::abort();
-            }
-
-            // Relaxed is valid for the same reason it is on Arc's Clone impl
-            match compare_exchange_weak(inner.counter.lock.as_mut(),
-                &mut inner.counter.strong, n, n+1, j)
-            {
-                Ok(_) => return Some(Parc::from_inner(self.ptr)), // null checked above
-                Err(old) => n = old,
-            }
+        if n == 0 {
+            return None;
         }
+
+        // See comments in `Arc::clone` for why we do this (for `mem::forget`).
+        if n > MAX_REFCOUNT {
+            std::process::abort();
+        }
+
+        lock_free_fetch_inc(&mut inner.counter.strong, j);
+        Some(Parc::from_inner(self.ptr))
     }
 
     /// Gets the number of strong (`Parc`) pointers pointing to this allocation.
@@ -1145,6 +1104,35 @@ fn load(lock: *mut u8, cnt: &usize) -> usize {
     *cnt
 }
 
+
+#[inline]
+fn lock_free_fetch_inc<A: MemPool>(cnt: &mut usize, journal: &Journal<A>) -> usize {
+    unsafe {
+        let mut log = if cfg!(not(feature = "no_log_rc")) {
+            if A::valid(cnt) {
+                Log::recount_on_failure(u64::MAX, false, journal)
+            } else {
+                Ptr::dangling()
+            }
+        } else {
+            Ptr::dangling()
+        };
+        
+        let res = *cnt;
+        if log.is_dangling() {
+            *cnt += 1;
+        } else {
+            let off = A::off_unchecked(cnt);
+            let z = A::zone(off);
+            A::prepare(z);
+            A::log64(off, res as u64 + 1, z);
+            log.set(off, 1, z);
+            A::perform(z);
+        }
+        res
+    }
+}
+
 #[inline]
 fn fetch_inc<A: MemPool>(lock: *mut u8, cnt: &mut usize, journal: &Journal<A>) -> usize {
     unsafe {
@@ -1202,46 +1190,6 @@ fn fetch_dec<A: MemPool>(lock: *mut u8, cnt: &mut usize, journal: &Journal<A>) -
             log.set(off, 1, z);
             A::perform(z);
         }
-        res
-    }
-}
-
-#[inline]
-fn compare_exchange_weak<A: MemPool>(
-    lock: *mut u8,
-    cnt: &mut usize, 
-    current: usize,
-    new: usize,
-    journal: &Journal<A>) -> Result<usize, usize> 
-{
-    unsafe {
-        let _lock = SpinLock::acquire(lock);
-
-        let mut log = if cfg!(not(feature = "no_log_rc")) {
-            if A::valid(cnt) {
-                Log::recount_on_failure(u64::MAX, false, journal)
-            } else {
-                Ptr::dangling()
-            }
-        } else {
-            Ptr::dangling()
-        };
-
-        let res = if *cnt == current {
-            if log.is_dangling() {
-                *cnt = new;
-            } else {
-                let off = A::off_unchecked(cnt);
-                let z = A::zone(off);
-                A::prepare(z);
-                A::log64(off, new as u64, z);
-                log.set(off, 1, z);
-                A::perform(z);
-            }
-            Ok(new)
-        } else {
-            Err(*cnt)
-        };
         res
     }
 }
@@ -1367,36 +1315,22 @@ impl<T: PSafe + ?Sized, A: MemPool> VWeak<T, A> {
     /// }).unwrap();
     /// ```
     pub fn promote(&self, j: &Journal<A>) -> Option<Parc<T, A>> {
-        // We use a CAS loop to increment the strong count instead of a
-        // fetch_add as this function should never take the reference count
-        // from zero to one.
         let inner = self.inner()?;
 
-        // Relaxed load because any write of 0 that we can observe
-        // leaves the field in a permanently zero state (so a
-        // "stale" read of 0 is fine), and any other value is
-        // confirmed via the CAS below.
-        let mut n = load(inner.counter.lock.as_mut(), &inner.counter.strong);
+        let _lock = SpinLock::acquire(inner.counter.lock.as_mut());
+        let n = inner.counter.strong;
 
-        loop {
-            if n == 0 {
-                return None;
-            }
-
-            // See comments in `Arc::clone` for why we do this (for `mem::forget`).
-            if n > MAX_REFCOUNT {
-                std::process::abort();
-            }
-
-            // Relaxed is fine for the failure case because we don't have any expectations about the new state.
-            // Acquire is necessary for the success case to synchronise with `Arc::new_cyclic`, when the inner
-            // value can be initialized after `Weak` references have already been created. In that case, we
-            // expect to observe the fully initialized value.
-            match compare_exchange_weak(inner.counter.lock.as_mut(), &mut inner.counter.strong, n, n + 1, j) {
-                Ok(_) => return Some(Parc::from_inner(Ptr::from_raw(self.ptr))), // null checked above
-                Err(old) => n = old,
-            }
+        if n == 0 {
+            return None;
         }
+
+        // See comments in `Arc::clone` for why we do this (for `mem::forget`).
+        if n > MAX_REFCOUNT {
+            std::process::abort();
+        }
+
+        lock_free_fetch_inc(&mut inner.counter.strong, j);
+        Some(Parc::from_inner(Ptr::from_raw(self.ptr)))
     }
 
     #[inline]

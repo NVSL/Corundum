@@ -216,7 +216,6 @@ impl<A: MemPool> Journal<A> {
     fn new_page(&self) -> Ptr<Page<A>, A> {
         #[cfg(feature = "perf_stat")]
         let _perf = crate::stat::Measure::<A>::NewPage(std::time::Instant::now());
-// eprintln!("new page for {:p}", self as *const Self);
         unsafe {
             let page = Page::<A> {
                 len: 0,
@@ -226,9 +225,11 @@ impl<A: MemPool> Journal<A> {
             };
             let (_, off, _, z) = A::atomic_new(page);
             A::log64(A::off_unchecked(self.pages.off_ref()), off, z);
-
+            
             #[cfg(feature = "pin_journals")] {
-            A::log64(A::off_unchecked(self.current.off_ref()), off, z);}
+                A::log64(A::off_unchecked(self.current.off_ref()), off, z);
+                // eprintln!("new page for {:p} at {:x}", self as *const Self, off);
+            }
 
             A::perform(z);
 
@@ -260,6 +261,19 @@ impl<A: MemPool> Journal<A> {
         }
         self.current = Ptr::dangling();
         self.pages = Ptr::dangling();
+    }
+
+    pub fn print_pages(&self) {
+        let mut i = 1;
+        let mut curr = self.pages;
+        while let Some(page) = curr.as_option() {
+            eprintln!("page {:<3} at offset {:x} (len = {}, full = {})", i, page.off(), page.len, page.is_full());
+            i += 1;
+            curr = page.next;
+        }
+
+        #[cfg(feature = "pin_journals")]
+        eprintln!("current page at offset {:x}", self.current.off());
     }
 
     /// Commits all logs in the journal
