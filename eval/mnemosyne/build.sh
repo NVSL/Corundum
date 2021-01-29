@@ -3,13 +3,10 @@
 full_path=$(realpath $0)
 dir_path=$(dirname $full_path)
 
-apt -y install scons
-apt -y install libconfig-dev libconfig9
-apt -y install libelf-dev elfutils
-apt -y install libevent-dev
-apt -y install libattr1-dev libnuma1 libnuma-dev libyaml-cpp-dev
-apt -y install python-dev libxml2-dev libxslt-dev
-apt -y install g++-7
+su=
+if [ "$EUID" -ne 0 ]; then
+  su=sudo
+fi
 
 mkdir -p $dir_path
 cd $dir_path
@@ -17,7 +14,7 @@ wget https://sourceforge.net/projects/boost/files/boost/1.62.0/boost_1_62_0.tar.
 tar xf boost_1_62_0.tar.gz
 cd boost_1_62_0
 ./bootstrap.sh
-./b2 -j$((`lscpu -e=cpu | wc -l` - 1)) install
+$su ./b2 -j$(nproc) install
 
 cd $dir_path
 git clone https://github.com/snalli/mnemosyne-gcc.git
@@ -25,7 +22,7 @@ cd mnemosyne-gcc/usermode/library/pmalloc/include/alps
 mkdir build
 cd build
 cmake .. -DTARGET_ARCH_MEM=CC-NUMA -DCMAKE_BUILD_TYPE=Release
-make -j
+make -j$(nproc)
 cd $dir_path/mnemosyne-gcc/usermode
 export PYTHONPATH=$dir_path/mnemosyne-gcc/usermode/library/configuration:$PYTHONPATH
 export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH

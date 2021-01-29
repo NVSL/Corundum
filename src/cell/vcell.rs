@@ -79,7 +79,7 @@ impl<T: Default + VSafe, A: MemPool> Deref for VCell<T, A> {
     fn deref(&self) -> &T {
         use std::intrinsics::*;
         unsafe {
-            let self_mut = self as *const Self as *mut Self;
+            let self_mut = crate::as_mut(self);
             let gen = &mut (*self_mut).gen;
             while atomic_load_acq(gen) == u32::MAX {}
 

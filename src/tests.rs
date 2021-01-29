@@ -267,7 +267,7 @@ pub(crate) mod problems {
 
     #[test]
     fn ref_cycle_mem_leak() {
-        use crate::alloc::default::*;
+        use crate::default::*;
         type P = BuddyAlloc;
 
         #[derive(Debug)]
@@ -313,7 +313,7 @@ pub(crate) mod problems {
 
     #[test]
     fn test_vweak() {
-        use crate::alloc::default::*;
+        use crate::default::*;
         type P = BuddyAlloc;
 
         struct Root {
@@ -494,6 +494,45 @@ pub(crate) mod problems {
         let duration = start.elapsed();
         println!("Time elapsed in serial execution is: {:?}", duration);
         println!("usage = {} bytes", BuddyAlloc::used());
+    }
+
+    #[test]
+    fn parc_two_threads() {
+        use crate::default::*;
+
+        type P = BuddyAlloc;
+        let root = P::open::<Parc<i32>>("parc_two_threads.pool", O_CFNE).unwrap();
+        println!("usage: {}", P::used());
+        println!("strong = {}", Parc::strong_count(&root));
+        let c1 = root.demote();
+        let c2 = root.demote();
+        let t1 = std::thread::spawn(move || {
+            let _=P::transaction(|j| {
+                if let Some(p) = c2.promote(j) {
+                    let m = p.pclone(j);
+                    println!("strong(t1) = {}", Parc::strong_count(&m));
+                    std::thread::sleep(std::time::Duration::from_millis(30));
+                    println!("t1 is done");
+                }
+            });
+        });
+        
+        let t2 = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(25));
+            let _ = P::transaction(|j| {
+                if let Some(p) = c1.promote(j) {
+                    let m = p.pclone(j);
+                    println!("strong(t2) = {}", Parc::strong_count(&m));
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                    // std::process::exit(0);
+                    panic!("abort");
+                }
+            });
+        });
+
+        t1.join().unwrap();
+        t2.join().unwrap();
+        assert_eq!(Parc::strong_count(&root), 1);
     }
 }
 
@@ -738,7 +777,7 @@ pub(crate) mod test {
 
     #[test]
     fn concat_test() {
-        use crate::alloc::default::*;
+        use crate::default::*;
 
         type P = BuddyAlloc;
         type Ptr = Option<Prc<PRefCell<Node>>>;
@@ -771,7 +810,7 @@ pub(crate) mod test {
 
     #[test]
     fn prc_test() {
-        use crate::alloc::default::*;
+        use crate::default::*;
 
         let _image = A::open_no_root("nosb.pool", O_CF).unwrap();
 
@@ -968,7 +1007,7 @@ pub(crate) mod test {
 
     #[test]
     fn test_gadget_owners() {
-        use crate::alloc::default::*;
+        use crate::default::*;
 
         let _image = A::open_no_root("nosb.pool", O_CF);
         struct Owner {
@@ -1087,7 +1126,7 @@ pub(crate) mod test {
     #[test]
     #[allow(clippy::comparison_chain)]
     fn test_dblist() {
-        use crate::alloc::default::{*, prc::PWeak};
+        use crate::default::{*, prc::PWeak};
 
         struct SB {
             root: Prc<PRefCell<Node<i32>>>,
@@ -1325,7 +1364,7 @@ pub(crate) mod test {
 
     #[test]
     fn test_transaction() {
-        use crate::alloc::default::*;
+        use crate::default::*;
 
         let _heap = A::open_no_root("nosb.pool", O_CF);
         A::transaction(|j| {
@@ -1339,7 +1378,7 @@ pub(crate) mod test {
 
     #[test]
     fn test_logs() {
-        use crate::alloc::default::*;
+        use crate::default::*;
 
         struct Root {
             head: Option<PRefCell<i32>>,
@@ -1464,7 +1503,7 @@ pub(crate) mod test {
 
     #[test]
     fn test_mutex() {
-        use crate::alloc::default::*;
+        use crate::default::*;
 
         struct SB {
             root: Option<Prc<PMutex<i32>>>,
@@ -1691,7 +1730,7 @@ pub(crate) mod test {
 
     #[test]
     fn propagate_panic() {
-        use crate::alloc::default::*;
+        use crate::default::*;
 
         let _image = A::open_no_root("nosb.pool", O_CF);
         if A::transaction(|j| {
@@ -1721,7 +1760,7 @@ pub(crate) mod test {
     #[test]
     #[should_panic]
     fn outside_tx() {
-        use crate::alloc::default::*;
+        use crate::default::*;
 
         let _image = A::open_no_root("nosb.pool", O_CF);
         let b = PRefCell::new(10);

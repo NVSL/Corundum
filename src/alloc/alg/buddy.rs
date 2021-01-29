@@ -203,6 +203,7 @@ impl<A: MemPool> BuddyAlg<A> {
     #[inline]
     /// Adds a new low-level 64-bit log entry
     pub unsafe fn log(&mut self, off: u64, data: u64) {
+        self.aux_valid = true;
         self.log64.push((off, data));
     }
 
@@ -943,7 +944,7 @@ macro_rules! pool {
             /// To define a new buddy allocator type as a memory pool, you may
             /// use [`pool!()`] macro. 
             /// 
-            /// [`pool!()`]: ../../macro.pool.html
+            /// [`pool!()`]: ../macro.pool.html
             pub struct BuddyAlloc {}
 
             static mut BUDDY_INNER: Option<&'static mut BuddyAllocInner> = None;
@@ -1489,10 +1490,6 @@ macro_rules! pool {
         }
     };
 }
-
-// This is an example of defining a new buddy allocator type
-// `BuddyAlloc` is the default allocator with Buddy Allocation
-crate::pool!(default);
 
 #[cfg(feature = "verbose")]
 pub fn debug_alloc<A: MemPool>(addr: u64, len: usize, pre: usize, post: usize) {

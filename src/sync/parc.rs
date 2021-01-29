@@ -13,21 +13,18 @@ use std::hash::Hasher;
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 use std::ops::Deref;
-use std::sync::atomic::{self, AtomicBool, AtomicUsize, Ordering::*};
+use std::sync::atomic::{self, AtomicBool, Ordering::*};
 use std::*;
 
 const MAX_REFCOUNT: usize = (isize::MAX) as usize;
 
-#[derive(Debug)]
-struct Counter {
-    strong: AtomicUsize,
-    weak: AtomicUsize,
-
-    #[cfg(not(feature = "no_log_rc"))]
-    has_log: u8,
+struct Counter<A: MemPool> {
+    strong: usize,
+    weak: usize,
+    lock: VCell<u8, A>,
 }
 
-unsafe impl PSafe for Counter {}
+unsafe impl<A: MemPool> PSafe for Counter<A> {}
 
 /// The [`Parc`]'s inner data type
 /// 
@@ -36,7 +33,7 @@ unsafe impl PSafe for Counter {}
 /// 
 /// [`Parc`]: #
 pub struct ParcInner<T: ?Sized, A: MemPool> {
-    counter: Counter,
+    counter: Counter<A>,
 
     #[cfg(not(feature = "no_volatile_pointers"))]
     vlist: VCell<VWeakList, A>,
@@ -189,11 +186,9 @@ impl<T: PSafe, A: MemPool> Parc<T, A> {
             let ptr = Ptr::new_unchecked(A::new(
                 ParcInner::<T, A> {
                     counter: Counter {
-                        strong: AtomicUsize::new(1),
-                        weak: AtomicUsize::new(1),
-
-                        #[cfg(not(feature = "no_log_rc"))]
-                        has_log: 0,
+                        strong: 1,
+                        weak: 1,
+                        lock: VCell::new(0),
                     },
 
                     #[cfg(not(feature = "no_volatile_pointers"))]
@@ -234,11 +229,9 @@ impl<T: PSafe, A: MemPool> Parc<T, A> {
             Parc::from_inner(Ptr::from_mut(A::new(
                 ParcInner {
                     counter: Counter {
-                        strong: AtomicUsize::new(1),
-                        weak: AtomicUsize::new(1),
-
-                        #[cfg(not(feature = "no_log_rc"))]
-                        has_log: 0,
+                        strong: 1,
+                        weak: 1,
+                        lock: VCell::new(0),
                     },
 
                     #[cfg(not(feature = "no_volatile_pointers"))]
@@ -291,8 +284,8 @@ impl<T: PSafe + ?Sized, A: MemPool> Parc<T, A> {
     }
 
     #[inline(always)]
-    fn inner(&self) -> &ParcInner<T, A> {
-        self.ptr.as_ref()
+    fn inner(&self) -> &mut ParcInner<T, A> {
+        self.ptr.get_mut()
     }
 
     #[allow(clippy::missing_safety_doc)]
@@ -300,21 +293,19 @@ impl<T: PSafe + ?Sized, A: MemPool> Parc<T, A> {
         let off = A::off_unchecked(ptr);
         let res = Self::from_inner(Ptr::from_off_unchecked(off));
 
-        #[cfg(not(feature = "no_log_rc"))]
-        res.log_count(j);
-
-        res.inner().counter.strong.fetch_add(1, Relaxed);
+        fetch_inc((*ptr).counter.lock.as_mut(), &mut (*ptr).counter.strong, j);
 
         res
     }
 
     #[inline(never)]
-    unsafe fn drop_slow(&mut self) {
+    unsafe fn drop_slow(&mut self, j: &Journal<A>) {
         // Destroy the data at this time, even though we may not free the box
         // allocation itself (there may still be weak pointers lying around).
         std::ptr::drop_in_place(&mut self.ptr.as_mut().value);
 
-        if self.inner().counter.weak.fetch_sub(1, Release) == 1 {
+        let inner = self.inner();
+        if fetch_dec(inner.counter.lock.as_mut(), &mut inner.counter.weak, j) == 1 {
             atomic::fence(Acquire);
             A::free(self.ptr.as_mut());
 
@@ -454,20 +445,18 @@ impl<T: PSafe + ?Sized, A: MemPool> Parc<T, A> {
     /// ```
     /// 
     /// [`upgrade`]: ./struct.Weak.html#method.upgrade
-    pub fn downgrade(this: &Self, _journal: &Journal<A>) -> Weak<T, A> {
+    pub fn downgrade(this: &Self, j: &Journal<A>) -> Weak<T, A> {
+        let inner = this.inner();
         // This Relaxed is OK because we're checking the value in the CAS
         // below.
-        let mut cur = this.inner().counter.weak.load(Relaxed);
+        let mut cur = load(inner.counter.lock.as_mut(), &mut inner.counter.weak);
 
         loop {
             // check if the weak counter is currently "locked"; if so, spin.
             if cur == usize::MAX {
-                cur = this.inner().counter.weak.load(Relaxed);
+                cur = load(inner.counter.lock.as_mut(), &mut inner.counter.weak);
                 continue;
             }
-
-            #[cfg(not(feature = "no_log_rc"))]
-            this.log_count(_journal);
 
             // NOTE: this code currently ignores the possibility of overflow
             // into usize::MAX; in general both Rc and Arc need to be adjusted
@@ -476,11 +465,12 @@ impl<T: PSafe + ?Sized, A: MemPool> Parc<T, A> {
             // Unlike with Clone(), we need this to be an Acquire read to
             // synchronize with the write coming from `is_unique`, so that the
             // events prior to that write happen before this read.
-            match this
-                .inner()
-                .counter
-                .weak
-                .compare_exchange_weak(cur, cur + 1, Acquire, Relaxed)
+            match compare_exchange_weak(
+                inner.counter.lock.as_mut(),
+                &mut inner.counter.weak,
+                cur,
+                cur + 1,
+                j)
             {
                 Ok(_) => {
                     // Make sure we do not create a dangling Weak
@@ -555,7 +545,8 @@ impl<T: PSafe + ?Sized, A: MemPool> Parc<T, A> {
     /// }).unwrap()
     /// ```
     pub fn weak_count(this: &Self) -> usize {
-        let cnt = this.inner().counter.weak.load(SeqCst);
+        let inner = this.inner();
+        let cnt = load(inner.counter.lock.as_mut(), &this.inner().counter.weak);
         // If the weak count is currently locked, the value of the
         // count was 0 just before taking the lock.
         if cnt == usize::MAX {
@@ -582,7 +573,8 @@ impl<T: PSafe + ?Sized, A: MemPool> Parc<T, A> {
     /// }).unwrap();
     /// ```
     pub fn strong_count(this: &Self) -> usize {
-        this.inner().counter.strong.load(SeqCst)
+        let inner = this.inner();
+        load(inner.counter.lock.as_mut(), &this.inner().counter.strong)
     }
 
     #[inline]
@@ -673,11 +665,9 @@ impl<T: PSafe, A: MemPool> Parc<T, A> {
                     let new = A::atomic_new(
                         ParcInner::<T, A> {
                             counter: Counter {
-                                strong: AtomicUsize::new(1),
-                                weak: AtomicUsize::new(1),
-        
-                                #[cfg(not(feature = "no_log_rc"))]
-                                has_log: 0,
+                                strong: 1,
+                                weak: 1,
+                                lock: VCell::new(0),
                             },
         
                             #[cfg(not(feature = "no_volatile_pointers"))]
@@ -736,33 +726,31 @@ unsafe impl<#[may_dangle] T: PSafe + ?Sized, A: MemPool> Drop for Parc<T, A> {
     ///
     fn drop(&mut self) {
         unsafe {
-            #[cfg(not(feature = "no_log_rc"))]
-            {
-                let journal = Journal::<A>::current(true).unwrap();
-                self.log_count(journal.0);
-            }
+            let journal = &*Journal::<A>::current(true).unwrap().0;
+            let inner = self.inner();
 
             // Because `fetch_sub` is already atomic, we do not need to synchronize
             // with other threads unless we are going to delete the object. This
             // same logic applies to the below `fetch_sub` to the `weak` count.
-            if self.inner().counter.strong.fetch_sub(1, Release) != 1 {
+            if fetch_dec(inner.counter.lock.as_mut(),
+                &mut inner.counter.strong, journal) != 1
+            {
                 return;
             }
 
             atomic::fence(Acquire);
 
-            self.drop_slow();
+            self.drop_slow(journal);
         }
     }
 }
 
 impl<T: PSafe + ?Sized, A: MemPool> PClone<A> for Parc<T, A> {
     #[inline]
-    fn pclone(&self, _journal: &Journal<A>) -> Parc<T, A> {
-        #[cfg(not(feature = "no_log_rc"))]
-        self.log_count(_journal);
-
-        let old_size = self.inner().counter.strong.fetch_add(1, Relaxed);
+    fn pclone(&self, j: &Journal<A>) -> Parc<T, A> {
+        let inner = self.inner();
+        let old_size = fetch_inc(inner.counter.lock.as_mut(),
+                        &mut inner.counter.strong, j);
 
         // However we need to guard against massive ref counts in case someone
         // is `mem::forget`ing Arcs. If we don't do this the count can overflow
@@ -985,7 +973,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Weak<T, A> {
     ///     assert!(weak_five.upgrade(j).is_none());
     /// }).unwrap()
     /// ```
-    pub fn upgrade(&self, _journal: &Journal<A>) -> Option<Parc<T, A>> {
+    pub fn upgrade(&self, j: &Journal<A>) -> Option<Parc<T, A>> {
         // We use a CAS loop to increment the strong count instead of a
         // fetch_add because once the count hits 0 it must never be above 0.
         let inner = self.inner()?;
@@ -994,7 +982,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Weak<T, A> {
         // leaves the field in a permanently zero state (so a
         // "stale" read of 0 is fine), and any other value is
         // confirmed via the CAS below.
-        let mut n = inner.counter.strong.load(Relaxed);
+        let mut n = load(inner.counter.lock.as_mut(), &inner.counter.strong);
 
         loop {
             if n == 0 {
@@ -1006,14 +994,9 @@ impl<T: PSafe + ?Sized, A: MemPool> Weak<T, A> {
                 std::process::abort();
             }
 
-            #[cfg(not(feature = "no_log_rc"))]
-            inner.log_count(_journal);
-
             // Relaxed is valid for the same reason it is on Arc's Clone impl
-            match inner
-                .counter
-                .strong
-                .compare_exchange_weak(n, n + 1, Relaxed, Relaxed)
+            match compare_exchange_weak(inner.counter.lock.as_mut(),
+                &mut inner.counter.strong, n, n+1, j)
             {
                 Ok(_) => return Some(Parc::from_inner(self.ptr)), // null checked above
                 Err(old) => n = old,
@@ -1026,7 +1009,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Weak<T, A> {
     /// If `self` was created using [`Weak::new`], this will return 0.
     pub fn strong_count(&self) -> usize {
         if let Some(inner) = self.inner() {
-            inner.counter.strong.load(SeqCst)
+            load(inner.counter.lock.as_mut(), &inner.counter.strong)
         } else {
             0
         }
@@ -1046,8 +1029,8 @@ impl<T: PSafe + ?Sized, A: MemPool> Weak<T, A> {
     pub fn weak_count(&self) -> usize {
         self.inner()
             .map(|inner| {
-                let weak = inner.counter.weak.load(SeqCst);
-                let strong = inner.counter.strong.load(SeqCst);
+                let weak = load(inner.counter.lock.as_mut(), &inner.counter.weak);
+                let strong = load(inner.counter.lock.as_mut(), &inner.counter.strong);
                 if strong == 0 {
                     0
                 } else {
@@ -1063,7 +1046,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Weak<T, A> {
     }
 
     #[inline]
-    fn inner(&self) -> Option<&ParcInner<T, A>> {
+    fn inner(&self) -> Option<&mut ParcInner<T, A>> {
         if self.ptr.is_dangling() {
             None
         } else {
@@ -1089,11 +1072,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Weak<T, A> {
 impl<T: PSafe + ?Sized, A: MemPool> Drop for Weak<T, A> {
     fn drop(&mut self) {
         if let Some(_inner) = self.inner() {
-            #[cfg(not(feature = "no_log_rc"))]
-            {
-                let journal = Journal::<A>::current(true).unwrap();
-                _inner.log_count(journal.0);
-            }
+            let j = unsafe { &*Journal::<A>::current(true).unwrap().0 };
 
             // If we find out that we were the last weak pointer, then its time to
             // deallocate the data entirely. See the discussion in Arc::drop() about
@@ -1109,7 +1088,9 @@ impl<T: PSafe + ?Sized, A: MemPool> Drop for Weak<T, A> {
                 return;
             };
 
-            if inner.counter.weak.fetch_sub(1, Release) == 1 {
+            if fetch_dec(inner.counter.lock.as_mut(),
+                &mut inner.counter.weak, j) == 1 
+            {
                 atomic::fence(Acquire);
                 unsafe {
                     A::free(self.ptr.as_mut());
@@ -1121,21 +1102,19 @@ impl<T: PSafe + ?Sized, A: MemPool> Drop for Weak<T, A> {
 
 impl<T: PSafe + ?Sized, A: MemPool> PClone<A> for Weak<T, A> {
     #[inline]
-    fn pclone(&self, _journal: &Journal<A>) -> Weak<T, A> {
+    fn pclone(&self, j: &Journal<A>) -> Weak<T, A> {
         let inner = if let Some(inner) = self.inner() {
             inner
         } else {
             return Weak { ptr: self.ptr };
         };
 
-        #[cfg(not(feature = "no_log_rc"))]
-        inner.log_count(_journal);
-
         // See comments in Arc::clone() for why this is relaxed.  This can use a
         // fetch_add (ignoring the lock) because the weak count is only locked
         // where are *no other* weak pointers in existence. (So we can't be
         // running this code in that case).
-        let old_size = inner.counter.weak.fetch_add(1, Relaxed);
+        let old_size = fetch_inc(inner.counter.lock.as_mut(),
+                        &mut inner.counter.weak, j);
 
         // See comments in Arc::clone() for why we do this (for mem::forget).
         if old_size > MAX_REFCOUNT {
@@ -1159,34 +1138,133 @@ impl<T: PSafe + ?Sized, A: MemPool> Default for Weak<T, A> {
 }
 
 trait ParcBoxPtr<T: PSafe + ?Sized, A: MemPool> {
-    fn count(&self) -> &Counter;
+    fn count(&self) -> &Counter<A>;
+}
 
-    #[inline]
-    #[cfg(not(feature = "no_log_rc"))]
-    fn log_count(&self, journal: *const Journal<A>) {
-        let inner = self.count();
+#[inline]
+fn load(lock: *mut u8, cnt: &usize) -> usize {
+    unsafe {
+        while std::intrinsics::atomic_cxchg_acqrel(lock, 0, 1).0 == 1 {}
+        let res = *cnt;
+        std::intrinsics::atomic_store_rel(lock, 0);
+        res
+    }
+}
 
-        unsafe {
-            if A::contains(inner as *const _ as *const u8 as u64) {
-                let flag = &inner.has_log as *const u8 as *mut u8;
-                if std::intrinsics::atomic_cxchg_acqrel(flag, 0, 1).0 == 0 {
-                    inner.take_log(&*journal, Notifier::Atomic(Ptr::from_ref(&inner.has_log)));
-                }
+#[inline]
+fn fetch_inc<A: MemPool>(lock: *mut u8, cnt: &mut usize, journal: &Journal<A>) -> usize {
+    unsafe {
+        while std::intrinsics::atomic_cxchg_acqrel(lock, 0, 1).0 == 1 {}
+
+        let mut log = if cfg!(not(feature = "no_log_rc")) {
+            if A::valid(cnt) {
+                Log::recount_on_failure(u64::MAX, false, journal)
+            } else {
+                Ptr::dangling()
             }
+        } else {
+            Ptr::dangling()
+        };
+        
+        let res = *cnt;
+        if log.is_dangling() {
+            *cnt += 1;
+        } else {
+            let off = A::off_unchecked(cnt);
+            let z = A::zone(off);
+            A::log64(off, res as u64 + 1, z);
+            log.set(off, 1, z);
+            A::perform(z);
         }
+
+        std::intrinsics::atomic_store_rel(lock, 0);
+        res
+    }
+}
+
+#[inline]
+fn fetch_dec<A: MemPool>(lock: *mut u8, cnt: &mut usize, journal: &Journal<A>) -> usize {
+    unsafe {
+        while std::intrinsics::atomic_cxchg_acqrel(lock, 0, 1).0 == 1 {}
+        
+        let mut log = if cfg!(not(feature = "no_log_rc")) {
+            if A::valid(cnt) {
+                Log::recount_on_failure(u64::MAX, true, journal)
+            } else {
+                Ptr::dangling()
+            }
+        } else {
+            Ptr::dangling()
+        };
+        
+        let res = *cnt;
+        if log.is_dangling() {
+            *cnt -= 1;
+        } else {
+            let off = A::off_unchecked(cnt);
+            let z = A::zone(off);
+            A::log64(off, res as u64 - 1, z);
+            log.set(off, 1, z);
+            A::perform(z);
+        }
+
+        std::intrinsics::atomic_store_rel(lock, 0);
+        res
+    }
+}
+
+#[inline]
+fn compare_exchange_weak<A: MemPool>(
+    lock: *mut u8,
+    cnt: &mut usize, 
+    current: usize,
+    new: usize,
+    journal: &Journal<A>) -> Result<usize, usize> 
+{
+    unsafe {
+        while std::intrinsics::atomic_cxchg_acqrel(lock, 0, 1).0 == 1 {}
+
+
+        let mut log = if cfg!(not(feature = "no_log_rc")) {
+            if A::valid(cnt) {
+                Log::recount_on_failure(u64::MAX, false, journal)
+            } else {
+                Ptr::dangling()
+            }
+        } else {
+            Ptr::dangling()
+        };
+
+        let res = if *cnt == current {
+            if log.is_dangling() {
+                *cnt = new;
+            } else {
+                let off = A::off_unchecked(cnt);
+                let z = A::zone(off);
+                A::log64(off, new as u64, z);
+                log.set(off, 1, z);
+                A::perform(z);
+            }
+            Ok(new)
+        } else {
+            Err(*cnt)
+        };
+
+        std::intrinsics::atomic_store_rel(lock, 0);
+        res
     }
 }
 
 impl<T: PSafe + ?Sized, A: MemPool> ParcBoxPtr<T, A> for Parc<T, A> {
     #[inline(always)]
-    fn count(&self) -> &Counter {
+    fn count(&self) -> &Counter<A> {
         &self.ptr.counter
     }
 }
 
 impl<T: PSafe + ?Sized, A: MemPool> ParcBoxPtr<T, A> for ParcInner<T, A> {
     #[inline(always)]
-    fn count(&self) -> &Counter {
+    fn count(&self) -> &Counter<A> {
         &self.counter
     }
 }
@@ -1240,7 +1318,7 @@ fn data_offset_align<A: MemPool>(align: usize) -> isize {
 /// [`Parc::demote`]: ./struct.Parc.html#method.demote
 /// [`upgrade`]: #method.upgrade
 pub struct VWeak<T: ?Sized, A: MemPool> {
-    ptr: *const ParcInner<T, A>,
+    ptr: *mut ParcInner<T, A>,
     valid: *mut VWeakValid,
     gen: u32,
 }
@@ -1257,7 +1335,7 @@ impl<T: PSafe + ?Sized, A: MemPool> VWeak<T, A> {
     fn new(parc: &Parc<T, A>) -> VWeak<T, A> {
         let list = parc.ptr.vlist.as_mut();
         VWeak {
-            ptr: parc.ptr.as_ptr(),
+            ptr: parc.ptr.get_mut_ptr(),
             valid: list.append(),
             gen: A::gen(),
         }
@@ -1297,7 +1375,7 @@ impl<T: PSafe + ?Sized, A: MemPool> VWeak<T, A> {
     ///     assert!(vweak_obj.promote(j).is_none());
     /// }).unwrap();
     /// ```
-    pub fn promote(&self, _journal: &Journal<A>) -> Option<Parc<T, A>> {
+    pub fn promote(&self, j: &Journal<A>) -> Option<Parc<T, A>> {
         // We use a CAS loop to increment the strong count instead of a
         // fetch_add as this function should never take the reference count
         // from zero to one.
@@ -1307,7 +1385,7 @@ impl<T: PSafe + ?Sized, A: MemPool> VWeak<T, A> {
         // leaves the field in a permanently zero state (so a
         // "stale" read of 0 is fine), and any other value is
         // confirmed via the CAS below.
-        let mut n = inner.counter.strong.load(Relaxed);
+        let mut n = load(inner.counter.lock.as_mut(), &inner.counter.strong);
 
         loop {
             if n == 0 {
@@ -1319,14 +1397,11 @@ impl<T: PSafe + ?Sized, A: MemPool> VWeak<T, A> {
                 std::process::abort();
             }
 
-            #[cfg(not(feature = "no_log_rc"))]
-            inner.log_count(_journal);
-
             // Relaxed is fine for the failure case because we don't have any expectations about the new state.
             // Acquire is necessary for the success case to synchronise with `Arc::new_cyclic`, when the inner
             // value can be initialized after `Weak` references have already been created. In that case, we
             // expect to observe the fully initialized value.
-            match inner.counter.strong.compare_exchange_weak(n, n + 1, Acquire, Relaxed) {
+            match compare_exchange_weak(inner.counter.lock.as_mut(), &mut inner.counter.strong, n, n + 1, j) {
                 Ok(_) => return Some(Parc::from_inner(Ptr::from_raw(self.ptr))), // null checked above
                 Err(old) => n = old,
             }
@@ -1334,12 +1409,12 @@ impl<T: PSafe + ?Sized, A: MemPool> VWeak<T, A> {
     }
 
     #[inline]
-    fn inner(&self) -> Option<&ParcInner<T, A>> {
+    fn inner(&self) -> Option<&mut ParcInner<T, A>> {
         unsafe {
             if !(*self.valid).valid.load(Acquire) || self.gen != A::gen() {
                 None
             } else {
-                Some(&*self.ptr)
+                Some(&mut *self.ptr)
             }
         }
     }

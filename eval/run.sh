@@ -65,7 +65,6 @@ done
 source $HOME/.cargo/env
 rustup default nightly
 
-
 [ -f $dir_path/inputs.tar.gz ] && \
     tar xzvf $dir_path/inputs.tar.gz -C $dir_path && \
     rm -f $dir_path/inputs.tar.gz && \

@@ -94,6 +94,12 @@ impl<A: MemPool, T: ?Sized> Ptr<T, A> {
 
     #[inline]
     /// Returns the mutable raw pointer of the value
+    pub(crate) fn get_mut_ptr(&self) -> *mut T {
+        unsafe { A::get_mut_unchecked(self.off) }
+    }
+
+    #[inline]
+    /// Returns the mutable raw pointer of the value
     pub(crate) fn as_ptr(&self) -> *const T {
         unsafe { A::get_mut_unchecked(self.off) }
     }

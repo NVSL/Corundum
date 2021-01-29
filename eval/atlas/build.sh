@@ -11,4 +11,4 @@ cd Atlas/compiler-plugin
 cd ../runtime
 mkdir build
 cd build
-cmake -D CMAKE_BUILD_TYPE=Release .. && make -j
+cmake -D CMAKE_BUILD_TYPE=Release .. && make -j$(nproc)

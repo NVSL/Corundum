@@ -156,9 +156,12 @@ mod tests;
 pub use cell::RootObj;
 pub use marker::*;
 
-pub use alloc::default;
 pub use crndm_derive::*;
 pub use stm::transaction;
+
+// This is an example of defining a new buddy allocator type
+// `BuddyAlloc` is the default allocator with Buddy Allocation
+crate::pool!(default);
 
 /// A `Result` type with string error messages
 pub mod result {

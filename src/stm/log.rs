@@ -1,3 +1,4 @@
+use std::sync::atomic::AtomicUsize;
 use crate::alloc::MemPool;
 use crate::ll::*;
 use crate::ptr::Ptr;
@@ -32,6 +33,10 @@ pub enum LogEnum {
     /// on failure, useful for high-level allocation.
     DropOnFailure(u64, usize),
 
+    /// `(src, inc/dec)`: A log indicating that the object is a counter
+    /// and should increment/decrement on failure.
+    RecountOnFailure(u64, bool),
+
     /// Unlocks a [`Mutex`](../sync/struct.Mutex.html) on transaction commit.
     UnlockOnCommit(u64),
     None,
@@ -52,6 +57,7 @@ impl Debug for LogEnum {
             DropOnAbort(off, _) => write!(f, "DropOnAbort({})", offset_to_str(off)),
             DropOnCommit(off, _) => write!(f, "DropOnCommit({})", offset_to_str(off)),
             DropOnFailure(off, _) => write!(f, "DropOnFailure({})", offset_to_str(off)),
+            RecountOnFailure(off, _) => write!(f, "RecountOnFailure({})", offset_to_str(off)),
             UnlockOnCommit(off) => write!(f, "UnlockOnCommit({})", offset_to_str(off)),
             None => write!(f, "None"),
         }
@@ -247,6 +253,9 @@ impl<A: MemPool> Log<A> {
                 A::log64(A::off_unchecked(offset), off, zone);
                 A::log64(A::off_unchecked(length), len as u64, zone);
             },
+            RecountOnFailure(offset, _) => unsafe {
+                A::log64(A::off_unchecked(offset), off, zone);
+            }
             _ => {}
         }
     }
@@ -425,6 +434,19 @@ impl<A: MemPool> Log<A> {
         Self::write_on_journal(UnlockOnCommit(virt_addr), journal, Notifier::None);
     }
 
+    /// Creates a new [`DropOnCommit`](./enum.LogEnum.html#variant.DropOnCommit)
+    /// log and writes it on `journal`
+    #[inline]
+    #[track_caller]
+    pub fn recount_on_failure(offset: u64, inc: bool, journal: &Journal<A>) -> Ptr<Log<A>, A> {
+        log!(A, Yellow, "NEW LOG", "FOR:         ({:>4}..{:<4}) = {:<5} RecountOnFailure({})",
+            offset_to_str(offset),
+            offset_to_str((offset as usize + 7) as u64),
+            8, atomic
+        );
+        Self::write_on_journal(RecountOnFailure(offset, inc), journal, Notifier::None)
+    }
+
     fn rollback_datalog(src: &mut u64, log: &mut u64, len: &usize) {
         debug_assert_ne!(*len, 0);
 
@@ -486,6 +508,20 @@ impl<A: MemPool> Log<A> {
                         A::log64(A::off_unchecked(src), u64::MAX, z);
                         A::perform(z);
                     }
+                }
+            }
+            RecountOnFailure(src, inc) => {
+                if *src != u64::MAX {
+                    debug_assert!(A::allocated(*src, 1), "Access Violation");
+                    let c = A::get_mut_unchecked::<AtomicUsize>(*src).get_mut();
+                    let z = A::zone(*src);
+                    if *inc {
+                        A::log64(A::off_unchecked(c), *c as u64 + 1, z);
+                    } else {
+                        A::log64(A::off_unchecked(c), *c as u64 - 1, z);
+                    }
+                    A::log64(A::off_unchecked(src), u64::MAX, z);
+                    A::perform(z);
                 }
             }
             UnlockOnCommit(src) => {
