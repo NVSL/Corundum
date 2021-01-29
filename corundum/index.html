@@ -11,8 +11,8 @@ confidence that they will be free of those bugs.</p>
 <tr><td>P-to-V Pointers</td><td>A persistent pointer pointing at demote memory</td><td>Persistent pointers accept only <a href="./trait.PSafe.html"><code>PSafe</code></a> types and demote pointers are <code>!PSafe</code>. Only, <a href="./cell/struct.VCell.html"><code>VCell</code></a> allows single-execution P-to-V pointers.</td></tr>
 <tr><td>V-to-P Pointers</td><td>A demote pointer keeping a zero-referenced object alive</td><td>Only <a href="./prc/struct.VWeak.html"><code>VWeak</code></a> allows V-to-P pointers which is a weak reference and does not keep data alive.</td></tr>
 <tr><td>Unlogged Updates</td><td>An unrecoverable update to persistent data</td><td>Modifications are enforced to be inside atomic <a href="./alloc/trait.MemPool.html#method.transaction"><code>transaction</code></a>s.</td></tr>
-<tr><td>Data Race</td><td>Updating persistent data simultaneously in two threads</td><td>Mutable borrowing is limited to <a href="./sync/struct.Mutex.html"><code>Mutex</code></a> which uses a transaction-wide lock to provide both atomicity and isolation.</td></tr>
-<tr><td>Locked Mutex</td><td>A persistent mutex remains locked on powerfail</td><td><a href="./sync/struct.Mutex.html"><code>Mutex</code></a> uses <a href="./cell/struct.VCell.html"><code>VCell</code></a> which resets at restart.</td></tr>
+<tr><td>Data Race</td><td>Updating persistent data simultaneously in two threads</td><td>Mutable borrowing is limited to <a href="./sync/struct.PMutex.html"><code>PMutex</code></a> which uses a transaction-wide lock to provide both atomicity and isolation.</td></tr>
+<tr><td>Locked Mutex</td><td>A persistent mutex remains locked on powerfail</td><td><a href="./sync/struct.PMutex.html"><code>PMutex</code></a> uses <a href="./cell/struct.VCell.html"><code>VCell</code></a> which resets at restart.</td></tr>
 <tr><td>Memory Leaks*</td><td>An allocated memory becomes unreachable</td><td>Persistent objects, except the root object, cannot cross transaction boundaries, and memory allocation is available only inside a transaction. Therefore, the allocation can survive only if there is a reference from the root object (or a decedent of it) to the data. <br>* Cyclic references are not prevented in this version, which lead to a memory leak.</td></tr>
 </tbody></table>
 <h1 id="persistent-objects" class="section-header"><a href="#persistent-objects">Persistent Objects</a></h1>
@@ -42,7 +42,7 @@ following memory cells:</p>
 memory location for a value of type <code>T</code> in pool <code>P</code>.</li>
 <li><a href="./cell/struct.PRefCell.html"><code>PRefCell&lt;T,P&gt;</code></a> (or <a href="./alloc/default/type.PRefCell.html"><code>PRefCell&lt;T&gt;</code></a>): A mutable persistent memory location
 with dynamically checked borrow rules for a value of type <code>T</code> in pool <code>P</code>.</li>
-<li><a href="./sync/struct.Mutex.html"><code>Mutex&lt;T,P&gt;</code></a> (or <a href="./alloc/default/type.PMutex.html"><code>PMutex&lt;T&gt;</code></a>): A mutual exclusion primitive useful for
+<li><a href="./sync/struct.PMutex.html"><code>PMutex&lt;T,P&gt;</code></a> (or <a href="./alloc/default/type.PMutex.html"><code>PMutex&lt;T&gt;</code></a>): A mutual exclusion primitive useful for
 protecting shared persistent data of type <code>T</code> in pool <code>P</code>.</li>
 </ul>
 <p>The following example creates a pool file for a linked-list-based stack,
