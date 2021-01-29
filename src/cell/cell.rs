@@ -21,13 +21,13 @@ use std::{fmt, mem, ptr};
 ///
 /// It does not implement [`Sync`], so it is not possible to share `PCell`
 /// between threads. To provide thread-safe interior mutability, use
-/// [`Mutex`].
+/// [`PMutex`].
 /// 
 /// [`PCell`] is a compact version of `PCell` tha can be find in the pool
 /// module.
 ///
 /// [`Sync`]: std::marker::Sync
-/// [`Mutex`]: ../sync/mutex/struct.Mutex.html
+/// [`PMutex`]: ../sync/mutex/struct.PMutex.html
 /// [`PCell`]: ../alloc/default/type.PCell.html
 /// 
 pub struct PCell<T: PSafe + ?Sized, A: MemPool> {

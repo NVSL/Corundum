@@ -31,12 +31,12 @@ use std::panic::{RefUnwindSafe, UnwindSafe};
 ///
 /// It does not implement [`Sync`], so it is not possible to share `PRefCell`
 /// between threads. To provide thread-safe interior mutability, use
-/// [`Mutex`].
+/// [`PMutex`].
 /// 
 /// [`PRefCell`] is an alias name in the pool module for `PRefCell`.
 ///
 /// [`Sync`]: std::marker::Sync
-/// [`Mutex`]: ../sync/mutex/struct.Mutex.html
+/// [`PMutex`]: ../sync/mutex/struct.PMutex.html
 /// [`RwLock`]: ../sync/mutex/struct.RwLock.html
 /// [`PRefCell`]: ../alloc/default/type.PRefCell.html
 ///

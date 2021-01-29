@@ -188,7 +188,7 @@ pub type Prc<T> = crate::prc::Prc<T, Heap>;
 /// `<T,`[`Heap`](./struct.Heap.html)`>`.
 pub type Parc<T> = crate::sync::Parc<T, Heap>;
 
-/// Compact form of [`Mutex`](../../sync/struct.Mutex.html)
+/// Compact form of [`PMutex`](../../sync/struct.PMutex.html)
 /// `<T,`[`Heap`](./struct.Heap.html)`>`.
 pub type PMutex<T> = crate::sync::PMutex<T, Heap>;
 

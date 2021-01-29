@@ -36,7 +36,7 @@ pub enum LogEnum {
     /// and should increment/decrement on failure.
     RecountOnFailure(u64, bool),
 
-    /// Unlocks a [`Mutex`](../sync/struct.Mutex.html) on transaction commit.
+    /// Unlocks a [`PMutex`](../sync/struct.PMutex.html) on transaction commit.
     UnlockOnCommit(u64),
     None,
 }

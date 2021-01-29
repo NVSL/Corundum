@@ -11,8 +11,8 @@
 //! | P-to-V Pointers     | A persistent pointer pointing at demote memory | Persistent pointers accept only [`PSafe`] types and demote pointers are `!PSafe`. Only, [`VCell`] allows single-execution P-to-V pointers. |
 //! | V-to-P Pointers     | A demote pointer keeping a zero-referenced object alive | Only [`VWeak`] allows V-to-P pointers which is a weak reference and does not keep data alive. |
 //! | Unlogged Updates    | An unrecoverable update to persistent data | Modifications are enforced to be inside atomic [`transaction`]s. | 
-//! | Data Race           | Updating persistent data simultaneously in two threads | Mutable borrowing is limited to [`Mutex`] which uses a transaction-wide lock to provide both atomicity and isolation. |
-//! | Locked Mutex        | A persistent mutex remains locked on powerfail | [`Mutex`] uses [`VCell`] which resets at restart. |
+//! | Data Race           | Updating persistent data simultaneously in two threads | Mutable borrowing is limited to [`PMutex`] which uses a transaction-wide lock to provide both atomicity and isolation. |
+//! | Locked Mutex        | A persistent mutex remains locked on powerfail | [`PMutex`] uses [`VCell`] which resets at restart. |
 //! | Memory Leaks\*      | An allocated memory becomes unreachable | Persistent objects, except the root object, cannot cross transaction boundaries, and memory allocation is available only inside a transaction. Therefore, the allocation can survive only if there is a reference from the root object (or a decedent of it) to the data. <br>\* Cyclic references are not prevented in this version, which lead to a memory leak. |
 //!
 //! 
@@ -45,7 +45,7 @@
 //! memory location for a value of type `T` in pool `P`.
 //! * [`PRefCell<T,P>`] (or [`PRefCell<T>`]): A mutable persistent memory location
 //! with dynamically checked borrow rules for a value of type `T` in pool `P`.
-//! * [`Mutex<T,P>`] (or [`PMutex<T>`]): A mutual exclusion primitive useful for
+//! * [`PMutex<T,P>`] (or [`PMutex<T>`]): A mutual exclusion primitive useful for
 //! protecting shared persistent data of type `T` in pool `P`.
 //! 
 //! The following example creates a pool file for a linked-list-based stack,
@@ -80,7 +80,7 @@
 //! [`VCell`]: ./cell/struct.VCell.html
 //! [`VWeak`]: ./prc/struct.VWeak.html
 //! [`transaction`]:  ./alloc/trait.MemPool.html#method.transaction
-//! [`Mutex`]: ./sync/struct.Mutex.html
+//! [`PMutex`]: ./sync/struct.PMutex.html
 //! [`Pbox`]: ./boxed/struct.Pbox.html
 //! [`Prc`]: ./prc/struct.Prc.html
 //! [`Parc`]: ./sync/struct.Parc.html
@@ -91,7 +91,7 @@
 //! [`PCell<T>`]: ./alloc/default/type.PCell.html
 //! [`PRefCell<T,P>`]: ./cell/struct.PRefCell.html 
 //! [`PRefCell<T>`]: ./alloc/default/type.PRefCell.html
-//! [`Mutex<T,P>`]: ./sync/struct.Mutex.html
+//! [`PMutex<T,P>`]: ./sync/struct.PMutex.html
 //! [`PMutex<T>`]: ./alloc/default/type.PMutex.html
 //! [`open<T>()`]: ./alloc/struct.MemPool.html#method.open
 

@@ -109,7 +109,7 @@ unsafe fn set_data_ptr<T, U>(mut ptr: *mut T, data: *mut U) -> *mut T {
 /// # Mutability
 ///
 /// `Parc` doesn't provide mutable reference to the inner value. To allow
-/// interior mutability, you may use `Parc<`[`Mutex`]`<T,P>,P>` (or in short, 
+/// interior mutability, you may use `Parc<`[`PMutex`]`<T,P>,P>` (or in short, 
 /// `Parc<`[`PMutex`]`<T>>` using aliased types).
 ///
 /// ```
@@ -151,7 +151,7 @@ unsafe fn set_data_ptr<T, U>(mut ptr: *mut T, data: *mut U) -> *mut T {
 /// [`Journal`]: ../stm/journal/struct.Journal.html
 /// [`transaction`]: ../stm/fn.transaction.html
 /// [`Arc`]: std::sync::Arc
-/// [`Mutex`]: ./struct.Mutex.html
+/// [`PMutex`]: ./struct.PMutex.html
 /// [`PMutex`]: ../alloc/default/type.PMutex.html
 /// [`pclone`]: #impl-PClone
 /// [`demote()`]: #method.demote

@@ -772,7 +772,7 @@ mod test {
 /// * `Pbox<T>` = [`corundum::boxed::Pbox`]`<T, `[`BuddyAlloc`]`>`
 /// * `Prc<T>` = [`corundum::prc::Prc`]`<T, `[`BuddyAlloc`]`>`
 /// * `Parc<T>` = [`corundum::sync::Parc`]`<T, `[`BuddyAlloc`]`>`
-/// * `PMutex<T>` = [`corundum::sync::Mutex`]`<T, `[`BuddyAlloc`]`>`
+/// * `PMutex<T>` = [`corundum::sync::PMutex`]`<T, `[`BuddyAlloc`]`>`
 /// * `PCell<T>` = [`corundum::cell::PCell`]`<T, `[`BuddyAlloc`]`>`
 /// * `PRefCell<T>` = [`corundum::cell::PRefCell`]`<T, `[`BuddyAlloc`]`>`
 /// * `VCell<T>` = [`corundum::cell::VCell`]`<T, `[`BuddyAlloc`]`>`
@@ -825,7 +825,7 @@ mod test {
 /// [`corundum::boxed::Pbox`]: ./boxed/struct.Pbox.html
 /// [`corundum::prc::Prc`]: ./prc/struct.Prc.html
 /// [`corundum::sync::Parc`]: ./sync/struct.Parc.html
-/// [`corundum::sync::Mutex`]: ./sync/struct.Mutex.html
+/// [`corundum::sync::PMutex`]: ./sync/struct.PMutex.html
 /// [`corundum::cell::PCell`]: ./cell/struct.PCell.html
 /// [`corundum::cell::PRefCell`]: ./cell/struct.PRefCell.html
 /// [`corundum::cell::VCell`]: ./cell/struct.VCell.html
@@ -1444,7 +1444,7 @@ macro_rules! pool {
             /// `<T,`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
             pub type Parc<T> = $crate::sync::Parc<T, BuddyAlloc>;
 
-            /// Compact form of [`Mutex`](../../sync/struct.Mutex.html)
+            /// Compact form of [`PMutex`](../../sync/struct.PMutex.html)
             /// `<T,`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
             pub type PMutex<T> = $crate::sync::PMutex<T, BuddyAlloc>;
 
