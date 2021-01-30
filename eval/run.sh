@@ -126,7 +126,7 @@ if $all || $atlas; then
     echo "Running performance test (Atlas-KVStore:PUT)..."
     perf stat -o $dir_path/outputs/perf/atlas-kv-PUT.out -d $dir_path/atlas/Atlas/runtime/build/tests/data_structures/simplekv burst put 65536
     echo "Running performance test (Atlas-KVStore:GET)..."
-    perf stat-o $dir_path/outputs/perf/atlas-kv-GET.out -d $dir_path/atlas/Atlas/runtime/build/tests/data_structures/simplekv burst get 65536
+    perf stat -o $dir_path/outputs/perf/atlas-kv-GET.out -d $dir_path/atlas/Atlas/runtime/build/tests/data_structures/simplekv burst get 65536
 
     rm -rf /mnt/pmem0/`whoami`  # Static in the code
     for i in ${ins[@]}; do
