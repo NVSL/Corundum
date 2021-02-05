@@ -655,6 +655,8 @@
 <span id="652">652</span>
 <span id="653">653</span>
 <span id="654">654</span>
+<span id="655">655</span>
+<span id="656">656</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! A persistent pointer type for persistent memory allocation</span>
 
@@ -1084,9 +1086,11 @@
 <span class="kw">unsafe</span> <span class="kw">impl</span><span class="op">&lt;</span><span class="attribute">#[<span class="ident">may_dangle</span>]</span> <span class="ident">T</span>: <span class="ident">PSafe</span> <span class="op">+</span> <span class="question-mark">?</span><span class="ident">Sized</span>, <span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span> <span class="ident">Drop</span> <span class="kw">for</span> <span class="ident">Pbox</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span> {
     <span class="kw">fn</span> <span class="ident">drop</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>) {
         <span class="kw">unsafe</span> {
-            <span class="kw">let</span> <span class="ident">p</span> <span class="op">=</span> <span class="self">self</span>.<span class="number">0</span>.<span class="ident">as_mut</span>();
-            <span class="ident">std</span>::<span class="ident">ptr</span>::<span class="ident">drop_in_place</span>(<span class="ident">p</span>);
-            <span class="ident">A</span>::<span class="ident">free</span>(<span class="ident">p</span>);
+            <span class="kw">if</span> <span class="op">!</span><span class="self">self</span>.<span class="number">0</span>.<span class="ident">is_dangling</span>() {
+                <span class="kw">let</span> <span class="ident">p</span> <span class="op">=</span> <span class="self">self</span>.<span class="number">0</span>.<span class="ident">as_mut</span>();
+                <span class="ident">std</span>::<span class="ident">ptr</span>::<span class="ident">drop_in_place</span>(<span class="ident">p</span>);
+                <span class="ident">A</span>::<span class="ident">free</span>(<span class="ident">p</span>);
+            }
         }
     }
 }

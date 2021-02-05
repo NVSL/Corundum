@@ -178,6 +178,7 @@
 <span id="175">175</span>
 <span id="176">176</span>
 <span id="177">177</span>
+<span id="178">178</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! *Corundum* is a crate with an idiomatic persistent memory programming</span>
 <span class="doccomment">//! interface and leverages Rust’s type system to statically avoid</span>
@@ -192,8 +193,8 @@
 <span class="doccomment">//! | P-to-V Pointers     | A persistent pointer pointing at demote memory | Persistent pointers accept only [`PSafe`] types and demote pointers are `!PSafe`. Only, [`VCell`] allows single-execution P-to-V pointers. |</span>
 <span class="doccomment">//! | V-to-P Pointers     | A demote pointer keeping a zero-referenced object alive | Only [`VWeak`] allows V-to-P pointers which is a weak reference and does not keep data alive. |</span>
 <span class="doccomment">//! | Unlogged Updates    | An unrecoverable update to persistent data | Modifications are enforced to be inside atomic [`transaction`]s. | </span>
-<span class="doccomment">//! | Data Race           | Updating persistent data simultaneously in two threads | Mutable borrowing is limited to [`Mutex`] which uses a transaction-wide lock to provide both atomicity and isolation. |</span>
-<span class="doccomment">//! | Locked Mutex        | A persistent mutex remains locked on powerfail | [`Mutex`] uses [`VCell`] which resets at restart. |</span>
+<span class="doccomment">//! | Data Race           | Updating persistent data simultaneously in two threads | Mutable borrowing is limited to [`PMutex`] which uses a transaction-wide lock to provide both atomicity and isolation. |</span>
+<span class="doccomment">//! | Locked Mutex        | A persistent mutex remains locked on powerfail | [`PMutex`] uses [`VCell`] which resets at restart. |</span>
 <span class="doccomment">//! | Memory Leaks\*      | An allocated memory becomes unreachable | Persistent objects, except the root object, cannot cross transaction boundaries, and memory allocation is available only inside a transaction. Therefore, the allocation can survive only if there is a reference from the root object (or a decedent of it) to the data. &lt;br&gt;\* Cyclic references are not prevented in this version, which lead to a memory leak. |</span>
 <span class="doccomment">//!</span>
 <span class="doccomment">//! </span>
@@ -226,7 +227,7 @@
 <span class="doccomment">//! memory location for a value of type `T` in pool `P`.</span>
 <span class="doccomment">//! * [`PRefCell&lt;T,P&gt;`] (or [`PRefCell&lt;T&gt;`]): A mutable persistent memory location</span>
 <span class="doccomment">//! with dynamically checked borrow rules for a value of type `T` in pool `P`.</span>
-<span class="doccomment">//! * [`Mutex&lt;T,P&gt;`] (or [`PMutex&lt;T&gt;`]): A mutual exclusion primitive useful for</span>
+<span class="doccomment">//! * [`PMutex&lt;T,P&gt;`] (or [`PMutex&lt;T&gt;`]): A mutual exclusion primitive useful for</span>
 <span class="doccomment">//! protecting shared persistent data of type `T` in pool `P`.</span>
 <span class="doccomment">//! </span>
 <span class="doccomment">//! The following example creates a pool file for a linked-list-based stack,</span>
@@ -261,7 +262,7 @@
 <span class="doccomment">//! [`VCell`]: ./cell/struct.VCell.html</span>
 <span class="doccomment">//! [`VWeak`]: ./prc/struct.VWeak.html</span>
 <span class="doccomment">//! [`transaction`]:  ./alloc/trait.MemPool.html#method.transaction</span>
-<span class="doccomment">//! [`Mutex`]: ./sync/struct.Mutex.html</span>
+<span class="doccomment">//! [`PMutex`]: ./sync/struct.PMutex.html</span>
 <span class="doccomment">//! [`Pbox`]: ./boxed/struct.Pbox.html</span>
 <span class="doccomment">//! [`Prc`]: ./prc/struct.Prc.html</span>
 <span class="doccomment">//! [`Parc`]: ./sync/struct.Parc.html</span>
@@ -272,7 +273,7 @@
 <span class="doccomment">//! [`PCell&lt;T&gt;`]: ./alloc/default/type.PCell.html</span>
 <span class="doccomment">//! [`PRefCell&lt;T,P&gt;`]: ./cell/struct.PRefCell.html </span>
 <span class="doccomment">//! [`PRefCell&lt;T&gt;`]: ./alloc/default/type.PRefCell.html</span>
-<span class="doccomment">//! [`Mutex&lt;T,P&gt;`]: ./sync/struct.Mutex.html</span>
+<span class="doccomment">//! [`PMutex&lt;T,P&gt;`]: ./sync/struct.PMutex.html</span>
 <span class="doccomment">//! [`PMutex&lt;T&gt;`]: ./alloc/default/type.PMutex.html</span>
 <span class="doccomment">//! [`open&lt;T&gt;()`]: ./alloc/struct.MemPool.html#method.open</span>
 
@@ -304,6 +305,7 @@
 <span class="attribute">#![<span class="ident">feature</span>(<span class="ident">fn_traits</span>)]</span>
 <span class="attribute">#![<span class="ident">feature</span>(<span class="ident">unboxed_closures</span>)]</span>
 <span class="attribute">#![<span class="ident">feature</span>(<span class="ident">let_chains</span>)]</span>
+<span class="attribute">#![<span class="ident">feature</span>(<span class="ident">c_variadic</span>)]</span>
 
 <span class="attribute">#![<span class="ident">allow</span>(<span class="ident">dead_code</span>)]</span>
 <span class="attribute">#![<span class="ident">allow</span>(<span class="ident">incomplete_features</span>)]</span>

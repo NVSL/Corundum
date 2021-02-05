@@ -534,13 +534,13 @@
 <span class="doccomment">///</span>
 <span class="doccomment">/// It does not implement [`Sync`], so it is not possible to share `PCell`</span>
 <span class="doccomment">/// between threads. To provide thread-safe interior mutability, use</span>
-<span class="doccomment">/// [`Mutex`].</span>
+<span class="doccomment">/// [`PMutex`].</span>
 <span class="doccomment">/// </span>
 <span class="doccomment">/// [`PCell`] is a compact version of `PCell` tha can be find in the pool</span>
 <span class="doccomment">/// module.</span>
 <span class="doccomment">///</span>
 <span class="doccomment">/// [`Sync`]: std::marker::Sync</span>
-<span class="doccomment">/// [`Mutex`]: ../sync/mutex/struct.Mutex.html</span>
+<span class="doccomment">/// [`PMutex`]: ../sync/mutex/struct.PMutex.html</span>
 <span class="doccomment">/// [`PCell`]: ../alloc/default/type.PCell.html</span>
 <span class="doccomment">/// </span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">PCell</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="ident">PSafe</span> <span class="op">+</span> <span class="question-mark">?</span><span class="ident">Sized</span>, <span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span> {

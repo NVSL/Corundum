@@ -1453,6 +1453,7 @@
 <span id="1450">1450</span>
 <span id="1451">1451</span>
 </pre><div class="example-wrap"><pre class="rust ">
+<span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">utils</span>::<span class="ident">SpinLock</span>;
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">panic</span>::<span class="ident">RefUnwindSafe</span>;
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">panic</span>::<span class="ident">UnwindSafe</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">alloc</span>::{<span class="ident">MemPool</span>, <span class="ident">PmemUsage</span>};
@@ -1468,21 +1469,18 @@
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">marker</span>::<span class="ident">PhantomData</span>;
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">mem</span>::<span class="ident">MaybeUninit</span>;
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">ops</span>::<span class="ident">Deref</span>;
-<span class="kw">use</span> <span class="ident">std</span>::<span class="ident">sync</span>::<span class="ident">atomic</span>::{<span class="self">self</span>, <span class="ident">AtomicBool</span>, <span class="ident">AtomicUsize</span>, <span class="ident">Ordering</span>::<span class="kw-2">*</span>};
+<span class="kw">use</span> <span class="ident">std</span>::<span class="ident">sync</span>::<span class="ident">atomic</span>::{<span class="self">self</span>, <span class="ident">AtomicBool</span>, <span class="ident">Ordering</span>::<span class="kw-2">*</span>};
 <span class="kw">use</span> <span class="ident">std</span>::<span class="kw-2">*</span>;
 
 <span class="kw">const</span> <span class="ident">MAX_REFCOUNT</span>: <span class="ident">usize</span> <span class="op">=</span> (<span class="ident">isize</span>::<span class="ident">MAX</span>) <span class="kw">as</span> <span class="ident">usize</span>;
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>)]</span>
-<span class="kw">struct</span> <span class="ident">Counter</span> {
-    <span class="ident">strong</span>: <span class="ident">AtomicUsize</span>,
-    <span class="ident">weak</span>: <span class="ident">AtomicUsize</span>,
-
-    <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_log_rc&quot;</span>))]</span>
-    <span class="ident">has_log</span>: <span class="ident">u8</span>,
+<span class="kw">struct</span> <span class="ident">Counter</span><span class="op">&lt;</span><span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span> {
+    <span class="ident">strong</span>: <span class="ident">usize</span>,
+    <span class="ident">weak</span>: <span class="ident">usize</span>,
+    <span class="ident">lock</span>: <span class="ident">VCell</span><span class="op">&lt;</span><span class="ident">u8</span>, <span class="ident">A</span><span class="op">&gt;</span>,
 }
 
-<span class="kw">unsafe</span> <span class="kw">impl</span> <span class="ident">PSafe</span> <span class="kw">for</span> <span class="ident">Counter</span> {}
+<span class="kw">unsafe</span> <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span> <span class="ident">PSafe</span> <span class="kw">for</span> <span class="ident">Counter</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span> {}
 
 <span class="doccomment">/// The [`Parc`]&#39;s inner data type</span>
 <span class="doccomment">/// </span>
@@ -1491,7 +1489,7 @@
 <span class="doccomment">/// </span>
 <span class="doccomment">/// [`Parc`]: #</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">ParcInner</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span>, <span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span> {
-    <span class="ident">counter</span>: <span class="ident">Counter</span>,
+    <span class="ident">counter</span>: <span class="ident">Counter</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>,
 
     <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_volatile_pointers&quot;</span>))]</span>
     <span class="ident">vlist</span>: <span class="ident">VCell</span><span class="op">&lt;</span><span class="ident">VWeakList</span>, <span class="ident">A</span><span class="op">&gt;</span>,
@@ -1566,7 +1564,7 @@
 <span class="doccomment">/// # Mutability</span>
 <span class="doccomment">///</span>
 <span class="doccomment">/// `Parc` doesn&#39;t provide mutable reference to the inner value. To allow</span>
-<span class="doccomment">/// interior mutability, you may use `Parc&lt;`[`Mutex`]`&lt;T,P&gt;,P&gt;` (or in short, </span>
+<span class="doccomment">/// interior mutability, you may use `Parc&lt;`[`PMutex`]`&lt;T,P&gt;,P&gt;` (or in short, </span>
 <span class="doccomment">/// `Parc&lt;`[`PMutex`]`&lt;T&gt;&gt;` using aliased types).</span>
 <span class="doccomment">///</span>
 <span class="doccomment">/// ```</span>
@@ -1608,7 +1606,7 @@
 <span class="doccomment">/// [`Journal`]: ../stm/journal/struct.Journal.html</span>
 <span class="doccomment">/// [`transaction`]: ../stm/fn.transaction.html</span>
 <span class="doccomment">/// [`Arc`]: std::sync::Arc</span>
-<span class="doccomment">/// [`Mutex`]: ./struct.Mutex.html</span>
+<span class="doccomment">/// [`PMutex`]: ./struct.PMutex.html</span>
 <span class="doccomment">/// [`PMutex`]: ../alloc/default/type.PMutex.html</span>
 <span class="doccomment">/// [`pclone`]: #impl-PClone</span>
 <span class="doccomment">/// [`demote()`]: #method.demote</span>
@@ -1644,11 +1642,9 @@
             <span class="kw">let</span> <span class="ident">ptr</span> <span class="op">=</span> <span class="ident">Ptr</span>::<span class="ident">new_unchecked</span>(<span class="ident">A</span>::<span class="ident">new</span>(
                 <span class="ident">ParcInner</span>::<span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span> {
                     <span class="ident">counter</span>: <span class="ident">Counter</span> {
-                        <span class="ident">strong</span>: <span class="ident">AtomicUsize</span>::<span class="ident">new</span>(<span class="number">1</span>),
-                        <span class="ident">weak</span>: <span class="ident">AtomicUsize</span>::<span class="ident">new</span>(<span class="number">1</span>),
-
-                        <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_log_rc&quot;</span>))]</span>
-                        <span class="ident">has_log</span>: <span class="number">0</span>,
+                        <span class="ident">strong</span>: <span class="number">1</span>,
+                        <span class="ident">weak</span>: <span class="number">1</span>,
+                        <span class="ident">lock</span>: <span class="ident">VCell</span>::<span class="ident">new</span>(<span class="number">0</span>),
                     },
 
                     <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_volatile_pointers&quot;</span>))]</span>
@@ -1689,11 +1685,9 @@
             <span class="ident">Parc</span>::<span class="ident">from_inner</span>(<span class="ident">Ptr</span>::<span class="ident">from_mut</span>(<span class="ident">A</span>::<span class="ident">new</span>(
                 <span class="ident">ParcInner</span> {
                     <span class="ident">counter</span>: <span class="ident">Counter</span> {
-                        <span class="ident">strong</span>: <span class="ident">AtomicUsize</span>::<span class="ident">new</span>(<span class="number">1</span>),
-                        <span class="ident">weak</span>: <span class="ident">AtomicUsize</span>::<span class="ident">new</span>(<span class="number">1</span>),
-
-                        <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_log_rc&quot;</span>))]</span>
-                        <span class="ident">has_log</span>: <span class="number">0</span>,
+                        <span class="ident">strong</span>: <span class="number">1</span>,
+                        <span class="ident">weak</span>: <span class="number">1</span>,
+                        <span class="ident">lock</span>: <span class="ident">VCell</span>::<span class="ident">new</span>(<span class="number">0</span>),
                     },
 
                     <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_volatile_pointers&quot;</span>))]</span>
@@ -1746,8 +1740,8 @@
     }
 
     <span class="attribute">#[<span class="ident">inline</span>(<span class="ident">always</span>)]</span>
-    <span class="kw">fn</span> <span class="ident">inner</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="ident">ParcInner</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span> {
-        <span class="self">self</span>.<span class="ident">ptr</span>.<span class="ident">as_ref</span>()
+    <span class="kw">fn</span> <span class="ident">inner</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">ParcInner</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span> {
+        <span class="self">self</span>.<span class="ident">ptr</span>.<span class="ident">get_mut</span>()
     }
 
     <span class="attribute">#[<span class="ident">allow</span>(<span class="ident">clippy</span>::<span class="ident">missing_safety_doc</span>)]</span>
@@ -1755,21 +1749,19 @@
         <span class="kw">let</span> <span class="ident">off</span> <span class="op">=</span> <span class="ident">A</span>::<span class="ident">off_unchecked</span>(<span class="ident">ptr</span>);
         <span class="kw">let</span> <span class="ident">res</span> <span class="op">=</span> <span class="self">Self</span>::<span class="ident">from_inner</span>(<span class="ident">Ptr</span>::<span class="ident">from_off_unchecked</span>(<span class="ident">off</span>));
 
-        <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_log_rc&quot;</span>))]</span>
-        <span class="ident">res</span>.<span class="ident">log_count</span>(<span class="ident">j</span>);
-
-        <span class="ident">res</span>.<span class="ident">inner</span>().<span class="ident">counter</span>.<span class="ident">strong</span>.<span class="ident">fetch_add</span>(<span class="number">1</span>, <span class="ident">Relaxed</span>);
+        <span class="ident">fetch_inc</span>((<span class="kw-2">*</span><span class="ident">ptr</span>).<span class="ident">counter</span>.<span class="ident">lock</span>.<span class="ident">as_mut</span>(), <span class="kw-2">&amp;</span><span class="kw-2">mut</span> (<span class="kw-2">*</span><span class="ident">ptr</span>).<span class="ident">counter</span>.<span class="ident">strong</span>, <span class="ident">j</span>);
 
         <span class="ident">res</span>
     }
 
     <span class="attribute">#[<span class="ident">inline</span>(<span class="ident">never</span>)]</span>
-    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">drop_slow</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>) {
+    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">drop_slow</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">j</span>: <span class="kw-2">&amp;</span><span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>) {
         <span class="comment">// Destroy the data at this time, even though we may not free the box</span>
         <span class="comment">// allocation itself (there may still be weak pointers lying around).</span>
         <span class="ident">std</span>::<span class="ident">ptr</span>::<span class="ident">drop_in_place</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>.<span class="ident">ptr</span>.<span class="ident">as_mut</span>().<span class="ident">value</span>);
 
-        <span class="kw">if</span> <span class="self">self</span>.<span class="ident">inner</span>().<span class="ident">counter</span>.<span class="ident">weak</span>.<span class="ident">fetch_sub</span>(<span class="number">1</span>, <span class="ident">Release</span>) <span class="op">=</span><span class="op">=</span> <span class="number">1</span> {
+        <span class="kw">let</span> <span class="ident">inner</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">inner</span>();
+        <span class="kw">if</span> <span class="ident">fetch_dec</span>(<span class="ident">inner</span>.<span class="ident">counter</span>.<span class="ident">lock</span>.<span class="ident">as_mut</span>(), <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">inner</span>.<span class="ident">counter</span>.<span class="ident">weak</span>, <span class="ident">j</span>) <span class="op">=</span><span class="op">=</span> <span class="number">1</span> {
             <span class="ident">atomic</span>::<span class="ident">fence</span>(<span class="ident">Acquire</span>);
             <span class="ident">A</span>::<span class="ident">free</span>(<span class="self">self</span>.<span class="ident">ptr</span>.<span class="ident">as_mut</span>());
 
@@ -1909,43 +1901,13 @@
     <span class="doccomment">/// ```</span>
     <span class="doccomment">/// </span>
     <span class="doccomment">/// [`upgrade`]: ./struct.Weak.html#method.upgrade</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">downgrade</span>(<span class="ident">this</span>: <span class="kw-2">&amp;</span><span class="self">Self</span>, <span class="ident">_journal</span>: <span class="kw-2">&amp;</span><span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Weak</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span> {
-        <span class="comment">// This Relaxed is OK because we&#39;re checking the value in the CAS</span>
-        <span class="comment">// below.</span>
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">cur</span> <span class="op">=</span> <span class="ident">this</span>.<span class="ident">inner</span>().<span class="ident">counter</span>.<span class="ident">weak</span>.<span class="ident">load</span>(<span class="ident">Relaxed</span>);
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">downgrade</span>(<span class="ident">this</span>: <span class="kw-2">&amp;</span><span class="self">Self</span>, <span class="ident">j</span>: <span class="kw-2">&amp;</span><span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Weak</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span> {
+        <span class="kw">let</span> <span class="ident">inner</span> <span class="op">=</span> <span class="ident">this</span>.<span class="ident">inner</span>();
+        <span class="kw">let</span> <span class="ident">_lock</span> <span class="op">=</span> <span class="ident">SpinLock</span>::<span class="ident">acquire</span>(<span class="ident">inner</span>.<span class="ident">counter</span>.<span class="ident">lock</span>.<span class="ident">as_mut</span>());
 
-        <span class="kw">loop</span> {
-            <span class="comment">// check if the weak counter is currently &quot;locked&quot;; if so, spin.</span>
-            <span class="kw">if</span> <span class="ident">cur</span> <span class="op">=</span><span class="op">=</span> <span class="ident">usize</span>::<span class="ident">MAX</span> {
-                <span class="ident">cur</span> <span class="op">=</span> <span class="ident">this</span>.<span class="ident">inner</span>().<span class="ident">counter</span>.<span class="ident">weak</span>.<span class="ident">load</span>(<span class="ident">Relaxed</span>);
-                <span class="kw">continue</span>;
-            }
-
-            <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_log_rc&quot;</span>))]</span>
-            <span class="ident">this</span>.<span class="ident">log_count</span>(<span class="ident">_journal</span>);
-
-            <span class="comment">// NOTE: this code currently ignores the possibility of overflow</span>
-            <span class="comment">// into usize::MAX; in general both Rc and Arc need to be adjusted</span>
-            <span class="comment">// to deal with overflow.</span>
-
-            <span class="comment">// Unlike with Clone(), we need this to be an Acquire read to</span>
-            <span class="comment">// synchronize with the write coming from `is_unique`, so that the</span>
-            <span class="comment">// events prior to that write happen before this read.</span>
-            <span class="kw">match</span> <span class="ident">this</span>
-                .<span class="ident">inner</span>()
-                .<span class="ident">counter</span>
-                .<span class="ident">weak</span>
-                .<span class="ident">compare_exchange_weak</span>(<span class="ident">cur</span>, <span class="ident">cur</span> <span class="op">+</span> <span class="number">1</span>, <span class="ident">Acquire</span>, <span class="ident">Relaxed</span>)
-            {
-                <span class="prelude-val">Ok</span>(<span class="kw">_</span>) <span class="op">=</span><span class="op">&gt;</span> {
-                    <span class="comment">// Make sure we do not create a dangling Weak</span>
-                    <span class="macro">debug_assert</span><span class="macro">!</span>(<span class="op">!</span><span class="ident">this</span>.<span class="ident">ptr</span>.<span class="ident">is_dangling</span>());
-                    <span class="kw">return</span> <span class="ident">Weak</span> {
-                        <span class="ident">ptr</span>: <span class="ident">this</span>.<span class="ident">ptr</span>.<span class="ident">clone</span>(),
-                    };
-                }
-                <span class="prelude-val">Err</span>(<span class="ident">old</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">cur</span> <span class="op">=</span> <span class="ident">old</span>,
-            }
+        <span class="ident">lock_free_fetch_inc</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">inner</span>.<span class="ident">counter</span>.<span class="ident">weak</span>, <span class="ident">j</span>);
+        <span class="ident">Weak</span> {
+            <span class="ident">ptr</span>: <span class="ident">this</span>.<span class="ident">ptr</span>.<span class="ident">clone</span>(),
         }
     }
 
@@ -2010,7 +1972,8 @@
     <span class="doccomment">/// }).unwrap()</span>
     <span class="doccomment">/// ```</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">weak_count</span>(<span class="ident">this</span>: <span class="kw-2">&amp;</span><span class="self">Self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">usize</span> {
-        <span class="kw">let</span> <span class="ident">cnt</span> <span class="op">=</span> <span class="ident">this</span>.<span class="ident">inner</span>().<span class="ident">counter</span>.<span class="ident">weak</span>.<span class="ident">load</span>(<span class="ident">SeqCst</span>);
+        <span class="kw">let</span> <span class="ident">inner</span> <span class="op">=</span> <span class="ident">this</span>.<span class="ident">inner</span>();
+        <span class="kw">let</span> <span class="ident">cnt</span> <span class="op">=</span> <span class="ident">load</span>(<span class="ident">inner</span>.<span class="ident">counter</span>.<span class="ident">lock</span>.<span class="ident">as_mut</span>(), <span class="kw-2">&amp;</span><span class="ident">this</span>.<span class="ident">inner</span>().<span class="ident">counter</span>.<span class="ident">weak</span>);
         <span class="comment">// If the weak count is currently locked, the value of the</span>
         <span class="comment">// count was 0 just before taking the lock.</span>
         <span class="kw">if</span> <span class="ident">cnt</span> <span class="op">=</span><span class="op">=</span> <span class="ident">usize</span>::<span class="ident">MAX</span> {
@@ -2037,7 +2000,8 @@
     <span class="doccomment">/// }).unwrap();</span>
     <span class="doccomment">/// ```</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">strong_count</span>(<span class="ident">this</span>: <span class="kw-2">&amp;</span><span class="self">Self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">usize</span> {
-        <span class="ident">this</span>.<span class="ident">inner</span>().<span class="ident">counter</span>.<span class="ident">strong</span>.<span class="ident">load</span>(<span class="ident">SeqCst</span>)
+        <span class="kw">let</span> <span class="ident">inner</span> <span class="op">=</span> <span class="ident">this</span>.<span class="ident">inner</span>();
+        <span class="ident">load</span>(<span class="ident">inner</span>.<span class="ident">counter</span>.<span class="ident">lock</span>.<span class="ident">as_mut</span>(), <span class="kw-2">&amp;</span><span class="ident">inner</span>.<span class="ident">counter</span>.<span class="ident">strong</span>)
     }
 
     <span class="attribute">#[<span class="ident">inline</span>]</span>
@@ -2128,11 +2092,9 @@
                     <span class="kw">let</span> <span class="ident">new</span> <span class="op">=</span> <span class="ident">A</span>::<span class="ident">atomic_new</span>(
                         <span class="ident">ParcInner</span>::<span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span> {
                             <span class="ident">counter</span>: <span class="ident">Counter</span> {
-                                <span class="ident">strong</span>: <span class="ident">AtomicUsize</span>::<span class="ident">new</span>(<span class="number">1</span>),
-                                <span class="ident">weak</span>: <span class="ident">AtomicUsize</span>::<span class="ident">new</span>(<span class="number">1</span>),
-        
-                                <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_log_rc&quot;</span>))]</span>
-                                <span class="ident">has_log</span>: <span class="number">0</span>,
+                                <span class="ident">strong</span>: <span class="number">1</span>,
+                                <span class="ident">weak</span>: <span class="number">1</span>,
+                                <span class="ident">lock</span>: <span class="ident">VCell</span>::<span class="ident">new</span>(<span class="number">0</span>),
                             },
         
                             <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_volatile_pointers&quot;</span>))]</span>
@@ -2191,33 +2153,29 @@
     <span class="doccomment">///</span>
     <span class="kw">fn</span> <span class="ident">drop</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>) {
         <span class="kw">unsafe</span> {
-            <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_log_rc&quot;</span>))]</span>
-            {
-                <span class="kw">let</span> <span class="ident">journal</span> <span class="op">=</span> <span class="ident">Journal</span>::<span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>::<span class="ident">current</span>(<span class="bool-val">true</span>).<span class="ident">unwrap</span>();
-                <span class="self">self</span>.<span class="ident">log_count</span>(<span class="ident">journal</span>.<span class="number">0</span>);
-            }
+            <span class="kw">let</span> <span class="ident">journal</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="kw-2">*</span><span class="ident">Journal</span>::<span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>::<span class="ident">current</span>(<span class="bool-val">true</span>).<span class="ident">unwrap</span>().<span class="number">0</span>;
+            <span class="kw">let</span> <span class="ident">inner</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">inner</span>();
 
             <span class="comment">// Because `fetch_sub` is already atomic, we do not need to synchronize</span>
             <span class="comment">// with other threads unless we are going to delete the object. This</span>
             <span class="comment">// same logic applies to the below `fetch_sub` to the `weak` count.</span>
-            <span class="kw">if</span> <span class="self">self</span>.<span class="ident">inner</span>().<span class="ident">counter</span>.<span class="ident">strong</span>.<span class="ident">fetch_sub</span>(<span class="number">1</span>, <span class="ident">Release</span>) <span class="op">!</span><span class="op">=</span> <span class="number">1</span> {
+            <span class="kw">if</span> <span class="ident">fetch_dec</span>(<span class="ident">inner</span>.<span class="ident">counter</span>.<span class="ident">lock</span>.<span class="ident">as_mut</span>(),
+                <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">inner</span>.<span class="ident">counter</span>.<span class="ident">strong</span>, <span class="ident">journal</span>) <span class="op">!</span><span class="op">=</span> <span class="number">1</span>
+            {
                 <span class="kw">return</span>;
             }
 
-            <span class="ident">atomic</span>::<span class="ident">fence</span>(<span class="ident">Acquire</span>);
-
-            <span class="self">self</span>.<span class="ident">drop_slow</span>();
+            <span class="self">self</span>.<span class="ident">drop_slow</span>(<span class="ident">journal</span>);
         }
     }
 }
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="ident">PSafe</span> <span class="op">+</span> <span class="question-mark">?</span><span class="ident">Sized</span>, <span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span> <span class="ident">PClone</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">Parc</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span> {
     <span class="attribute">#[<span class="ident">inline</span>]</span>
-    <span class="kw">fn</span> <span class="ident">pclone</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">_journal</span>: <span class="kw-2">&amp;</span><span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Parc</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span> {
-        <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_log_rc&quot;</span>))]</span>
-        <span class="self">self</span>.<span class="ident">log_count</span>(<span class="ident">_journal</span>);
-
-        <span class="kw">let</span> <span class="ident">old_size</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">inner</span>().<span class="ident">counter</span>.<span class="ident">strong</span>.<span class="ident">fetch_add</span>(<span class="number">1</span>, <span class="ident">Relaxed</span>);
+    <span class="kw">fn</span> <span class="ident">pclone</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">j</span>: <span class="kw-2">&amp;</span><span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Parc</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span> {
+        <span class="kw">let</span> <span class="ident">inner</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">inner</span>();
+        <span class="kw">let</span> <span class="ident">old_size</span> <span class="op">=</span> <span class="ident">fetch_inc</span>(<span class="ident">inner</span>.<span class="ident">counter</span>.<span class="ident">lock</span>.<span class="ident">as_mut</span>(),
+                        <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">inner</span>.<span class="ident">counter</span>.<span class="ident">strong</span>, <span class="ident">j</span>);
 
         <span class="comment">// However we need to guard against massive ref counts in case someone</span>
         <span class="comment">// is `mem::forget`ing Arcs. If we don&#39;t do this the count can overflow</span>
@@ -2440,40 +2398,23 @@
     <span class="doccomment">///     assert!(weak_five.upgrade(j).is_none());</span>
     <span class="doccomment">/// }).unwrap()</span>
     <span class="doccomment">/// ```</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">upgrade</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">_journal</span>: <span class="kw-2">&amp;</span><span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">Parc</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span><span class="op">&gt;</span> {
-        <span class="comment">// We use a CAS loop to increment the strong count instead of a</span>
-        <span class="comment">// fetch_add because once the count hits 0 it must never be above 0.</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">upgrade</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">j</span>: <span class="kw-2">&amp;</span><span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">Parc</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span><span class="op">&gt;</span> {
         <span class="kw">let</span> <span class="ident">inner</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">inner</span>()<span class="question-mark">?</span>;
 
-        <span class="comment">// Relaxed load because any write of 0 that we can observe</span>
-        <span class="comment">// leaves the field in a permanently zero state (so a</span>
-        <span class="comment">// &quot;stale&quot; read of 0 is fine), and any other value is</span>
-        <span class="comment">// confirmed via the CAS below.</span>
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">n</span> <span class="op">=</span> <span class="ident">inner</span>.<span class="ident">counter</span>.<span class="ident">strong</span>.<span class="ident">load</span>(<span class="ident">Relaxed</span>);
+        <span class="kw">let</span> <span class="ident">_lock</span> <span class="op">=</span> <span class="ident">SpinLock</span>::<span class="ident">acquire</span>(<span class="ident">inner</span>.<span class="ident">counter</span>.<span class="ident">lock</span>.<span class="ident">as_mut</span>());
+        <span class="kw">let</span> <span class="ident">n</span> <span class="op">=</span> <span class="ident">inner</span>.<span class="ident">counter</span>.<span class="ident">strong</span>;
 
-        <span class="kw">loop</span> {
-            <span class="kw">if</span> <span class="ident">n</span> <span class="op">=</span><span class="op">=</span> <span class="number">0</span> {
-                <span class="kw">return</span> <span class="prelude-val">None</span>;
-            }
-
-            <span class="comment">// See comments in `Arc::clone` for why we do this (for `mem::forget`).</span>
-            <span class="kw">if</span> <span class="ident">n</span> <span class="op">&gt;</span> <span class="ident">MAX_REFCOUNT</span> {
-                <span class="ident">std</span>::<span class="ident">process</span>::<span class="ident">abort</span>();
-            }
-
-            <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_log_rc&quot;</span>))]</span>
-            <span class="ident">inner</span>.<span class="ident">log_count</span>(<span class="ident">_journal</span>);
-
-            <span class="comment">// Relaxed is valid for the same reason it is on Arc&#39;s Clone impl</span>
-            <span class="kw">match</span> <span class="ident">inner</span>
-                .<span class="ident">counter</span>
-                .<span class="ident">strong</span>
-                .<span class="ident">compare_exchange_weak</span>(<span class="ident">n</span>, <span class="ident">n</span> <span class="op">+</span> <span class="number">1</span>, <span class="ident">Relaxed</span>, <span class="ident">Relaxed</span>)
-            {
-                <span class="prelude-val">Ok</span>(<span class="kw">_</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="kw">return</span> <span class="prelude-val">Some</span>(<span class="ident">Parc</span>::<span class="ident">from_inner</span>(<span class="self">self</span>.<span class="ident">ptr</span>)), <span class="comment">// null checked above</span>
-                <span class="prelude-val">Err</span>(<span class="ident">old</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">n</span> <span class="op">=</span> <span class="ident">old</span>,
-            }
+        <span class="kw">if</span> <span class="ident">n</span> <span class="op">=</span><span class="op">=</span> <span class="number">0</span> {
+            <span class="kw">return</span> <span class="prelude-val">None</span>;
         }
+
+        <span class="comment">// See comments in `Arc::clone` for why we do this (for `mem::forget`).</span>
+        <span class="kw">if</span> <span class="ident">n</span> <span class="op">&gt;</span> <span class="ident">MAX_REFCOUNT</span> {
+            <span class="ident">std</span>::<span class="ident">process</span>::<span class="ident">abort</span>();
+        }
+
+        <span class="ident">lock_free_fetch_inc</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">inner</span>.<span class="ident">counter</span>.<span class="ident">strong</span>, <span class="ident">j</span>);
+        <span class="prelude-val">Some</span>(<span class="ident">Parc</span>::<span class="ident">from_inner</span>(<span class="self">self</span>.<span class="ident">ptr</span>))
     }
 
     <span class="doccomment">/// Gets the number of strong (`Parc`) pointers pointing to this allocation.</span>
@@ -2481,7 +2422,7 @@
     <span class="doccomment">/// If `self` was created using [`Weak::new`], this will return 0.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">strong_count</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">usize</span> {
         <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">inner</span>) <span class="op">=</span> <span class="self">self</span>.<span class="ident">inner</span>() {
-            <span class="ident">inner</span>.<span class="ident">counter</span>.<span class="ident">strong</span>.<span class="ident">load</span>(<span class="ident">SeqCst</span>)
+            <span class="ident">load</span>(<span class="ident">inner</span>.<span class="ident">counter</span>.<span class="ident">lock</span>.<span class="ident">as_mut</span>(), <span class="kw-2">&amp;</span><span class="ident">inner</span>.<span class="ident">counter</span>.<span class="ident">strong</span>)
         } <span class="kw">else</span> {
             <span class="number">0</span>
         }
@@ -2501,8 +2442,8 @@
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">weak_count</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">usize</span> {
         <span class="self">self</span>.<span class="ident">inner</span>()
             .<span class="ident">map</span>(<span class="op">|</span><span class="ident">inner</span><span class="op">|</span> {
-                <span class="kw">let</span> <span class="ident">weak</span> <span class="op">=</span> <span class="ident">inner</span>.<span class="ident">counter</span>.<span class="ident">weak</span>.<span class="ident">load</span>(<span class="ident">SeqCst</span>);
-                <span class="kw">let</span> <span class="ident">strong</span> <span class="op">=</span> <span class="ident">inner</span>.<span class="ident">counter</span>.<span class="ident">strong</span>.<span class="ident">load</span>(<span class="ident">SeqCst</span>);
+                <span class="kw">let</span> <span class="ident">weak</span> <span class="op">=</span> <span class="ident">load</span>(<span class="ident">inner</span>.<span class="ident">counter</span>.<span class="ident">lock</span>.<span class="ident">as_mut</span>(), <span class="kw-2">&amp;</span><span class="ident">inner</span>.<span class="ident">counter</span>.<span class="ident">weak</span>);
+                <span class="kw">let</span> <span class="ident">strong</span> <span class="op">=</span> <span class="ident">load</span>(<span class="ident">inner</span>.<span class="ident">counter</span>.<span class="ident">lock</span>.<span class="ident">as_mut</span>(), <span class="kw-2">&amp;</span><span class="ident">inner</span>.<span class="ident">counter</span>.<span class="ident">strong</span>);
                 <span class="kw">if</span> <span class="ident">strong</span> <span class="op">=</span><span class="op">=</span> <span class="number">0</span> {
                     <span class="number">0</span>
                 } <span class="kw">else</span> {
@@ -2518,7 +2459,7 @@
     }
 
     <span class="attribute">#[<span class="ident">inline</span>]</span>
-    <span class="kw">fn</span> <span class="ident">inner</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="ident">ParcInner</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">inner</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">ParcInner</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span><span class="op">&gt;</span> {
         <span class="kw">if</span> <span class="self">self</span>.<span class="ident">ptr</span>.<span class="ident">is_dangling</span>() {
             <span class="prelude-val">None</span>
         } <span class="kw">else</span> {
@@ -2544,11 +2485,7 @@
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="ident">PSafe</span> <span class="op">+</span> <span class="question-mark">?</span><span class="ident">Sized</span>, <span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span> <span class="ident">Drop</span> <span class="kw">for</span> <span class="ident">Weak</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span> {
     <span class="kw">fn</span> <span class="ident">drop</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>) {
         <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">_inner</span>) <span class="op">=</span> <span class="self">self</span>.<span class="ident">inner</span>() {
-            <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_log_rc&quot;</span>))]</span>
-            {
-                <span class="kw">let</span> <span class="ident">journal</span> <span class="op">=</span> <span class="ident">Journal</span>::<span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>::<span class="ident">current</span>(<span class="bool-val">true</span>).<span class="ident">unwrap</span>();
-                <span class="ident">_inner</span>.<span class="ident">log_count</span>(<span class="ident">journal</span>.<span class="number">0</span>);
-            }
+            <span class="kw">let</span> <span class="ident">j</span> <span class="op">=</span> <span class="kw">unsafe</span> { <span class="kw-2">&amp;</span><span class="kw-2">*</span><span class="ident">Journal</span>::<span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>::<span class="ident">current</span>(<span class="bool-val">true</span>).<span class="ident">unwrap</span>().<span class="number">0</span> };
 
             <span class="comment">// If we find out that we were the last weak pointer, then its time to</span>
             <span class="comment">// deallocate the data entirely. See the discussion in Arc::drop() about</span>
@@ -2564,8 +2501,9 @@
                 <span class="kw">return</span>;
             };
 
-            <span class="kw">if</span> <span class="ident">inner</span>.<span class="ident">counter</span>.<span class="ident">weak</span>.<span class="ident">fetch_sub</span>(<span class="number">1</span>, <span class="ident">Release</span>) <span class="op">=</span><span class="op">=</span> <span class="number">1</span> {
-                <span class="ident">atomic</span>::<span class="ident">fence</span>(<span class="ident">Acquire</span>);
+            <span class="kw">if</span> <span class="ident">fetch_dec</span>(<span class="ident">inner</span>.<span class="ident">counter</span>.<span class="ident">lock</span>.<span class="ident">as_mut</span>(),
+                <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">inner</span>.<span class="ident">counter</span>.<span class="ident">weak</span>, <span class="ident">j</span>) <span class="op">=</span><span class="op">=</span> <span class="number">1</span> 
+            {
                 <span class="kw">unsafe</span> {
                     <span class="ident">A</span>::<span class="ident">free</span>(<span class="self">self</span>.<span class="ident">ptr</span>.<span class="ident">as_mut</span>());
                 }
@@ -2576,21 +2514,19 @@
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="ident">PSafe</span> <span class="op">+</span> <span class="question-mark">?</span><span class="ident">Sized</span>, <span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span> <span class="ident">PClone</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">Weak</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span> {
     <span class="attribute">#[<span class="ident">inline</span>]</span>
-    <span class="kw">fn</span> <span class="ident">pclone</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">_journal</span>: <span class="kw-2">&amp;</span><span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Weak</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">pclone</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">j</span>: <span class="kw-2">&amp;</span><span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Weak</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span> {
         <span class="kw">let</span> <span class="ident">inner</span> <span class="op">=</span> <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">inner</span>) <span class="op">=</span> <span class="self">self</span>.<span class="ident">inner</span>() {
             <span class="ident">inner</span>
         } <span class="kw">else</span> {
             <span class="kw">return</span> <span class="ident">Weak</span> { <span class="ident">ptr</span>: <span class="self">self</span>.<span class="ident">ptr</span> };
         };
 
-        <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_log_rc&quot;</span>))]</span>
-        <span class="ident">inner</span>.<span class="ident">log_count</span>(<span class="ident">_journal</span>);
-
         <span class="comment">// See comments in Arc::clone() for why this is relaxed.  This can use a</span>
         <span class="comment">// fetch_add (ignoring the lock) because the weak count is only locked</span>
         <span class="comment">// where are *no other* weak pointers in existence. (So we can&#39;t be</span>
         <span class="comment">// running this code in that case).</span>
-        <span class="kw">let</span> <span class="ident">old_size</span> <span class="op">=</span> <span class="ident">inner</span>.<span class="ident">counter</span>.<span class="ident">weak</span>.<span class="ident">fetch_add</span>(<span class="number">1</span>, <span class="ident">Relaxed</span>);
+        <span class="kw">let</span> <span class="ident">old_size</span> <span class="op">=</span> <span class="ident">fetch_inc</span>(<span class="ident">inner</span>.<span class="ident">counter</span>.<span class="ident">lock</span>.<span class="ident">as_mut</span>(),
+                        <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">inner</span>.<span class="ident">counter</span>.<span class="ident">weak</span>, <span class="ident">j</span>);
 
         <span class="comment">// See comments in Arc::clone() for why we do this (for mem::forget).</span>
         <span class="kw">if</span> <span class="ident">old_size</span> <span class="op">&gt;</span> <span class="ident">MAX_REFCOUNT</span> {
@@ -2614,34 +2550,115 @@
 }
 
 <span class="kw">trait</span> <span class="ident">ParcBoxPtr</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="ident">PSafe</span> <span class="op">+</span> <span class="question-mark">?</span><span class="ident">Sized</span>, <span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span> {
-    <span class="kw">fn</span> <span class="ident">count</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="ident">Counter</span>;
+    <span class="kw">fn</span> <span class="ident">count</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="ident">Counter</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>;
+}
 
-    <span class="attribute">#[<span class="ident">inline</span>]</span>
-    <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_log_rc&quot;</span>))]</span>
-    <span class="kw">fn</span> <span class="ident">log_count</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">journal</span>: <span class="kw-2">*</span><span class="kw">const</span> <span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>) {
-        <span class="kw">let</span> <span class="ident">inner</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">count</span>();
+<span class="attribute">#[<span class="ident">inline</span>]</span>
+<span class="kw">fn</span> <span class="ident">load</span>(<span class="ident">lock</span>: <span class="kw-2">*</span><span class="kw-2">mut</span> <span class="ident">u8</span>, <span class="ident">cnt</span>: <span class="kw-2">&amp;</span><span class="ident">usize</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">usize</span> {
+    <span class="kw">let</span> <span class="ident">_lock</span> <span class="op">=</span> <span class="ident">SpinLock</span>::<span class="ident">acquire</span>(<span class="ident">lock</span>);
+    <span class="kw-2">*</span><span class="ident">cnt</span>
+}
 
-        <span class="kw">unsafe</span> {
-            <span class="kw">if</span> <span class="ident">A</span>::<span class="ident">contains</span>(<span class="ident">inner</span> <span class="kw">as</span> <span class="kw-2">*</span><span class="kw">const</span> <span class="kw">_</span> <span class="kw">as</span> <span class="kw-2">*</span><span class="kw">const</span> <span class="ident">u8</span> <span class="kw">as</span> <span class="ident">u64</span>) {
-                <span class="kw">let</span> <span class="ident">flag</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">inner</span>.<span class="ident">has_log</span> <span class="kw">as</span> <span class="kw-2">*</span><span class="kw">const</span> <span class="ident">u8</span> <span class="kw">as</span> <span class="kw-2">*</span><span class="kw-2">mut</span> <span class="ident">u8</span>;
-                <span class="kw">if</span> <span class="ident">std</span>::<span class="ident">intrinsics</span>::<span class="ident">atomic_cxchg_acqrel</span>(<span class="ident">flag</span>, <span class="number">0</span>, <span class="number">1</span>).<span class="number">0</span> <span class="op">=</span><span class="op">=</span> <span class="number">0</span> {
-                    <span class="ident">inner</span>.<span class="ident">take_log</span>(<span class="kw-2">&amp;</span><span class="kw-2">*</span><span class="ident">journal</span>, <span class="ident">Notifier</span>::<span class="ident">Atomic</span>(<span class="ident">Ptr</span>::<span class="ident">from_ref</span>(<span class="kw-2">&amp;</span><span class="ident">inner</span>.<span class="ident">has_log</span>)));
-                }
+
+<span class="attribute">#[<span class="ident">inline</span>]</span>
+<span class="kw">fn</span> <span class="ident">lock_free_fetch_inc</span><span class="op">&lt;</span><span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span>(<span class="ident">cnt</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">usize</span>, <span class="ident">journal</span>: <span class="kw-2">&amp;</span><span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">usize</span> {
+    <span class="kw">unsafe</span> {
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">log</span> <span class="op">=</span> <span class="kw">if</span> <span class="macro">cfg</span><span class="macro">!</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_log_rc&quot;</span>)) {
+            <span class="kw">if</span> <span class="ident">A</span>::<span class="ident">valid</span>(<span class="ident">cnt</span>) {
+                <span class="ident">Log</span>::<span class="ident">recount_on_failure</span>(<span class="ident">u64</span>::<span class="ident">MAX</span>, <span class="bool-val">false</span>, <span class="ident">journal</span>)
+            } <span class="kw">else</span> {
+                <span class="ident">Ptr</span>::<span class="ident">dangling</span>()
             }
+        } <span class="kw">else</span> {
+            <span class="ident">Ptr</span>::<span class="ident">dangling</span>()
+        };
+        
+        <span class="kw">let</span> <span class="ident">res</span> <span class="op">=</span> <span class="kw-2">*</span><span class="ident">cnt</span>;
+        <span class="kw">if</span> <span class="ident">log</span>.<span class="ident">is_dangling</span>() {
+            <span class="kw-2">*</span><span class="ident">cnt</span> <span class="op">+</span><span class="op">=</span> <span class="number">1</span>;
+        } <span class="kw">else</span> {
+            <span class="kw">let</span> <span class="ident">off</span> <span class="op">=</span> <span class="ident">A</span>::<span class="ident">off_unchecked</span>(<span class="ident">cnt</span>);
+            <span class="kw">let</span> <span class="ident">z</span> <span class="op">=</span> <span class="ident">A</span>::<span class="ident">zone</span>(<span class="ident">off</span>);
+            <span class="ident">A</span>::<span class="ident">prepare</span>(<span class="ident">z</span>);
+            <span class="ident">A</span>::<span class="ident">log64</span>(<span class="ident">off</span>, <span class="ident">res</span> <span class="kw">as</span> <span class="ident">u64</span> <span class="op">+</span> <span class="number">1</span>, <span class="ident">z</span>);
+            <span class="ident">log</span>.<span class="ident">set</span>(<span class="ident">off</span>, <span class="number">1</span>, <span class="ident">z</span>);
+            <span class="ident">A</span>::<span class="ident">perform</span>(<span class="ident">z</span>);
         }
+        <span class="ident">res</span>
+    }
+}
+
+<span class="attribute">#[<span class="ident">inline</span>]</span>
+<span class="kw">fn</span> <span class="ident">fetch_inc</span><span class="op">&lt;</span><span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span>(<span class="ident">lock</span>: <span class="kw-2">*</span><span class="kw-2">mut</span> <span class="ident">u8</span>, <span class="ident">cnt</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">usize</span>, <span class="ident">journal</span>: <span class="kw-2">&amp;</span><span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">usize</span> {
+    <span class="kw">unsafe</span> {
+        <span class="kw">let</span> <span class="ident">_lock</span> <span class="op">=</span> <span class="ident">SpinLock</span>::<span class="ident">acquire</span>(<span class="ident">lock</span>);
+
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">log</span> <span class="op">=</span> <span class="kw">if</span> <span class="macro">cfg</span><span class="macro">!</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_log_rc&quot;</span>)) {
+            <span class="kw">if</span> <span class="ident">A</span>::<span class="ident">valid</span>(<span class="ident">cnt</span>) {
+                <span class="ident">Log</span>::<span class="ident">recount_on_failure</span>(<span class="ident">u64</span>::<span class="ident">MAX</span>, <span class="bool-val">false</span>, <span class="ident">journal</span>)
+            } <span class="kw">else</span> {
+                <span class="ident">Ptr</span>::<span class="ident">dangling</span>()
+            }
+        } <span class="kw">else</span> {
+            <span class="ident">Ptr</span>::<span class="ident">dangling</span>()
+        };
+        
+        <span class="kw">let</span> <span class="ident">res</span> <span class="op">=</span> <span class="kw-2">*</span><span class="ident">cnt</span>;
+        <span class="kw">if</span> <span class="ident">log</span>.<span class="ident">is_dangling</span>() {
+            <span class="kw-2">*</span><span class="ident">cnt</span> <span class="op">+</span><span class="op">=</span> <span class="number">1</span>;
+        } <span class="kw">else</span> {
+            <span class="kw">let</span> <span class="ident">off</span> <span class="op">=</span> <span class="ident">A</span>::<span class="ident">off_unchecked</span>(<span class="ident">cnt</span>);
+            <span class="kw">let</span> <span class="ident">z</span> <span class="op">=</span> <span class="ident">A</span>::<span class="ident">zone</span>(<span class="ident">off</span>);
+            <span class="ident">A</span>::<span class="ident">prepare</span>(<span class="ident">z</span>);
+            <span class="ident">A</span>::<span class="ident">log64</span>(<span class="ident">off</span>, <span class="ident">res</span> <span class="kw">as</span> <span class="ident">u64</span> <span class="op">+</span> <span class="number">1</span>, <span class="ident">z</span>);
+            <span class="ident">log</span>.<span class="ident">set</span>(<span class="ident">off</span>, <span class="number">1</span>, <span class="ident">z</span>);
+            <span class="ident">A</span>::<span class="ident">perform</span>(<span class="ident">z</span>);
+        }
+
+        <span class="ident">res</span>
+    }
+}
+
+<span class="attribute">#[<span class="ident">inline</span>]</span>
+<span class="kw">fn</span> <span class="ident">fetch_dec</span><span class="op">&lt;</span><span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span>(<span class="ident">lock</span>: <span class="kw-2">*</span><span class="kw-2">mut</span> <span class="ident">u8</span>, <span class="ident">cnt</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">usize</span>, <span class="ident">journal</span>: <span class="kw-2">&amp;</span><span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">usize</span> {
+    <span class="kw">unsafe</span> {
+        <span class="kw">let</span> <span class="ident">_lock</span> <span class="op">=</span> <span class="ident">SpinLock</span>::<span class="ident">acquire</span>(<span class="ident">lock</span>);
+
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">log</span> <span class="op">=</span> <span class="kw">if</span> <span class="macro">cfg</span><span class="macro">!</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_log_rc&quot;</span>)) {
+            <span class="kw">if</span> <span class="ident">A</span>::<span class="ident">valid</span>(<span class="ident">cnt</span>) {
+                <span class="ident">Log</span>::<span class="ident">recount_on_failure</span>(<span class="ident">u64</span>::<span class="ident">MAX</span>, <span class="bool-val">true</span>, <span class="ident">journal</span>)
+            } <span class="kw">else</span> {
+                <span class="ident">Ptr</span>::<span class="ident">dangling</span>()
+            }
+        } <span class="kw">else</span> {
+            <span class="ident">Ptr</span>::<span class="ident">dangling</span>()
+        };
+        
+        <span class="kw">let</span> <span class="ident">res</span> <span class="op">=</span> <span class="kw-2">*</span><span class="ident">cnt</span>;
+        <span class="kw">if</span> <span class="ident">log</span>.<span class="ident">is_dangling</span>() {
+            <span class="kw-2">*</span><span class="ident">cnt</span> <span class="op">-</span><span class="op">=</span> <span class="number">1</span>;
+        } <span class="kw">else</span> {
+            <span class="kw">let</span> <span class="ident">off</span> <span class="op">=</span> <span class="ident">A</span>::<span class="ident">off_unchecked</span>(<span class="ident">cnt</span>);
+            <span class="kw">let</span> <span class="ident">z</span> <span class="op">=</span> <span class="ident">A</span>::<span class="ident">zone</span>(<span class="ident">off</span>);
+            <span class="ident">A</span>::<span class="ident">prepare</span>(<span class="ident">z</span>);
+            <span class="ident">A</span>::<span class="ident">log64</span>(<span class="ident">off</span>, <span class="ident">res</span> <span class="kw">as</span> <span class="ident">u64</span> <span class="op">-</span> <span class="number">1</span>, <span class="ident">z</span>);
+            <span class="ident">log</span>.<span class="ident">set</span>(<span class="ident">off</span>, <span class="number">1</span>, <span class="ident">z</span>);
+            <span class="ident">A</span>::<span class="ident">perform</span>(<span class="ident">z</span>);
+        }
+        <span class="ident">res</span>
     }
 }
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="ident">PSafe</span> <span class="op">+</span> <span class="question-mark">?</span><span class="ident">Sized</span>, <span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span> <span class="ident">ParcBoxPtr</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">Parc</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span> {
     <span class="attribute">#[<span class="ident">inline</span>(<span class="ident">always</span>)]</span>
-    <span class="kw">fn</span> <span class="ident">count</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="ident">Counter</span> {
+    <span class="kw">fn</span> <span class="ident">count</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="ident">Counter</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span> {
         <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">ptr</span>.<span class="ident">counter</span>
     }
 }
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="ident">PSafe</span> <span class="op">+</span> <span class="question-mark">?</span><span class="ident">Sized</span>, <span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span> <span class="ident">ParcBoxPtr</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">ParcInner</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span> {
     <span class="attribute">#[<span class="ident">inline</span>(<span class="ident">always</span>)]</span>
-    <span class="kw">fn</span> <span class="ident">count</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="ident">Counter</span> {
+    <span class="kw">fn</span> <span class="ident">count</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="ident">Counter</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span> {
         <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">counter</span>
     }
 }
@@ -2695,7 +2712,7 @@
 <span class="doccomment">/// [`Parc::demote`]: ./struct.Parc.html#method.demote</span>
 <span class="doccomment">/// [`upgrade`]: #method.upgrade</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">VWeak</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span>, <span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span> {
-    <span class="ident">ptr</span>: <span class="kw-2">*</span><span class="kw">const</span> <span class="ident">ParcInner</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span>,
+    <span class="ident">ptr</span>: <span class="kw-2">*</span><span class="kw-2">mut</span> <span class="ident">ParcInner</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span>,
     <span class="ident">valid</span>: <span class="kw-2">*</span><span class="kw-2">mut</span> <span class="ident">VWeakValid</span>,
     <span class="ident">gen</span>: <span class="ident">u32</span>,
 }
@@ -2712,7 +2729,7 @@
     <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">parc</span>: <span class="kw-2">&amp;</span><span class="ident">Parc</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">VWeak</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span> {
         <span class="kw">let</span> <span class="ident">list</span> <span class="op">=</span> <span class="ident">parc</span>.<span class="ident">ptr</span>.<span class="ident">vlist</span>.<span class="ident">as_mut</span>();
         <span class="ident">VWeak</span> {
-            <span class="ident">ptr</span>: <span class="ident">parc</span>.<span class="ident">ptr</span>.<span class="ident">as_ptr</span>(),
+            <span class="ident">ptr</span>: <span class="ident">parc</span>.<span class="ident">ptr</span>.<span class="ident">get_mut_ptr</span>(),
             <span class="ident">valid</span>: <span class="ident">list</span>.<span class="ident">append</span>(),
             <span class="ident">gen</span>: <span class="ident">A</span>::<span class="ident">gen</span>(),
         }
@@ -2752,49 +2769,32 @@
     <span class="doccomment">///     assert!(vweak_obj.promote(j).is_none());</span>
     <span class="doccomment">/// }).unwrap();</span>
     <span class="doccomment">/// ```</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">promote</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">_journal</span>: <span class="kw-2">&amp;</span><span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">Parc</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span><span class="op">&gt;</span> {
-        <span class="comment">// We use a CAS loop to increment the strong count instead of a</span>
-        <span class="comment">// fetch_add as this function should never take the reference count</span>
-        <span class="comment">// from zero to one.</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">promote</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">j</span>: <span class="kw-2">&amp;</span><span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">Parc</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span><span class="op">&gt;</span> {
         <span class="kw">let</span> <span class="ident">inner</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">inner</span>()<span class="question-mark">?</span>;
 
-        <span class="comment">// Relaxed load because any write of 0 that we can observe</span>
-        <span class="comment">// leaves the field in a permanently zero state (so a</span>
-        <span class="comment">// &quot;stale&quot; read of 0 is fine), and any other value is</span>
-        <span class="comment">// confirmed via the CAS below.</span>
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">n</span> <span class="op">=</span> <span class="ident">inner</span>.<span class="ident">counter</span>.<span class="ident">strong</span>.<span class="ident">load</span>(<span class="ident">Relaxed</span>);
+        <span class="kw">let</span> <span class="ident">_lock</span> <span class="op">=</span> <span class="ident">SpinLock</span>::<span class="ident">acquire</span>(<span class="ident">inner</span>.<span class="ident">counter</span>.<span class="ident">lock</span>.<span class="ident">as_mut</span>());
+        <span class="kw">let</span> <span class="ident">n</span> <span class="op">=</span> <span class="ident">inner</span>.<span class="ident">counter</span>.<span class="ident">strong</span>;
 
-        <span class="kw">loop</span> {
-            <span class="kw">if</span> <span class="ident">n</span> <span class="op">=</span><span class="op">=</span> <span class="number">0</span> {
-                <span class="kw">return</span> <span class="prelude-val">None</span>;
-            }
-
-            <span class="comment">// See comments in `Arc::clone` for why we do this (for `mem::forget`).</span>
-            <span class="kw">if</span> <span class="ident">n</span> <span class="op">&gt;</span> <span class="ident">MAX_REFCOUNT</span> {
-                <span class="ident">std</span>::<span class="ident">process</span>::<span class="ident">abort</span>();
-            }
-
-            <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_log_rc&quot;</span>))]</span>
-            <span class="ident">inner</span>.<span class="ident">log_count</span>(<span class="ident">_journal</span>);
-
-            <span class="comment">// Relaxed is fine for the failure case because we don&#39;t have any expectations about the new state.</span>
-            <span class="comment">// Acquire is necessary for the success case to synchronise with `Arc::new_cyclic`, when the inner</span>
-            <span class="comment">// value can be initialized after `Weak` references have already been created. In that case, we</span>
-            <span class="comment">// expect to observe the fully initialized value.</span>
-            <span class="kw">match</span> <span class="ident">inner</span>.<span class="ident">counter</span>.<span class="ident">strong</span>.<span class="ident">compare_exchange_weak</span>(<span class="ident">n</span>, <span class="ident">n</span> <span class="op">+</span> <span class="number">1</span>, <span class="ident">Acquire</span>, <span class="ident">Relaxed</span>) {
-                <span class="prelude-val">Ok</span>(<span class="kw">_</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="kw">return</span> <span class="prelude-val">Some</span>(<span class="ident">Parc</span>::<span class="ident">from_inner</span>(<span class="ident">Ptr</span>::<span class="ident">from_raw</span>(<span class="self">self</span>.<span class="ident">ptr</span>))), <span class="comment">// null checked above</span>
-                <span class="prelude-val">Err</span>(<span class="ident">old</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">n</span> <span class="op">=</span> <span class="ident">old</span>,
-            }
+        <span class="kw">if</span> <span class="ident">n</span> <span class="op">=</span><span class="op">=</span> <span class="number">0</span> {
+            <span class="kw">return</span> <span class="prelude-val">None</span>;
         }
+
+        <span class="comment">// See comments in `Arc::clone` for why we do this (for `mem::forget`).</span>
+        <span class="kw">if</span> <span class="ident">n</span> <span class="op">&gt;</span> <span class="ident">MAX_REFCOUNT</span> {
+            <span class="ident">std</span>::<span class="ident">process</span>::<span class="ident">abort</span>();
+        }
+
+        <span class="ident">lock_free_fetch_inc</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">inner</span>.<span class="ident">counter</span>.<span class="ident">strong</span>, <span class="ident">j</span>);
+        <span class="prelude-val">Some</span>(<span class="ident">Parc</span>::<span class="ident">from_inner</span>(<span class="ident">Ptr</span>::<span class="ident">from_raw</span>(<span class="self">self</span>.<span class="ident">ptr</span>)))
     }
 
     <span class="attribute">#[<span class="ident">inline</span>]</span>
-    <span class="kw">fn</span> <span class="ident">inner</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="ident">ParcInner</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">inner</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">ParcInner</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span><span class="op">&gt;</span> {
         <span class="kw">unsafe</span> {
             <span class="kw">if</span> <span class="op">!</span>(<span class="kw-2">*</span><span class="self">self</span>.<span class="ident">valid</span>).<span class="ident">valid</span>.<span class="ident">load</span>(<span class="ident">Acquire</span>) <span class="op">|</span><span class="op">|</span> <span class="self">self</span>.<span class="ident">gen</span> <span class="op">!</span><span class="op">=</span> <span class="ident">A</span>::<span class="ident">gen</span>() {
                 <span class="prelude-val">None</span>
             } <span class="kw">else</span> {
-                <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span><span class="kw-2">*</span><span class="self">self</span>.<span class="ident">ptr</span>)
+                <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="kw-2">*</span><span class="self">self</span>.<span class="ident">ptr</span>)
             }
         }
     }

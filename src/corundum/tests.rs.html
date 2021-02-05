@@ -2104,6 +2104,45 @@
 <span id="2101">2101</span>
 <span id="2102">2102</span>
 <span id="2103">2103</span>
+<span id="2104">2104</span>
+<span id="2105">2105</span>
+<span id="2106">2106</span>
+<span id="2107">2107</span>
+<span id="2108">2108</span>
+<span id="2109">2109</span>
+<span id="2110">2110</span>
+<span id="2111">2111</span>
+<span id="2112">2112</span>
+<span id="2113">2113</span>
+<span id="2114">2114</span>
+<span id="2115">2115</span>
+<span id="2116">2116</span>
+<span id="2117">2117</span>
+<span id="2118">2118</span>
+<span id="2119">2119</span>
+<span id="2120">2120</span>
+<span id="2121">2121</span>
+<span id="2122">2122</span>
+<span id="2123">2123</span>
+<span id="2124">2124</span>
+<span id="2125">2125</span>
+<span id="2126">2126</span>
+<span id="2127">2127</span>
+<span id="2128">2128</span>
+<span id="2129">2129</span>
+<span id="2130">2130</span>
+<span id="2131">2131</span>
+<span id="2132">2132</span>
+<span id="2133">2133</span>
+<span id="2134">2134</span>
+<span id="2135">2135</span>
+<span id="2136">2136</span>
+<span id="2137">2137</span>
+<span id="2138">2138</span>
+<span id="2139">2139</span>
+<span id="2140">2140</span>
+<span id="2141">2141</span>
+<span id="2142">2142</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">test</span>)]</span>
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod</span> <span class="ident">problems</span> {
@@ -2601,6 +2640,45 @@
         <span class="kw">let</span> <span class="ident">duration</span> <span class="op">=</span> <span class="ident">start</span>.<span class="ident">elapsed</span>();
         <span class="macro">println</span><span class="macro">!</span>(<span class="string">&quot;Time elapsed in serial execution is: {:?}&quot;</span>, <span class="ident">duration</span>);
         <span class="macro">println</span><span class="macro">!</span>(<span class="string">&quot;usage = {} bytes&quot;</span>, <span class="ident">BuddyAlloc</span>::<span class="ident">used</span>());
+    }
+
+    <span class="attribute">#[<span class="ident">test</span>]</span>
+    <span class="kw">fn</span> <span class="ident">parc_two_threads</span>() {
+        <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">default</span>::<span class="kw-2">*</span>;
+
+        <span class="kw">type</span> <span class="ident">P</span> <span class="op">=</span> <span class="ident">BuddyAlloc</span>;
+        <span class="kw">let</span> <span class="ident">root</span> <span class="op">=</span> <span class="ident">P</span>::<span class="ident">open</span>::<span class="op">&lt;</span><span class="ident">Parc</span><span class="op">&lt;</span><span class="ident">i32</span><span class="op">&gt;</span><span class="op">&gt;</span>(<span class="string">&quot;parc_two_threads.pool&quot;</span>, <span class="ident">O_CFNE</span>).<span class="ident">unwrap</span>();
+        <span class="macro">println</span><span class="macro">!</span>(<span class="string">&quot;usage: {}&quot;</span>, <span class="ident">P</span>::<span class="ident">used</span>());
+        <span class="macro">println</span><span class="macro">!</span>(<span class="string">&quot;strong = {}&quot;</span>, <span class="ident">Parc</span>::<span class="ident">strong_count</span>(<span class="kw-2">&amp;</span><span class="ident">root</span>));
+        <span class="kw">let</span> <span class="ident">c1</span> <span class="op">=</span> <span class="ident">root</span>.<span class="ident">demote</span>();
+        <span class="kw">let</span> <span class="ident">c2</span> <span class="op">=</span> <span class="ident">root</span>.<span class="ident">demote</span>();
+        <span class="kw">let</span> <span class="ident">t1</span> <span class="op">=</span> <span class="ident">std</span>::<span class="ident">thread</span>::<span class="ident">spawn</span>(<span class="kw">move</span> <span class="op">|</span><span class="op">|</span> {
+            <span class="kw">let</span> <span class="kw">_</span><span class="op">=</span><span class="ident">P</span>::<span class="ident">transaction</span>(<span class="op">|</span><span class="ident">j</span><span class="op">|</span> {
+                <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">p</span>) <span class="op">=</span> <span class="ident">c2</span>.<span class="ident">promote</span>(<span class="ident">j</span>) {
+                    <span class="kw">let</span> <span class="ident">m</span> <span class="op">=</span> <span class="ident">p</span>.<span class="ident">pclone</span>(<span class="ident">j</span>);
+                    <span class="macro">println</span><span class="macro">!</span>(<span class="string">&quot;strong(t1) = {}&quot;</span>, <span class="ident">Parc</span>::<span class="ident">strong_count</span>(<span class="kw-2">&amp;</span><span class="ident">m</span>));
+                    <span class="ident">std</span>::<span class="ident">thread</span>::<span class="ident">sleep</span>(<span class="ident">std</span>::<span class="ident">time</span>::<span class="ident">Duration</span>::<span class="ident">from_millis</span>(<span class="number">30</span>));
+                    <span class="macro">println</span><span class="macro">!</span>(<span class="string">&quot;t1 is done&quot;</span>);
+                }
+            });
+        });
+        
+        <span class="kw">let</span> <span class="ident">t2</span> <span class="op">=</span> <span class="ident">std</span>::<span class="ident">thread</span>::<span class="ident">spawn</span>(<span class="kw">move</span> <span class="op">|</span><span class="op">|</span> {
+            <span class="ident">std</span>::<span class="ident">thread</span>::<span class="ident">sleep</span>(<span class="ident">std</span>::<span class="ident">time</span>::<span class="ident">Duration</span>::<span class="ident">from_millis</span>(<span class="number">25</span>));
+            <span class="kw">let</span> <span class="kw">_</span> <span class="op">=</span> <span class="ident">P</span>::<span class="ident">transaction</span>(<span class="op">|</span><span class="ident">j</span><span class="op">|</span> {
+                <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">p</span>) <span class="op">=</span> <span class="ident">c1</span>.<span class="ident">promote</span>(<span class="ident">j</span>) {
+                    <span class="kw">let</span> <span class="ident">m</span> <span class="op">=</span> <span class="ident">p</span>.<span class="ident">pclone</span>(<span class="ident">j</span>);
+                    <span class="macro">println</span><span class="macro">!</span>(<span class="string">&quot;strong(t2) = {}&quot;</span>, <span class="ident">Parc</span>::<span class="ident">strong_count</span>(<span class="kw-2">&amp;</span><span class="ident">m</span>));
+                    <span class="ident">std</span>::<span class="ident">thread</span>::<span class="ident">sleep</span>(<span class="ident">std</span>::<span class="ident">time</span>::<span class="ident">Duration</span>::<span class="ident">from_millis</span>(<span class="number">10</span>));
+                    <span class="comment">// std::process::exit(0);</span>
+                    <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;abort&quot;</span>);
+                }
+            });
+        });
+
+        <span class="ident">t1</span>.<span class="ident">join</span>().<span class="ident">unwrap</span>();
+        <span class="ident">t2</span>.<span class="ident">join</span>().<span class="ident">unwrap</span>();
+        <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="ident">Parc</span>::<span class="ident">strong_count</span>(<span class="kw-2">&amp;</span><span class="ident">root</span>), <span class="number">1</span>);
     }
 }
 

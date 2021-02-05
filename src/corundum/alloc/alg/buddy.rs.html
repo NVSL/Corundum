@@ -1504,6 +1504,23 @@
 <span id="1501">1501</span>
 <span id="1502">1502</span>
 <span id="1503">1503</span>
+<span id="1504">1504</span>
+<span id="1505">1505</span>
+<span id="1506">1506</span>
+<span id="1507">1507</span>
+<span id="1508">1508</span>
+<span id="1509">1509</span>
+<span id="1510">1510</span>
+<span id="1511">1511</span>
+<span id="1512">1512</span>
+<span id="1513">1513</span>
+<span id="1514">1514</span>
+<span id="1515">1515</span>
+<span id="1516">1516</span>
+<span id="1517">1517</span>
+<span id="1518">1518</span>
+<span id="1519">1519</span>
+<span id="1520">1520</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">alloc</span>::<span class="ident">MemPool</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">ll</span>::<span class="kw-2">*</span>;
@@ -1752,6 +1769,14 @@
         });
         <span class="self">self</span>.<span class="ident">log64</span>.<span class="ident">clear</span>();
         <span class="self">self</span>.<span class="ident">available</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">available_log</span>;
+    }
+
+    <span class="attribute">#[<span class="ident">inline</span>(<span class="ident">always</span>)]</span>
+    <span class="doccomment">/// Begins a failure-atomic section</span>
+    <span class="kw">pub</span> <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">prepare</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>) {
+        <span class="self">self</span>.<span class="ident">lock</span>();
+        <span class="self">self</span>.<span class="ident">log64</span>.<span class="ident">clear</span>();
+        <span class="self">self</span>.<span class="ident">aux_valid</span> <span class="op">=</span> <span class="bool-val">true</span>;
     }
 
     <span class="attribute">#[<span class="ident">inline</span>]</span>
@@ -2271,7 +2296,7 @@
 <span class="doccomment">/// * `Pbox&lt;T&gt;` = [`corundum::boxed::Pbox`]`&lt;T, `[`BuddyAlloc`]`&gt;`</span>
 <span class="doccomment">/// * `Prc&lt;T&gt;` = [`corundum::prc::Prc`]`&lt;T, `[`BuddyAlloc`]`&gt;`</span>
 <span class="doccomment">/// * `Parc&lt;T&gt;` = [`corundum::sync::Parc`]`&lt;T, `[`BuddyAlloc`]`&gt;`</span>
-<span class="doccomment">/// * `PMutex&lt;T&gt;` = [`corundum::sync::Mutex`]`&lt;T, `[`BuddyAlloc`]`&gt;`</span>
+<span class="doccomment">/// * `PMutex&lt;T&gt;` = [`corundum::sync::PMutex`]`&lt;T, `[`BuddyAlloc`]`&gt;`</span>
 <span class="doccomment">/// * `PCell&lt;T&gt;` = [`corundum::cell::PCell`]`&lt;T, `[`BuddyAlloc`]`&gt;`</span>
 <span class="doccomment">/// * `PRefCell&lt;T&gt;` = [`corundum::cell::PRefCell`]`&lt;T, `[`BuddyAlloc`]`&gt;`</span>
 <span class="doccomment">/// * `VCell&lt;T&gt;` = [`corundum::cell::VCell`]`&lt;T, `[`BuddyAlloc`]`&gt;`</span>
@@ -2324,7 +2349,7 @@
 <span class="doccomment">/// [`corundum::boxed::Pbox`]: ./boxed/struct.Pbox.html</span>
 <span class="doccomment">/// [`corundum::prc::Prc`]: ./prc/struct.Prc.html</span>
 <span class="doccomment">/// [`corundum::sync::Parc`]: ./sync/struct.Parc.html</span>
-<span class="doccomment">/// [`corundum::sync::Mutex`]: ./sync/struct.Mutex.html</span>
+<span class="doccomment">/// [`corundum::sync::PMutex`]: ./sync/struct.PMutex.html</span>
 <span class="doccomment">/// [`corundum::cell::PCell`]: ./cell/struct.PCell.html</span>
 <span class="doccomment">/// [`corundum::cell::PRefCell`]: ./cell/struct.PRefCell.html</span>
 <span class="doccomment">/// [`corundum::cell::VCell`]: ./cell/struct.VCell.html</span>
@@ -2699,6 +2724,15 @@
                 <span class="attribute">#[<span class="ident">inline</span>]</span>
                 <span class="attribute">#[<span class="ident">allow</span>(<span class="ident">unused_unsafe</span>)]</span>
                 <span class="attribute">#[<span class="ident">track_caller</span>]</span>
+                <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">prepare</span>(<span class="ident">z</span>: <span class="ident">usize</span>) {
+                    <span class="macro">static_inner</span><span class="macro">!</span>(<span class="ident">BUDDY_INNER</span>, <span class="ident">inner</span>, {
+                        <span class="ident">inner</span>.<span class="ident">zone</span>[<span class="ident">z</span>].<span class="ident">prepare</span>();
+                    })
+                }
+
+                <span class="attribute">#[<span class="ident">inline</span>]</span>
+                <span class="attribute">#[<span class="ident">allow</span>(<span class="ident">unused_unsafe</span>)]</span>
+                <span class="attribute">#[<span class="ident">track_caller</span>]</span>
                 <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">perform</span>(<span class="ident">z</span>: <span class="ident">usize</span>) {
                     <span class="macro">static_inner</span><span class="macro">!</span>(<span class="ident">BUDDY_INNER</span>, <span class="ident">inner</span>, {
                         <span class="ident">inner</span>.<span class="ident">zone</span>[<span class="ident">z</span>].<span class="ident">perform</span>();
@@ -2934,7 +2968,7 @@
             <span class="doccomment">/// `&lt;T,`[`BuddyAlloc`](./struct.BuddyAlloc.html)`&gt;`.</span>
             <span class="kw">pub</span> <span class="kw">type</span> <span class="ident">Parc</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="op">=</span> <span class="macro-nonterminal">$</span><span class="kw">crate</span>::<span class="macro-nonterminal">sync</span>::<span class="ident">Parc</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">BuddyAlloc</span><span class="op">&gt;</span>;
 
-            <span class="doccomment">/// Compact form of [`Mutex`](../../sync/struct.Mutex.html)</span>
+            <span class="doccomment">/// Compact form of [`PMutex`](../../sync/struct.PMutex.html)</span>
             <span class="doccomment">/// `&lt;T,`[`BuddyAlloc`](./struct.BuddyAlloc.html)`&gt;`.</span>
             <span class="kw">pub</span> <span class="kw">type</span> <span class="ident">PMutex</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="op">=</span> <span class="macro-nonterminal">$</span><span class="kw">crate</span>::<span class="macro-nonterminal">sync</span>::<span class="ident">PMutex</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">BuddyAlloc</span><span class="op">&gt;</span>;
 

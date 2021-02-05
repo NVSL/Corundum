@@ -370,6 +370,12 @@
 <span id="367">367</span>
 <span id="368">368</span>
 <span id="369">369</span>
+<span id="370">370</span>
+<span id="371">371</span>
+<span id="372">372</span>
+<span id="373">373</span>
+<span id="374">374</span>
+<span id="375">375</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">alloc</span>::<span class="ident">MemPool</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">alloc</span>::<span class="ident">PmemUsage</span>;
@@ -462,6 +468,12 @@
     <span class="attribute">#[<span class="ident">inline</span>]</span>
     <span class="doccomment">/// Returns the mutable raw pointer of the value</span>
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn</span> <span class="ident">as_mut_ptr</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">*</span><span class="kw-2">mut</span> <span class="ident">T</span> {
+        <span class="kw">unsafe</span> { <span class="ident">A</span>::<span class="ident">get_mut_unchecked</span>(<span class="self">self</span>.<span class="ident">off</span>) }
+    }
+
+    <span class="attribute">#[<span class="ident">inline</span>]</span>
+    <span class="doccomment">/// Returns the mutable raw pointer of the value</span>
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn</span> <span class="ident">get_mut_ptr</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">*</span><span class="kw-2">mut</span> <span class="ident">T</span> {
         <span class="kw">unsafe</span> { <span class="ident">A</span>::<span class="ident">get_mut_unchecked</span>(<span class="self">self</span>.<span class="ident">off</span>) }
     }
 

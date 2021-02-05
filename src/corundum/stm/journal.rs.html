@@ -538,6 +538,20 @@
 <span id="535">535</span>
 <span id="536">536</span>
 <span id="537">537</span>
+<span id="538">538</span>
+<span id="539">539</span>
+<span id="540">540</span>
+<span id="541">541</span>
+<span id="542">542</span>
+<span id="543">543</span>
+<span id="544">544</span>
+<span id="545">545</span>
+<span id="546">546</span>
+<span id="547">547</span>
+<span id="548">548</span>
+<span id="549">549</span>
+<span id="550">550</span>
+<span id="551">551</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! The journal object for keeping logs</span>
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">alloc</span>::<span class="ident">MemPool</span>;
@@ -757,7 +771,6 @@
     <span class="kw">fn</span> <span class="ident">new_page</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Ptr</span><span class="op">&lt;</span><span class="ident">Page</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>, <span class="ident">A</span><span class="op">&gt;</span> {
         <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;perf_stat&quot;</span>)]</span>
         <span class="kw">let</span> <span class="ident">_perf</span> <span class="op">=</span> <span class="kw">crate</span>::<span class="ident">stat</span>::<span class="ident">Measure</span>::<span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>::<span class="ident">NewPage</span>(<span class="ident">std</span>::<span class="ident">time</span>::<span class="ident">Instant</span>::<span class="ident">now</span>());
-
         <span class="kw">unsafe</span> {
             <span class="kw">let</span> <span class="ident">page</span> <span class="op">=</span> <span class="ident">Page</span>::<span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span> {
                 <span class="ident">len</span>: <span class="number">0</span>,
@@ -767,9 +780,11 @@
             };
             <span class="kw">let</span> (<span class="kw">_</span>, <span class="ident">off</span>, <span class="kw">_</span>, <span class="ident">z</span>) <span class="op">=</span> <span class="ident">A</span>::<span class="ident">atomic_new</span>(<span class="ident">page</span>);
             <span class="ident">A</span>::<span class="ident">log64</span>(<span class="ident">A</span>::<span class="ident">off_unchecked</span>(<span class="self">self</span>.<span class="ident">pages</span>.<span class="ident">off_ref</span>()), <span class="ident">off</span>, <span class="ident">z</span>);
-
+            
             <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;pin_journals&quot;</span>)]</span> {
-            <span class="ident">A</span>::<span class="ident">log64</span>(<span class="ident">A</span>::<span class="ident">off_unchecked</span>(<span class="self">self</span>.<span class="ident">current</span>.<span class="ident">off_ref</span>()), <span class="ident">off</span>, <span class="ident">z</span>);}
+                <span class="ident">A</span>::<span class="ident">log64</span>(<span class="ident">A</span>::<span class="ident">off_unchecked</span>(<span class="self">self</span>.<span class="ident">current</span>.<span class="ident">off_ref</span>()), <span class="ident">off</span>, <span class="ident">z</span>);
+                <span class="comment">// eprintln!(&quot;new page for {:p} at {:x}&quot;, self as *const Self, off);</span>
+            }
 
             <span class="ident">A</span>::<span class="ident">perform</span>(<span class="ident">z</span>);
 
@@ -801,6 +816,19 @@
         }
         <span class="self">self</span>.<span class="ident">current</span> <span class="op">=</span> <span class="ident">Ptr</span>::<span class="ident">dangling</span>();
         <span class="self">self</span>.<span class="ident">pages</span> <span class="op">=</span> <span class="ident">Ptr</span>::<span class="ident">dangling</span>();
+    }
+
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">print_pages</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">i</span> <span class="op">=</span> <span class="number">1</span>;
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">curr</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">pages</span>;
+        <span class="kw">while</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">page</span>) <span class="op">=</span> <span class="ident">curr</span>.<span class="ident">as_option</span>() {
+            <span class="macro">eprintln</span><span class="macro">!</span>(<span class="string">&quot;page {:&lt;3} at offset {:x} (len = {}, full = {})&quot;</span>, <span class="ident">i</span>, <span class="ident">page</span>.<span class="ident">off</span>(), <span class="ident">page</span>.<span class="ident">len</span>, <span class="ident">page</span>.<span class="ident">is_full</span>());
+            <span class="ident">i</span> <span class="op">+</span><span class="op">=</span> <span class="number">1</span>;
+            <span class="ident">curr</span> <span class="op">=</span> <span class="ident">page</span>.<span class="ident">next</span>;
+        }
+
+        <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;pin_journals&quot;</span>)]</span>
+        <span class="macro">eprintln</span><span class="macro">!</span>(<span class="string">&quot;current page at offset {:x}&quot;</span>, <span class="self">self</span>.<span class="ident">current</span>.<span class="ident">off</span>());
     }
 
     <span class="doccomment">/// Commits all logs in the journal</span>
