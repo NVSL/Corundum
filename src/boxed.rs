@@ -426,9 +426,11 @@ impl<T: PSafe + ?Sized, A: MemPool> Pbox<T, A> {
 unsafe impl<#[may_dangle] T: PSafe + ?Sized, A: MemPool> Drop for Pbox<T, A> {
     fn drop(&mut self) {
         unsafe {
-            let p = self.0.as_mut();
-            std::ptr::drop_in_place(p);
-            A::free(p);
+            if !self.0.is_dangling() {
+                let p = self.0.as_mut();
+                std::ptr::drop_in_place(p);
+                A::free(p);
+            }
         }
     }
 }
