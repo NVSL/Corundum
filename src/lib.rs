@@ -123,6 +123,7 @@
 #![feature(fn_traits)]
 #![feature(unboxed_closures)]
 #![feature(let_chains)]
+#![feature(c_variadic)]
 
 #![allow(dead_code)]
 #![allow(incomplete_features)]
