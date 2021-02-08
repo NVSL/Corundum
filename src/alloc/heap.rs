@@ -12,7 +12,7 @@ use std::thread::ThreadId;
 
 pub  use crate::alloc::*;
 
-/// A pass-through allocator for demote memory
+/// A pass-through allocator for volatile memory
 pub struct Heap {}
 
 static mut JOURNALS: Option<HashMap<ThreadId, (u64, i32)>> = None;

@@ -62,7 +62,7 @@ unsafe fn set_data_ptr<T: ?Sized, U>(mut ptr: *mut T, data: *mut U) -> *mut T {
 /// [`Weak`] references for reference cycles.
 /// 
 /// References to data can be strong (using [`pclone`]), weak (using [`downgrade`]),
-/// or demote weak (using [`demote`]). The first two generate NV-to-NV
+/// or volatile weak (using [`demote`]). The first two generate NV-to-NV
 /// pointers, while the last on is a V-to-NV pointer. Please see [`Weak`] and
 /// [`VWeak`] for more details on their implementation and safety.
 ///
@@ -100,7 +100,7 @@ unsafe fn set_data_ptr<T: ?Sized, U>(mut ptr: *mut T, data: *mut U) -> *mut T {
 ///     assert_eq!(3, Prc::strong_count(&p));
 ///     assert_eq!(1, Prc::weak_count(&p));
 /// 
-///     // Upgrade the demote weak ref to a strong ref
+///     // Upgrade the volatile weak ref to a strong ref
 ///     let vs = w.upgrade(j).unwrap();
 ///     assert_eq!(4, Prc::strong_count(&p));
 ///     assert_eq!(1, Prc::weak_count(&p));
@@ -1084,7 +1084,7 @@ pub fn ws<T: PSafe, A: MemPool>(ptr: &Prc<T, A>) -> (usize, usize) {
 }
 
 /// `VWeak` is a version of [`Prc`] that holds a non-owning reference to the
-/// managed allocation in the demote heap. The allocation is accessed by
+/// managed allocation in the volatile heap. The allocation is accessed by
 /// calling [`promote`] on the `VWeak` pointer, which returns an
 /// [`Option`]`<`[`Prc`]`<T>>`.
 ///

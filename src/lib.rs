@@ -8,8 +8,8 @@
 //! |     Common Bugs     | Explanation  <img width=700/> | Approach |
 //! |         ---         |              ---              |    ---   |
 //! | Inter-Pool Pointers | A pointer in another pool which is unavailable | Type checking pools in persistent pointers. |
-//! | P-to-V Pointers     | A persistent pointer pointing at demote memory | Persistent pointers accept only [`PSafe`] types and demote pointers are `!PSafe`. Only, [`VCell`] allows single-execution P-to-V pointers. |
-//! | V-to-P Pointers     | A demote pointer keeping a zero-referenced object alive | Only [`VWeak`] allows V-to-P pointers which is a weak reference and does not keep data alive. |
+//! | P-to-V Pointers     | A persistent pointer pointing at volatile memory | Persistent pointers accept only [`PSafe`] types and volatile pointers are `!PSafe`. Only, [`VCell`] allows single-execution P-to-V pointers. |
+//! | V-to-P Pointers     | A volatile pointer keeping a zero-referenced object alive | Only [`VWeak`] allows V-to-P pointers which is a weak reference and does not keep data alive. |
 //! | Unlogged Updates    | An unrecoverable update to persistent data | Modifications are enforced to be inside atomic [`transaction`]s. | 
 //! | Data Race           | Updating persistent data simultaneously in two threads | Mutable borrowing is limited to [`PMutex`] which uses a transaction-wide lock to provide both atomicity and isolation. |
 //! | Locked Mutex        | A persistent mutex remains locked on powerfail | [`PMutex`] uses [`VCell`] which resets at restart. |

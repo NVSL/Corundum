@@ -29,7 +29,7 @@ unsafe impl<A: MemPool> PSafe for Counter<A> {}
 
 /// The [`Parc`]'s inner data type
 /// 
-/// It contains the atomic counters, a list of demote references, and the
+/// It contains the atomic counters, a list of volatile references, and the
 /// actual value.
 /// 
 /// [`Parc`]: #
@@ -71,7 +71,7 @@ unsafe fn set_data_ptr<T, U>(mut ptr: *mut T, data: *mut U) -> *mut T {
 /// To allow sharing, `Parc` provides a safe mechanism to cross the thread
 /// boundaries. When you need to share it, you can obtain a [`VWeak`]
 /// object by calling [`demote()`] function. The [`VWeak`] object is both
-/// [`Sync`] and [`Send`] and acts like a demote reference. Calling
+/// [`Sync`] and [`Send`] and acts like a volatile reference. Calling
 /// [`VWeak`]`::`[`promote()`] gives access to data by creating a new reference
 /// of type `Parc` inside the other thread, if the referent is still available.
 /// Calling [`demote()`] is dynamically prohibited to be inside a transaction.
@@ -1237,7 +1237,7 @@ fn data_offset_align<A: MemPool>(align: usize) -> isize {
 }
 
 /// `VWeak` is a version of [`Parc`] that holds a non-owning thread-safe 
-/// reference to the managed allocation in the demote heap. The allocation is
+/// reference to the managed allocation in the volatile heap. The allocation is
 /// accessed by calling [`upgrade`] on the `VWeak` pointer, which returns an
 /// [`Option`]`<`[`Parc`]`<T>>`.
 ///

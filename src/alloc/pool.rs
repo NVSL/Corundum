@@ -299,7 +299,7 @@ where
     ///
     /// # Errors
     ///
-    /// * A demote memory pool (e.g. `Heap`) doesn't have a root object.
+    /// * A volatile memory pool (e.g. `Heap`) doesn't have a root object.
     /// * The pool should be open before accessing the root object.
     ///
     /// [`RootObj`]: ../stm/trait.RootObj.html
@@ -1082,7 +1082,7 @@ where
     /// 
     /// The captured types are bounded to be [`TxInSafe`], unless explicitly
     /// asserted otherwise using [`AssertTxInSafe`] type wrapper. This
-    /// guarantees the demote state consistency, as well as the persistent
+    /// guarantees the volatile state consistency, as well as the persistent
     /// state.
     /// 
     /// The returned type should be [`TxOutSafe`]. This prevents sending out

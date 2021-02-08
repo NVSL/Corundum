@@ -9,7 +9,7 @@ use std::panic::{RefUnwindSafe, UnwindSafe};
 use std::cell::UnsafeCell;
 use std::fmt;
 
-/// It marks the implementing type to be free of pointers to the demote heap,
+/// It marks the implementing type to be free of pointers to the volatile heap,
 /// and persistence safe.
 ///
 /// Also, every type that allows interior mutability is not safe in persistence
@@ -192,7 +192,7 @@ impl<F: Future + LooseTxInUnsafe> Future for AssertTxInSafe<F> {
     }
 }
 
-/// Safe to be stored in demote memory useful in `VCell` type to prevent
+/// Safe to be stored in volatile memory useful in `VCell` type to prevent
 /// storing persistent pointers in [`VCell`](./cell/struct.VCell.html)
 pub unsafe auto trait VSafe {}
 

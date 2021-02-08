@@ -335,13 +335,13 @@ pub(crate) mod problems {
                 if let Some(p) = vp.promote(j) {
 
                     let _vp2 = Prc::demote(&p);
-                    // drop a recently created demote reference
+                    // drop a recently created volatile reference
                     let _vp2 = Prc::demote(&p);
-                    // drop a recently created demote reference
+                    // drop a recently created volatile reference
                     let _vp2 = Prc::demote(&p);
-                    // drop a recently created demote reference
+                    // drop a recently created volatile reference
                     let _vp2 = Prc::demote(&p);
-                // drop a recently created demote reference
+                // drop a recently created volatile reference
                 } else {
                     println!("no data");
                 }
@@ -360,7 +360,7 @@ pub(crate) mod problems {
 
             let x = Prc::demote(&root.v.borrow());
             P::transaction(|j| {
-                // Trying to access a demote pointer from the current session
+                // Trying to access a volatile pointer from the current session
                 if let Some(p) = x.promote(j) {
                     println!("data = {}", p);
                 } else {
@@ -374,7 +374,7 @@ pub(crate) mod problems {
         // Reopening the pool
         let _root = P::open::<Root>("test_vweak.pool", O_CFNE).unwrap();
         P::transaction(|j| {
-            // Trying to access a demote pointer from previous session
+            // Trying to access a volatile pointer from previous session
             if let Some(p) = ovp.promote(j) {
                 println!("data = {}", p);
             } else {

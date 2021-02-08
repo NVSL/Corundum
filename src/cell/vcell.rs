@@ -4,7 +4,7 @@ use std::cmp::*;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 
-/// A persistent memory location containing a demote data
+/// A persistent memory location containing a volatile data
 /// 
 /// The underlying data is valid throughout of the course of a single pool
 /// lifetime. When the pool is reopened, the data is back to its default value.
@@ -28,7 +28,7 @@ use std::ops::{Deref, DerefMut};
 /// P::transaction(|j| {
 ///     let mut v = root.v.borrow_mut();
 ///     assert_eq!(*v, i32::default());
-///     *v = 20; // This value is demote and resets on restart
+///     *v = 20; // This value is volatile and resets on restart
 /// }).unwrap();
 /// ```
 /// 

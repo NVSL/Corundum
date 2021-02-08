@@ -205,7 +205,7 @@ impl<A: MemPool> String<A> {
 
     /// Creates a `String` from `&str`
     ///
-    /// `s` may be in the demote heap. `PStrong::from_str` will allocate enough
+    /// `s` may be in the volatile heap. `PStrong::from_str` will allocate enough
     /// space in pool `A` and places `s` into it an make a `String` out of it.
     ///
     /// # Example
