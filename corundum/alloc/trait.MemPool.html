@@ -239,7 +239,7 @@ in <a href="../sync/parc/struct.Parc.html"><code>Parc</code></a><code>&lt;</code
 }).<span class="ident">unwrap</span>();</pre></div>
 <h1 id="errors" class="section-header"><a href="#errors">Errors</a></h1>
 <ul>
-<li>A demote memory pool (e.g. <code>Heap</code>) doesn't have a root object.</li>
+<li>A volatile memory pool (e.g. <code>Heap</code>) doesn't have a root object.</li>
 <li>The pool should be open before accessing the root object.</li>
 </ul>
 </div><h3 id="method.is_open" class="method"><code>pub fn <a href="#method.is_open" class="fnname">is_open</a>() -&gt; <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.bool.html">bool</a></code><a class="srclink" href="../../src/corundum/alloc/pool.rs.html#319-321" title="goto source code">[src]</a></h3><div class="docblock"><p>Returns true if the pool is open</p>
@@ -411,7 +411,7 @@ ensures that every function taking an argument of type <code>&amp;Journal&lt;P&g
 enforced to be invoked from a transaction.</p>
 <p>The captured types are bounded to be <a href="../trait.TxInSafe.html"><code>TxInSafe</code></a>, unless explicitly
 asserted otherwise using <a href="../struct.AssertTxInSafe.html"><code>AssertTxInSafe</code></a> type wrapper. This
-guarantees the demote state consistency, as well as the persistent
+guarantees the volatile state consistency, as well as the persistent
 state.</p>
 <p>The returned type should be <a href="../trait.TxOutSafe.html"><code>TxOutSafe</code></a>. This prevents sending out
 unreachable persistent objects. The only way out of a transaction for

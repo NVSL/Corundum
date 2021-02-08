@@ -1484,7 +1484,7 @@
 
 <span class="doccomment">/// The [`Parc`]&#39;s inner data type</span>
 <span class="doccomment">/// </span>
-<span class="doccomment">/// It contains the atomic counters, a list of demote references, and the</span>
+<span class="doccomment">/// It contains the atomic counters, a list of volatile references, and the</span>
 <span class="doccomment">/// actual value.</span>
 <span class="doccomment">/// </span>
 <span class="doccomment">/// [`Parc`]: #</span>
@@ -1526,7 +1526,7 @@
 <span class="doccomment">/// To allow sharing, `Parc` provides a safe mechanism to cross the thread</span>
 <span class="doccomment">/// boundaries. When you need to share it, you can obtain a [`VWeak`]</span>
 <span class="doccomment">/// object by calling [`demote()`] function. The [`VWeak`] object is both</span>
-<span class="doccomment">/// [`Sync`] and [`Send`] and acts like a demote reference. Calling</span>
+<span class="doccomment">/// [`Sync`] and [`Send`] and acts like a volatile reference. Calling</span>
 <span class="doccomment">/// [`VWeak`]`::`[`promote()`] gives access to data by creating a new reference</span>
 <span class="doccomment">/// of type `Parc` inside the other thread, if the referent is still available.</span>
 <span class="doccomment">/// Calling [`demote()`] is dynamically prohibited to be inside a transaction.</span>
@@ -2692,7 +2692,7 @@
 }
 
 <span class="doccomment">/// `VWeak` is a version of [`Parc`] that holds a non-owning thread-safe </span>
-<span class="doccomment">/// reference to the managed allocation in the demote heap. The allocation is</span>
+<span class="doccomment">/// reference to the managed allocation in the volatile heap. The allocation is</span>
 <span class="doccomment">/// accessed by calling [`upgrade`] on the `VWeak` pointer, which returns an</span>
 <span class="doccomment">/// [`Option`]`&lt;`[`Parc`]`&lt;T&gt;&gt;`.</span>
 <span class="doccomment">///</span>

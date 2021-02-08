@@ -13,7 +13,7 @@ leak. At this point, we have not provided a static solution to detect cyclic
 references. However, following Rust's partial solution for that, you may use
 <a href="../../corundum/prc/struct.Weak.html" title="Weak"><code>Weak</code></a> references for reference cycles.</p>
 <p>References to data can be strong (using <a href="#method.pclone"><code>pclone</code></a>), weak (using <a href="#method.downgrade"><code>downgrade</code></a>),
-or demote weak (using <a href="#method.demote"><code>demote</code></a>). The first two generate NV-to-NV
+or volatile weak (using <a href="#method.demote"><code>demote</code></a>). The first two generate NV-to-NV
 pointers, while the last on is a V-to-NV pointer. Please see <a href="../../corundum/prc/struct.Weak.html" title="Weak"><code>Weak</code></a> and
 <a href="../../corundum/prc/struct.VWeak.html" title="VWeak"><code>VWeak</code></a> for more details on their implementation and safety.</p>
 <h1 id="examples" class="section-header"><a href="#examples">Examples</a></h1>
@@ -46,7 +46,7 @@ pointers, while the last on is a V-to-NV pointer. Please see <a href="../../coru
     <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="number">3</span>, <span class="ident">Prc</span>::<span class="ident">strong_count</span>(<span class="kw-2">&amp;</span><span class="ident">p</span>));
     <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="number">1</span>, <span class="ident">Prc</span>::<span class="ident">weak_count</span>(<span class="kw-2">&amp;</span><span class="ident">p</span>));
  
-    <span class="comment">// Upgrade the demote weak ref to a strong ref</span>
+    <span class="comment">// Upgrade the volatile weak ref to a strong ref</span>
     <span class="kw">let</span> <span class="ident">vs</span> <span class="op">=</span> <span class="ident">w</span>.<span class="ident">upgrade</span>(<span class="ident">j</span>).<span class="ident">unwrap</span>();
     <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="number">4</span>, <span class="ident">Prc</span>::<span class="ident">strong_count</span>(<span class="kw-2">&amp;</span><span class="ident">p</span>));
     <span class="macro">assert_eq</span><span class="macro">!</span>(<span class="number">1</span>, <span class="ident">Prc</span>::<span class="ident">weak_count</span>(<span class="kw-2">&amp;</span><span class="ident">p</span>));

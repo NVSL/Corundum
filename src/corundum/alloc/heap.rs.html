@@ -265,7 +265,7 @@
 
 <span class="kw">pub</span>  <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">alloc</span>::<span class="kw-2">*</span>;
 
-<span class="doccomment">/// A pass-through allocator for demote memory</span>
+<span class="doccomment">/// A pass-through allocator for volatile memory</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Heap</span> {}
 
 <span class="kw">static</span> <span class="kw-2">mut</span> <span class="ident">JOURNALS</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">ThreadId</span>, (<span class="ident">u64</span>, <span class="ident">i32</span>)<span class="op">&gt;</span><span class="op">&gt;</span> <span class="op">=</span> <span class="prelude-val">None</span>;

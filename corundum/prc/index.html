@@ -6,7 +6,7 @@
 <table><tr class="module-item"><td><a class="struct" href="struct.Prc.html" title="corundum::prc::Prc struct">Prc</a></td><td class="docblock-short"><p>A single-thread reference-counting persistent pointer. 'Prc' stands for
 'Persistent Reference Counted'.</p>
 </td></tr><tr class="module-item"><td><a class="struct" href="struct.PrcBox.html" title="corundum::prc::PrcBox struct">PrcBox</a></td><td class="docblock-short"></td></tr><tr class="module-item"><td><a class="struct" href="struct.VWeak.html" title="corundum::prc::VWeak struct">VWeak</a></td><td class="docblock-short"><p><code>VWeak</code> is a version of <a href="struct.Prc.html"><code>Prc</code></a> that holds a non-owning reference to the
-managed allocation in the demote heap. The allocation is accessed by
+managed allocation in the volatile heap. The allocation is accessed by
 calling <a href="#method.promote"><code>promote</code></a> on the <code>VWeak</code> pointer, which returns an
 <a href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html"><code>Option</code></a><code>&lt;</code><a href="struct.Prc.html"><code>Prc</code></a><code>&lt;T&gt;&gt;</code>.</p>
 </td></tr><tr class="module-item"><td><a class="struct" href="struct.Weak.html" title="corundum::prc::Weak struct">Weak</a></td><td class="docblock-short"><p><code>Weak</code> is a version of <a href="struct.Prc.html"><code>Prc</code></a> that holds a non-owning reference to the

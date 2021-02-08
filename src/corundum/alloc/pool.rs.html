@@ -1543,7 +1543,7 @@
     <span class="doccomment">///</span>
     <span class="doccomment">/// # Errors</span>
     <span class="doccomment">///</span>
-    <span class="doccomment">/// * A demote memory pool (e.g. `Heap`) doesn&#39;t have a root object.</span>
+    <span class="doccomment">/// * A volatile memory pool (e.g. `Heap`) doesn&#39;t have a root object.</span>
     <span class="doccomment">/// * The pool should be open before accessing the root object.</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// [`RootObj`]: ../stm/trait.RootObj.html</span>
@@ -2326,7 +2326,7 @@
     <span class="doccomment">/// </span>
     <span class="doccomment">/// The captured types are bounded to be [`TxInSafe`], unless explicitly</span>
     <span class="doccomment">/// asserted otherwise using [`AssertTxInSafe`] type wrapper. This</span>
-    <span class="doccomment">/// guarantees the demote state consistency, as well as the persistent</span>
+    <span class="doccomment">/// guarantees the volatile state consistency, as well as the persistent</span>
     <span class="doccomment">/// state.</span>
     <span class="doccomment">/// </span>
     <span class="doccomment">/// The returned type should be [`TxOutSafe`]. This prevents sending out</span>

@@ -221,7 +221,7 @@
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">cell</span>::<span class="ident">UnsafeCell</span>;
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">fmt</span>;
 
-<span class="doccomment">/// It marks the implementing type to be free of pointers to the demote heap,</span>
+<span class="doccomment">/// It marks the implementing type to be free of pointers to the volatile heap,</span>
 <span class="doccomment">/// and persistence safe.</span>
 <span class="doccomment">///</span>
 <span class="doccomment">/// Also, every type that allows interior mutability is not safe in persistence</span>
@@ -404,7 +404,7 @@
     }
 }
 
-<span class="doccomment">/// Safe to be stored in demote memory useful in `VCell` type to prevent</span>
+<span class="doccomment">/// Safe to be stored in volatile memory useful in `VCell` type to prevent</span>
 <span class="doccomment">/// storing persistent pointers in [`VCell`](./cell/struct.VCell.html)</span>
 <span class="kw">pub</span> <span class="kw">unsafe</span> <span class="ident">auto</span> <span class="kw">trait</span> <span class="ident">VSafe</span> {}
 

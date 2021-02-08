@@ -1331,7 +1331,7 @@
 <span class="doccomment">/// [`Weak`] references for reference cycles.</span>
 <span class="doccomment">/// </span>
 <span class="doccomment">/// References to data can be strong (using [`pclone`]), weak (using [`downgrade`]),</span>
-<span class="doccomment">/// or demote weak (using [`demote`]). The first two generate NV-to-NV</span>
+<span class="doccomment">/// or volatile weak (using [`demote`]). The first two generate NV-to-NV</span>
 <span class="doccomment">/// pointers, while the last on is a V-to-NV pointer. Please see [`Weak`] and</span>
 <span class="doccomment">/// [`VWeak`] for more details on their implementation and safety.</span>
 <span class="doccomment">///</span>
@@ -1369,7 +1369,7 @@
 <span class="doccomment">///     assert_eq!(3, Prc::strong_count(&amp;p));</span>
 <span class="doccomment">///     assert_eq!(1, Prc::weak_count(&amp;p));</span>
 <span class="doccomment">/// </span>
-<span class="doccomment">///     // Upgrade the demote weak ref to a strong ref</span>
+<span class="doccomment">///     // Upgrade the volatile weak ref to a strong ref</span>
 <span class="doccomment">///     let vs = w.upgrade(j).unwrap();</span>
 <span class="doccomment">///     assert_eq!(4, Prc::strong_count(&amp;p));</span>
 <span class="doccomment">///     assert_eq!(1, Prc::weak_count(&amp;p));</span>
@@ -2353,7 +2353,7 @@
 }
 
 <span class="doccomment">/// `VWeak` is a version of [`Prc`] that holds a non-owning reference to the</span>
-<span class="doccomment">/// managed allocation in the demote heap. The allocation is accessed by</span>
+<span class="doccomment">/// managed allocation in the volatile heap. The allocation is accessed by</span>
 <span class="doccomment">/// calling [`promote`] on the `VWeak` pointer, which returns an</span>
 <span class="doccomment">/// [`Option`]`&lt;`[`Prc`]`&lt;T&gt;&gt;`.</span>
 <span class="doccomment">///</span>

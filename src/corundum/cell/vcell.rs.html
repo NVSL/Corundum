@@ -203,7 +203,7 @@
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">marker</span>::<span class="ident">PhantomData</span>;
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">ops</span>::{<span class="ident">Deref</span>, <span class="ident">DerefMut</span>};
 
-<span class="doccomment">/// A persistent memory location containing a demote data</span>
+<span class="doccomment">/// A persistent memory location containing a volatile data</span>
 <span class="doccomment">/// </span>
 <span class="doccomment">/// The underlying data is valid throughout of the course of a single pool</span>
 <span class="doccomment">/// lifetime. When the pool is reopened, the data is back to its default value.</span>
@@ -227,7 +227,7 @@
 <span class="doccomment">/// P::transaction(|j| {</span>
 <span class="doccomment">///     let mut v = root.v.borrow_mut();</span>
 <span class="doccomment">///     assert_eq!(*v, i32::default());</span>
-<span class="doccomment">///     *v = 20; // This value is demote and resets on restart</span>
+<span class="doccomment">///     *v = 20; // This value is volatile and resets on restart</span>
 <span class="doccomment">/// }).unwrap();</span>
 <span class="doccomment">/// ```</span>
 <span class="doccomment">/// </span>

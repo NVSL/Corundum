@@ -2481,13 +2481,13 @@
                 <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">p</span>) <span class="op">=</span> <span class="ident">vp</span>.<span class="ident">promote</span>(<span class="ident">j</span>) {
 
                     <span class="kw">let</span> <span class="ident">_vp2</span> <span class="op">=</span> <span class="ident">Prc</span>::<span class="ident">demote</span>(<span class="kw-2">&amp;</span><span class="ident">p</span>);
-                    <span class="comment">// drop a recently created demote reference</span>
+                    <span class="comment">// drop a recently created volatile reference</span>
                     <span class="kw">let</span> <span class="ident">_vp2</span> <span class="op">=</span> <span class="ident">Prc</span>::<span class="ident">demote</span>(<span class="kw-2">&amp;</span><span class="ident">p</span>);
-                    <span class="comment">// drop a recently created demote reference</span>
+                    <span class="comment">// drop a recently created volatile reference</span>
                     <span class="kw">let</span> <span class="ident">_vp2</span> <span class="op">=</span> <span class="ident">Prc</span>::<span class="ident">demote</span>(<span class="kw-2">&amp;</span><span class="ident">p</span>);
-                    <span class="comment">// drop a recently created demote reference</span>
+                    <span class="comment">// drop a recently created volatile reference</span>
                     <span class="kw">let</span> <span class="ident">_vp2</span> <span class="op">=</span> <span class="ident">Prc</span>::<span class="ident">demote</span>(<span class="kw-2">&amp;</span><span class="ident">p</span>);
-                <span class="comment">// drop a recently created demote reference</span>
+                <span class="comment">// drop a recently created volatile reference</span>
                 } <span class="kw">else</span> {
                     <span class="macro">println</span><span class="macro">!</span>(<span class="string">&quot;no data&quot;</span>);
                 }
@@ -2506,7 +2506,7 @@
 
             <span class="kw">let</span> <span class="ident">x</span> <span class="op">=</span> <span class="ident">Prc</span>::<span class="ident">demote</span>(<span class="kw-2">&amp;</span><span class="ident">root</span>.<span class="ident">v</span>.<span class="ident">borrow</span>());
             <span class="ident">P</span>::<span class="ident">transaction</span>(<span class="op">|</span><span class="ident">j</span><span class="op">|</span> {
-                <span class="comment">// Trying to access a demote pointer from the current session</span>
+                <span class="comment">// Trying to access a volatile pointer from the current session</span>
                 <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">p</span>) <span class="op">=</span> <span class="ident">x</span>.<span class="ident">promote</span>(<span class="ident">j</span>) {
                     <span class="macro">println</span><span class="macro">!</span>(<span class="string">&quot;data = {}&quot;</span>, <span class="ident">p</span>);
                 } <span class="kw">else</span> {
@@ -2520,7 +2520,7 @@
         <span class="comment">// Reopening the pool</span>
         <span class="kw">let</span> <span class="ident">_root</span> <span class="op">=</span> <span class="ident">P</span>::<span class="ident">open</span>::<span class="op">&lt;</span><span class="ident">Root</span><span class="op">&gt;</span>(<span class="string">&quot;test_vweak.pool&quot;</span>, <span class="ident">O_CFNE</span>).<span class="ident">unwrap</span>();
         <span class="ident">P</span>::<span class="ident">transaction</span>(<span class="op">|</span><span class="ident">j</span><span class="op">|</span> {
-            <span class="comment">// Trying to access a demote pointer from previous session</span>
+            <span class="comment">// Trying to access a volatile pointer from previous session</span>
             <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">p</span>) <span class="op">=</span> <span class="ident">ovp</span>.<span class="ident">promote</span>(<span class="ident">j</span>) {
                 <span class="macro">println</span><span class="macro">!</span>(<span class="string">&quot;data = {}&quot;</span>, <span class="ident">p</span>);
             } <span class="kw">else</span> {

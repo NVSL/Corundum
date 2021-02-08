@@ -18,7 +18,7 @@ transaction is done and the drop function is called.</p>
 <p>To allow sharing, <code>Parc</code> provides a safe mechanism to cross the thread
 boundaries. When you need to share it, you can obtain a <a href="../../corundum/sync/struct.VWeak.html" title="VWeak"><code>VWeak</code></a>
 object by calling <a href="#method.demote"><code>demote()</code></a> function. The <a href="../../corundum/sync/struct.VWeak.html" title="VWeak"><code>VWeak</code></a> object is both
-<a href="https://doc.rust-lang.org/nightly/core/marker/trait.Sync.html" title="Sync"><code>Sync</code></a> and <a href="https://doc.rust-lang.org/nightly/core/marker/trait.Send.html" title="Send"><code>Send</code></a> and acts like a demote reference. Calling
+<a href="https://doc.rust-lang.org/nightly/core/marker/trait.Sync.html" title="Sync"><code>Sync</code></a> and <a href="https://doc.rust-lang.org/nightly/core/marker/trait.Send.html" title="Send"><code>Send</code></a> and acts like a volatile reference. Calling
 <a href="../../corundum/sync/struct.VWeak.html" title="VWeak"><code>VWeak</code></a><code>::</code><a href="./struct.VWeak.html#method.promote"><code>promote()</code></a> gives access to data by creating a new reference
 of type <code>Parc</code> inside the other thread, if the referent is still available.
 Calling <a href="#method.demote"><code>demote()</code></a> is dynamically prohibited to be inside a transaction.
