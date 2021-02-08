@@ -1459,6 +1459,16 @@ pub(crate) mod test {
         .unwrap();
     }
 
+
+    #[test]
+    fn parc_heap() {
+        Heap::transaction(|j| {
+            // the Arc is protected with a mutex.
+            let _data = Parc::new(10, j);
+            let _weak_five = Parc::downgrade(&_data, j);
+        }).unwrap();
+    }
+
     #[test]
     fn test_parallel_alloc() {
         let mut threads = vec![];

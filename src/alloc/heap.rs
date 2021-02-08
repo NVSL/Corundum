@@ -99,7 +99,8 @@ unsafe impl MemPool for Heap {
                 raw: &'a mut u64,
             }
             *U {off}.raw = data;
-        })
+        });
+        logs.clear();
     }
 
     unsafe fn discard(_: usize) {
