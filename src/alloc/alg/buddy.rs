@@ -125,7 +125,7 @@ pub fn get_idx(x: usize) -> usize {
 
 impl<A: MemPool> BuddyAlg<A> {
     /// Pool Initialization with a given device size
-    pub fn init(&mut self, base: usize, size: usize) {
+    pub fn init(&mut self, base: u64, size: usize) {
         let mut idx = get_idx(size);
         if 1 << idx > size {
             idx -= 1;
@@ -133,11 +133,13 @@ impl<A: MemPool> BuddyAlg<A> {
         self.buddies = [u64::MAX; 64];
         self.size = 1 << idx;
         self.available = self.size;
-        self.buddies[idx] = base as u64;
+        self.buddies[idx] = base;
         self.last_idx = idx;
         self.log64.clear();
         self.drop_log.clear();
         self.aux.clear();
+
+        Self::buddy(base).next = u64::MAX;
 
         #[cfg(not(any(feature = "no_pthread", windows)))] unsafe {
         crate::sync::init_lock(&mut self.mutex.0, &mut self.mutex.1);
@@ -590,8 +592,13 @@ impl<A: MemPool> BuddyAlg<A> {
             print!("{:>8} [{:>2}] ", 1 << idx, idx);
             let mut curr = self.buddies[idx];
             while let Some(b) = off_to_option(curr) {
-                print!("({}..{})", b, b + (1 << idx) - 1);
                 let e = Self::buddy(b);
+                if A::contains(b+A::start()) {
+                    print!("({}..{})", b, b + (1 << idx) - 1);
+                } else {
+                    print!("(ERR)");
+                    break;
+                }
                 curr = e.next;
             }
             println!();
@@ -923,7 +930,7 @@ macro_rules! pool {
                     let quota = size / cpus;
                     self.zone = Zones::new(cpus, mem::size_of::<Self>(), quota);
                     for i in 0..cpus {
-                        self.zone[i].init(quota * i, quota);
+                        self.zone[i].init((quota * i) as u64, quota);
                     }
                     self.magic_number = u64::MAX;
                     unsafe {
