@@ -16,7 +16,7 @@ fn main() {
     let cnt: usize = args[3].parse().expect("expected an integer");
     let thr: usize = args[4].parse().expect("expected an integer");
 
-    let _pool = P::open_no_root(path, O_CFNE | O_1GB).unwrap();
+    let _pool = P::open_no_root(path, O_CFNE | O_8GB).unwrap();
 
     println!("Allocating {} block(s) of {} byte(s) in {} thread(s)", cnt*thr, len, thr);
 
