@@ -191,35 +191,35 @@ main(int argc, char *argv[])
     const char *value;
 
     switch (op) {
-        case 'p':
-            btree_print(pop);
-        break;
-        case 'i':
-            key = atoll(argv[3]);
-            value = argv[4];
-            btree_insert(pop, key, value);
-        break;
-        case 'f':
-            key = atoll(argv[3]);
-            if ((value = btree_find(pop, key)) != NULL)
-                printf("%s\n", value);
-            else
-                printf("not found\n");
-        break;
+    case 'p':
+        btree_print(pop);
+    break;
+    case 'i':
+        key = atoll(argv[3]);
+        value = argv[4];
+        btree_insert(pop, key, value);
+    break;
+    case 'f':
+        key = atoll(argv[3]);
+        if ((value = btree_find(pop, key)) != NULL)
+            printf("%s\n", value);
+        else
+            printf("not found\n");
+    break;
     case 's':
-      len = atoll(argv[3]);
-            for(k=0; k<len; k++) {
-                btree_insert(pop, k, "test");
-            }
-    break;
+        len = atoll(argv[3]);
+        for(k=0; k<len; k++) {
+            btree_insert(pop, k, "test");
+        }
+        break;
     case 'r':
-            len = atoll(argv[3]);
-            for(long k=0; k<len; k++) {
-                    btree_find(pop, k);
-            }
-    break;
-        default:
-            printf("invalid operation\n");
+        len = atoll(argv[3]);
+        for(long k=0; k<len; k++) {
+                btree_find(pop, k);
+        }
+        break;
+    default:
+        printf("invalid operation\n");
         break;
     }
 

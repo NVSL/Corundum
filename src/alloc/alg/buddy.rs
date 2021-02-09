@@ -589,7 +589,7 @@ impl<A: MemPool> BuddyAlg<A> {
     pub fn print(&self) {
         println!();
         for idx in 3..self.last_idx + 1 {
-            print!("{:>8} [{:>2}] ", 1 << idx, idx);
+            print!("{:>12} [{:>2}] ", 1 << idx, idx);
             let mut curr = self.buddies[idx];
             while let Some(b) = off_to_option(curr) {
                 let e = Self::buddy(b);
@@ -1329,8 +1329,9 @@ macro_rules! pool {
                     let slf = Self::open_no_root(path, flags)?;
                     static_inner!(BUDDY_INNER, inner, {
                         // Replace it with std::any::TypeId::of::<U>() when it
-                        // is available in the future
-                        let id = std::any::type_name::<U>();
+                        // is available in the future for non-'static types
+                        let id = format!("{} ({})", std::any::type_name::<U>(),
+                            mem::size_of::<U>());
                         let mut s = DefaultHasher::new();
                         id.hash(&mut s);
                         let id = s.finish();
@@ -1414,13 +1415,17 @@ macro_rules! pool {
                 }
 
                 fn print_info() {
+                    println!("{:=^80}", " All Zones ");
                     println!("      Total: {} bytes", Self::size());
                     println!("       Used: {} bytes", Self::used());
                     println!("  Available: {} bytes", Self::available());
 
                     static_inner!(BUDDY_INNER, inner, { 
                         for i in 0..inner.zone.count() {
-                            print!("Free Blocks Zone #{}:", i);
+                            println!("{:=^80}", format!(" Persistent Memory Zone #{} ", i));
+                            println!("       Total      {}", inner.zone[i].size());
+                            println!("        Used      {}", inner.zone[i].used());
+                            println!("   Available      {}", inner.zone[i].available());
                             inner.zone[i].print();
                         }
                     })
