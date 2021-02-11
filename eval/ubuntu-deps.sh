@@ -43,7 +43,7 @@ $su apt-get -y install python-dev libxml2-dev libxslt-dev
 $su apt-get -y install g++-7
 
 if ! which perf; then
-  if apt-get -y install linux-tools-generic linux-cloud-tools-generic; then
+  if $su apt-get -y install linux-tools-generic linux-cloud-tools-generic; then
     [ -f /usr/bin/perf ] && $su mv /usr/bin/perf /usr/bin/perf.bkup
     $su ln -s /usr/lib/linux-tools/*/perf /usr/bin/perf
   else

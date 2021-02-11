@@ -90,7 +90,7 @@ impl<T, const N: usize> Ring<T, N> {
     pub fn push(&mut self, x: T) {
         debug_assert!(
             (self.tail+1)%N != self.head,
-            format!("too many slots are used (len = {})", N)
+            "too many slots are used (len = {})", N
         );
 
         self.data[self.tail] = x;
@@ -101,7 +101,7 @@ impl<T, const N: usize> Ring<T, N> {
     pub fn push_sync(&mut self, x: T) {
         debug_assert!(
             (self.tail+1)%N != self.head,
-            format!("too many slots are used (len = {})", N)
+            "too many slots are used (len = {})", N
         );
         self.data[self.tail] = x;
 

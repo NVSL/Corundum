@@ -89,7 +89,6 @@ pub const FLAG_HAS_ROOT: u64 = 0x0000_0001;
 
 /// This macro can be used to access static data of an arbitrary allocator
 #[macro_export]
-#[track_caller]
 macro_rules! static_inner {
     ($id:ident, $inner:ident, $body:block) => {
         unsafe {
@@ -435,11 +434,9 @@ where
             #[cfg(any(feature = "access_violation_check", debug_assertions))]
             assert!(
                 Self::allocated(off, mem::size_of::<T>() * len),
-                format!(
-                    "Bad address (0x{:x}..0x{:x})",
-                    off,
-                    off + (mem::size_of::<T>() * len) as u64 - 1
-                )
+                "Bad address (0x{:x}..0x{:x})",
+                off,
+                off + (mem::size_of::<T>() * len) as u64 - 1
             );
 
             res
@@ -472,11 +469,9 @@ where
             #[cfg(any(feature = "access_violation_check", debug_assertions))]
             assert!(
                 Self::allocated(off, mem::size_of::<T>() * len),
-                format!(
-                    "Bad address (0x{:x}..0x{:x})",
-                    off,
-                    off + (mem::size_of::<T>() * len) as u64 - 1
-                )
+                "Bad address (0x{:x}..0x{:x})",
+                off,
+                off + (mem::size_of::<T>() * len) as u64 - 1
             );
 
             res

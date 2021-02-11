@@ -7,7 +7,6 @@
 #![allow(dead_code)]
 #![allow(incomplete_features)]
 #![feature(type_name_of_val)]
-#![feature(const_in_array_repeat_expressions)]
 #![feature(const_generics)]
 
 use corundum::default::*;

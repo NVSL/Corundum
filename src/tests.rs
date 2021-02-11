@@ -1156,7 +1156,7 @@ pub(crate) mod test {
             AddNewRndNum = 0,
             DelRndNum = 1,
             DelAll = 2,
-        };
+        }
         use Operation::*;
         let r = rand() % 100;
         let cmd = if r < 20 {
