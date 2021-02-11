@@ -18,3 +18,5 @@ CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=$nofopt PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 \
     taskset -c 0-$(($thrd-1)) \
     perf stat -o $dir_path/outputs/perf/pmdk-kv-GET.out -d \
     alloc $pool $len $cnt $thrd
+
+# g++ -o alloc -I`pwd`/ralloc/src alloc.c -L`pwd`/ralloc/test -lralloc -lpthread

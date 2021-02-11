@@ -19,8 +19,6 @@ wget https://github.com/pmem/libpmemobj-cpp/archive/1.8.tar.gz && \
     mkdir -p build && cd build && cmake -D CMAKE_BUILD_TYPE=Release .. && \
     make -j$(nproc) && $su make install
 
-$su ldconfig
-
 cd $dir_path
 g++ -O2 -o simplekv simplekv.cpp -lpmemobj
 gcc -O2 -o btree btree.c -lpmemobj

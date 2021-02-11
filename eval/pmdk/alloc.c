@@ -4,14 +4,63 @@
 #include <pthread.h>
 #include <libpmemobj.h>
 
+int len = 512;
+int cnt = 128;
+int thr = 1;
+#define REGION_SIZE (8*1024*1024*1024ULL)
+
+#if ALLOC == pmdk
+
 POBJ_LAYOUT_BEGIN(alloc);
 POBJ_LAYOUT_TOID(alloc, uint8_t);
 POBJ_LAYOUT_END(alloc);
 
 PMEMobjpool *pop;
-int len = 512;
-int cnt = 128;
-int thr = 1;
+
+#define HEAP_FILE "/mnt/pmem0/pmdk.pool"
+int pm_init() {
+    pop = pmemobj_create(HEAP_FILE, "test", REGION_SIZE, 0666);
+    if (pop == nullptr) {
+        perror("pmemobj_create");
+        return 1;
+    }
+    return 0;
+}
+
+void pm_close() {
+    pmemobj_close(pop);
+}
+
+void *pm_alloc(size_t len) {
+    void *dst = NULL;
+    if(pmemobj_zalloc(pop, dst, TOID_TYPE_NUM(uint8_t), len)==0) 
+        return dst;
+    return NULL;
+}
+
+#elif ALLOC == r
+
+int pm_init() {
+}
+
+void pm_close() {
+}
+
+void *pm_alloc(size_t len) {
+}
+
+#else
+
+int pm_init() {}
+
+void pm_close() {}
+
+void *pm_alloc(size_t len) {
+    return malloc(len);
+}
+
+#endif
+
 
 void *worker(void *vargp)
 {
@@ -19,7 +68,7 @@ void *worker(void *vargp)
     {
 	void *dst = NULL;
 	int e;
-	if (e=pmemobj_zalloc(pop, dst, TOID_TYPE_NUM(uint8_t), len)) {
+	if (e=) {
 	    printf("Allocation failed (%d)\n", e);
 	    exit(-1);
         }
@@ -31,29 +80,17 @@ int
 main(int argc, char *argv[])
 {
     if (argc != 5) {
-        printf("usage: %s [file-name] [block-size] [count/thread] [threads] \n", argv[0]);
-        return 1;
-    }
-
-    const char *path = argv[1];
-
-    printf("pool file: %s\n", path);
-
-    if (file_exists(path) != 0) {
-        if ((pop = pmemobj_create(path, POBJ_LAYOUT_NAME(alloc),
-            PMEMOBJ_MIN_POOL, 0666)) == NULL) {
-            perror("failed to create pool\n");
-            return 1;
-        }
-    } else {
-        printf("pool file not exists\n");
-        printf("To create pool run: pmempool create -s 8G obj --layout=alloc path_to_pool\n");
+        printf("usage: %s [block-size] [count/thread] [threads] \n", argv[0]);
         return 1;
     }
     
-    len = atoi(argv[2]);
-    cnt = atoi(argv[3]);
-    thr = atoi(argv[4]);
+    if (pm_alloc()) {
+        return 1;
+    }
+    
+    len = atoi(argv[1]);
+    cnt = atoi(argv[2]);
+    thr = atoi(argv[3]);
 
     printf("Allocating %d block(s) of %d byte(s) in %d thread(s)\n", cnt*thr, len, thr);
 

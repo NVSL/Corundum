@@ -44,18 +44,15 @@ $su apt-get -y install g++-7
 
 if ! which perf; then
   if apt-get -y install linux-tools-generic linux-cloud-tools-generic; then
-    [ -f /usr/bin/perf ] && mv /usr/bin/perf /usr/bin/perf.bkup
-    ln -s /usr/lib/linux-tools/*/perf /usr/bin/perf
+    [ -f /usr/bin/perf ] && $su mv /usr/bin/perf /usr/bin/perf.bkup
+    $su ln -s /usr/lib/linux-tools/*/perf /usr/bin/perf
   else
     git clone --depth 1 https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git
     cd linux/tools/perf
-    make && rm -f /usr/bin/perf && cp perf /usr/bin
+    make && $su rm -f /usr/bin/perf && $su cp perf /usr/bin
     cd ../../..
   fi
 fi
-
-[ -f $dir_path/inputs.tar.gz ] || [ -d $dir_path/inputs ] || \
-  wget https://github.com/NVSL/Corundum/raw/24130f8789b4bed6cf6526562045586e19e88592/eval/inputs.tar.gz
 
 # Corundum's dependency
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
