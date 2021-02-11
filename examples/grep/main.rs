@@ -103,7 +103,7 @@ fn main() {
         } else if filename.is_empty() {
             filename = s.clone();
         } else {
-            panic!(format!("Unknown option `{}'", s));
+            panic!("Unknown option `{}'", s);
         }
         i += 1;
     }

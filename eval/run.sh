@@ -96,7 +96,6 @@ ins=(INS CHK REM RAND)
 
 if $all || $pmdk; then
     mkdir -p $dir_path/outputs/perf
-    ldconfig
 
     rm -f $pool
     echo "Running performance test (PMDK-BST:INS)..."
@@ -110,7 +109,6 @@ if $all || $pmdk; then
     CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=$nofopt PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -o $dir_path/outputs/perf/pmdk-kv-PUT.out -d $dir_path/pmdk/simplekv $pool burst put 65536
     echo "Running performance test (PMDK-KVStore:GET)..."
     CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=$nofopt PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -o $dir_path/outputs/perf/pmdk-kv-GET.out -d $dir_path/pmdk/simplekv $pool burst get 65536
-
 
     rm -f $pool
     for i in ${ins[@]}; do
