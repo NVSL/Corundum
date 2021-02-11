@@ -22,3 +22,5 @@ wget https://github.com/pmem/libpmemobj-cpp/archive/1.8.tar.gz && \
 cd $dir_path
 g++ -O2 -o simplekv simplekv.cpp -lpmemobj
 gcc -O2 -o btree btree.c -lpmemobj
+
+$su ldconfig

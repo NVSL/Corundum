@@ -12,10 +12,9 @@ cd $dir_path
 git clone https://github.com/jerrinsg/go-pmem.git
 cd go-pmem/src
 ./make.bash
-$su apt -y remove golang
-$su apt -y autoremove
+# $su apt -y remove golang
+# $su apt -y autoremove
 echo "export PATH=$dir_path/go-pmem/bin:\$PATH" >> $HOME/.corundum/env
-# echo "export GOPATH=$HOME/go" >> $HOME/.corundum/env
 source $HOME/.corundum/env
 export GO111MODULE=off
 go get -u github.com/vmware/go-pmem-transaction

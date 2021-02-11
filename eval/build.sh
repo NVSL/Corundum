@@ -3,6 +3,7 @@
 full_path=$(realpath $0)
 dir_path=$(dirname $full_path)
 
+mkdir $HOME/.corundum
 rm -f $HOME/.corundum/env
 
 $dir_path/pmdk/build.sh
@@ -14,7 +15,6 @@ source $HOME/.cargo/env
 rustup default nightly
 rustup update
 
-mkdir $HOME/.corundum
 echo "source \$HOME/.cargo/env" >> $HOME/.corundum/env
 
 cd $dir_path/..
