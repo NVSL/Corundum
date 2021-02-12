@@ -13,7 +13,7 @@
 
 #define TM_ATOMIC	__transaction_atomic
 #define TM_RELAXED	__transaction_relaxed
-#define PTx		TM_ATOMIC
+#define PTx		TM_RELAXED
 
 #ifdef __PVAR_C__
 
