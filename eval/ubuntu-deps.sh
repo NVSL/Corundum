@@ -45,7 +45,10 @@ $su apt-get -y install g++-7
 if ! which perf; then
   if $su apt-get -y install linux-tools-generic linux-cloud-tools-generic; then
     [ -f /usr/bin/perf ] && $su mv /usr/bin/perf /usr/bin/perf.bkup
-    $su ln -s /usr/lib/linux-tools/*/perf /usr/bin/perf
+    $su ln -s /usr/lib/linux-tools/*/perf /usr/bin/perf || (\
+      echo "Run the following command to enable perf" && \
+      echo "  ln -s /usr/lib/linux-tools/<kernel-version>/perf /usr/bin/perf" && \
+      exit 1 )
   else
     git clone --depth 1 https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git
     cd linux/tools/perf

@@ -62,7 +62,7 @@ do
     shift
 done
 
-source $HOME/.cargo/env
+source $HOME/.corundum/env
 rustup default nightly
 
 [ -f $dir_path/inputs.tar.gz ] || [ -d $dir_path/inputs ] || \
