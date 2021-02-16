@@ -315,4 +315,5 @@ fn main() {
     }
 
     println!("{}", report());
+    let _=save_histograms("hist");
 }

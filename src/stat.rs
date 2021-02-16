@@ -9,6 +9,7 @@ use std::ops::AddAssign;
 use std::sync::Mutex;
 use std::thread::{current, ThreadId};
 use std::time::Instant;
+use std::io::*;
 
 #[derive(Clone)]
 struct Data {
@@ -18,13 +19,15 @@ struct Data {
     min: u64,
     max: u64,
 
-    #[cfg(features="plot_histogram")] 
+    #[cfg(feature="hist")] 
     points: HashMap<u64, u64>
 }
 
 impl Default for Data {
     fn default() -> Self {
-        Data { sum: 0, cnt: 0, sum2: 0f64, min: u64::MAX, max:0 }
+        Data { sum: 0, cnt: 0, sum2: 0f64, min: u64::MAX, max:0,
+            #[cfg(feature="hist")] points: Default::default()
+        }
     }
 }
 
@@ -103,8 +106,10 @@ macro_rules! add {
         counter.sum2 += f64::powi(t as f64, 2);
         if counter.max < t { counter.max = t; }
         if counter.min > t { counter.min = t; }
-        // let p = counter.points.entry(t/10).or_default();
-        // *p += 1;
+        #[cfg(feature="hist")] {
+            let p = counter.points.entry(t).or_default();
+            *p += 1;
+        }
     };
     ($tp:ty,$s:ident,batch,$m:expr,$cnt:expr) => {
         // let mut t = tsc();
@@ -122,6 +127,10 @@ macro_rules! add {
         counter.sum2 = 0f64;
         counter.min = 0;
         counter.max = 0;
+        #[cfg(feature="hist")] {
+            let p = counter.points.entry(t).or_default();
+            *p += 1;
+        }
     };
     ($tp:ty,$s:ident,$id:ident,$cnt:ident) => {
         // let mut t = tsc();
@@ -256,13 +265,31 @@ impl AddAssign<&Stat> for Stat {
             counter.sum2 += v.sum2;
             if counter.max < v.max { counter.max = v.max; }
             if counter.min > v.min { counter.min = v.min; }
-            #[cfg(features="plot_histogram")] {
+            #[cfg(feature="hist")] {
                 for (vp,vv) in &v.points {
                     let p = counter.points.entry(*vp).or_default();
                     *p += vv;
                 }
             }
         }
+    }
+}
+
+impl Stat {
+    pub fn save_histograms(&self, _path: &str) -> Result<()> {
+        #[cfg(feature="hist")] {
+            for (k,v) in &self.custom {
+                use std::fs::File;
+                use prelude::*;
+
+                let mut f = File::create(format!("{}/{}_hist.csv", _path, k))?;
+                f.write(b"lat,freq\n")?;
+                for (tm,fr) in &v.points {
+                    f.write(format!("{},{}\n", tm, fr).to_string().as_bytes())?;
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -335,25 +362,12 @@ Logging       {:>14} ns    avg(ns): {:<8}    cnt: {}",
         }
         let mut lns = vec!();
 
-        #[cfg(features="plot_histogram")] {
-            let mut plots = String::new();
-        }
-
         for (k,v) in &self.custom {
             let avg = div(v.sum, v.cnt);
             let sd = f64::sqrt(v.sum2/(v.cnt as f64)-f64::powi(avg,2));
             lns.push(format!("{:<15}{:>10} ns  avg(ns): {:<11.3} std(ns): {:<8.1} min(ns): {:<8} max(ns): {:<10} cnt: {}",
                 k, v.sum, avg, sd,
                 v.min, v.max, v.cnt));
-            #[cfg(features="plot_histogram")] {
-                if let Some(plt) = plot(&v.points) {
-                    plots += &format!("┌{:─^40}┐\n", format!(" {} ", k));
-                    for ln in plt {
-                        plots += &format!("│{}│\n", ln);
-                    }
-                    plots += "└────────────────────────────────────────┘\n";
-                }
-            }
         }
         
         lns.sort_by(|x, y| x.cmp(&y));
@@ -361,9 +375,26 @@ Logging       {:>14} ns    avg(ns): {:<8}    cnt: {}",
             writeln!(f, "{}", ln)?;
         }
 
-        #[cfg(features="plot_histogram")] {
-            writeln!(f, "{}", plots)?;
+        #[cfg(feature="hist")] {
+            let mut _plots = vec!();
+            for (k,v) in &self.custom {
+                if let Some((plt,min,max,vmax,avg)) = plot(&v.points, 1.0, 10) {
+                    let mut plot = format!("┌{:─^80}┐{}\n", format!(" {} ", k), vmax);
+                    for ln in plt {
+                        plot += &format!("│{}│\n", ln);
+                    }
+                    plot += &format!("└{:─^80}┘\n", "┼");
+                    plot += &format!("{:<31}{: ^20}{:>31}", min, avg, max);
+                    _plots.push(plot);
+                }
+            }
+            
+            _plots.sort_by(|x, y| x.replace('─',"").cmp(&y.replace('─',"")));
+            for pl in &_plots {
+                writeln!(f, "{}", pl)?;
+            }
         }
+
         Ok(())
     }
 }
@@ -391,28 +422,67 @@ pub fn report() -> String {
     )
 }
 
+pub fn save_histograms(_path: &'static str) -> Result<()> {
+    #[cfg(feature="hist")] {
+        let stat = match STAT.lock() {
+            Ok(g) => g,
+            Err(p) => p.into_inner(),
+        };
+        let mut total = Stat::default();
+        for (_, stat) in stat.iter() {
+            total += stat;
+        }
+        total.save_histograms(_path)
+    }
+    #[cfg(not(feature="hist"))] {
+        println!("Use --features=\"hist\" to enable histogram info.");
+        Err(Error::from(ErrorKind::Other))
+    }
+}
 
-#[cfg(features="plot_histogram")]
-fn plot(data: &HashMap<u64, u64>) -> Option<Vec<String>> {
-    let mut res = vec!["                                        ".to_string(); 20];
-    let mut freqs = vec![0; 40];
+
+#[cfg(feature="hist")]
+fn plot(data: &HashMap<u64, u64>, x: f32, freq_thr: u64) -> Option<(Vec<String>,i64,i64,i64,i64)> {
+    let mut res = vec!["                                                                                ".to_string(); 20];
+    let mut freqs = vec![0; 80];
     let h_min = data.keys().min()?;
     let h_max = data.keys().max()?;
     let h_len = h_max - h_min;
-    for (t,freq) in data {
-        let t = ((t - h_min) * 390) / h_len;
-        let t = 39.min(t as usize);
-        freqs[t as usize] += freq;
-    }
-    let v_max = freqs.iter().max()?;
-    for i in 0..freqs.len() {
-        let f = (freqs[i] * 19) / v_max;
-        let f = 19.min(f as usize);
-        for j in 0..f {
-            unsafe { res[19-j].as_bytes_mut()[i] = b'A'; }
+    if h_len == 0 {
+        None
+    } else {
+        let mut sum = 0;
+        let mut cnt = 0;
+        for (t,freq) in data {
+            if *freq > freq_thr {
+                sum += freq * *t;
+                cnt += freq;
+            }
         }
+        let avg = (sum / cnt) as i64;
+
+        for (t,freq) in data {
+            let t = (*t as i64) - avg;
+
+            let t = (x * (t as f32 * 40.0) / avg as f32) as i64;
+            let t = 0.max(79.min(t + 40));
+            freqs[t as usize] += freq;
+        }
+
+        let v_max = freqs.iter().max()?;
+        for i in 0..freqs.len() {
+            let f = (freqs[i] * 19) / v_max;
+            let f = 19.min(f as usize);
+            for j in 0..f {
+                unsafe { res[19-j].as_bytes_mut()[i] = b'X'; }
+            }
+        }
+        Some((res,
+            ((1.0 - x) * avg as f32) as i64,
+            ((1.0 + x) * avg as f32) as i64,
+            *v_max as i64,
+            avg))
     }
-    Some(res)
 }
 
 #[macro_export]

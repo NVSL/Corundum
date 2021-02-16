@@ -1189,7 +1189,7 @@ where
     /// Prints memory information
     fn print_info() {}
 
-    #[cfg(feature = "capture_footprint")]
+    #[cfg(feature = "footprint")]
     fn footprint() -> usize {
         0
     }

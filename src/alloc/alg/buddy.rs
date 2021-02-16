@@ -92,7 +92,7 @@ pub struct BuddyAlg<A: MemPool> {
     /// Log of available space
     available_log: usize,
 
-    #[cfg(feature = "capture_footprint")]
+    #[cfg(feature = "footprint")]
     /// The footprint of memory usage in bytes
     foot_print: usize,
 
@@ -350,7 +350,7 @@ impl<A: MemPool> BuddyAlg<A> {
                         self.perform();
                     }
 
-                    #[cfg(feature = "capture_footprint")]
+                    #[cfg(feature = "footprint")]
                     {
                         let usage = self.size - self.available_log;
                         if usage > self.foot_print {
@@ -567,7 +567,7 @@ impl<A: MemPool> BuddyAlg<A> {
         self.size - self.available
     }
 
-    #[cfg(feature = "capture_footprint")]
+    #[cfg(feature = "footprint")]
     /// Returns the total number of bytes written to the pool. It may exceed the
     /// pool size as it does not subtract the reclaimed space after being used.
     pub fn footprint(&self) -> usize {
@@ -1409,7 +1409,7 @@ macro_rules! pool {
                     }
                 }
 
-                #[cfg(feature = "capture_footprint")]
+                #[cfg(feature = "footprint")]
                 fn footprint() -> usize {
                     static_inner!(BUDDY_INNER, inner, { inner.zone.footprint() })
                 }
