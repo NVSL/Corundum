@@ -459,29 +459,33 @@ fn plot(data: &HashMap<u64, u64>, x: f32, freq_thr: u64) -> Option<(Vec<String>,
                 cnt += freq;
             }
         }
-        let avg = (sum / cnt) as i64;
-
-        for (t,freq) in data {
-            let t = (*t as i64) - avg;
-
-            let t = (x * (t as f32 * 40.0) / avg as f32) as i64;
-            let t = 0.max(79.min(t + 40));
-            freqs[t as usize] += freq;
-        }
-
-        let v_max = freqs.iter().max()?;
-        for i in 0..freqs.len() {
-            let f = (freqs[i] * 19) / v_max;
-            let f = 19.min(f as usize);
-            for j in 0..f {
-                unsafe { res[19-j].as_bytes_mut()[i] = b'X'; }
+        if cnt > 0 {
+            let avg = (sum / cnt) as i64;
+    
+            for (t,freq) in data {
+                let t = (*t as i64) - avg;
+    
+                let t = (x * (t as f32 * 40.0) / avg as f32) as i64;
+                let t = 0.max(79.min(t + 40));
+                freqs[t as usize] += freq;
             }
+    
+            let v_max = freqs.iter().max()?;
+            for i in 0..freqs.len() {
+                let f = (freqs[i] * 19) / v_max;
+                let f = 19.min(f as usize);
+                for j in 0..f {
+                    unsafe { res[19-j].as_bytes_mut()[i] = b'X'; }
+                }
+            }
+            Some((res,
+                ((1.0 - x) * avg as f32) as i64,
+                ((1.0 + x) * avg as f32) as i64,
+                *v_max as i64,
+                avg))
+        } else {
+            None
         }
-        Some((res,
-            ((1.0 - x) * avg as f32) as i64,
-            ((1.0 + x) * avg as f32) as i64,
-            *v_max as i64,
-            avg))
     }
 }
 
