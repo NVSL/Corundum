@@ -17,16 +17,14 @@ struct Data {
     cnt: u64,
     sum2: f64,
     min: u64,
-    max: u64,
-
-    #[cfg(feature="hist")] 
+    max: u64, 
     points: HashMap<u64, u64>
 }
 
 impl Default for Data {
     fn default() -> Self {
         Data { sum: 0, cnt: 0, sum2: 0f64, min: u64::MAX, max:0,
-            #[cfg(feature="hist")] points: Default::default()
+            points: Default::default()
         }
     }
 }
@@ -85,8 +83,45 @@ pub enum Measure<A: Any> {
     Unknown(PhantomData<A>)
 }
 
+static mut HIST: Option<bool> = None;
+static mut POINTS: Option<bool> = None;
+
 lazy_static! {
     static ref STAT: Mutex<HashMap<(ThreadId, &'static str), Stat>> = Mutex::new(HashMap::new());
+}
+
+#[inline]
+fn hist_enabled() -> bool {
+    unsafe {
+        if let Some(hist) = &mut HIST {
+            *hist
+        } else {
+            if let Some(val) = std::env::var_os("HIST") {
+                HIST = Some(val.into_string().unwrap().parse::<i32>().unwrap() == 1);
+                true
+            } else {
+                HIST = Some(false);
+                false
+            }
+        }
+    }
+}
+
+#[inline]
+fn points_enabled() -> bool {
+    unsafe {
+        if let Some(points) = &mut POINTS {
+            *points
+        } else {
+            if let Some(val) = std::env::var_os("POINTS") {
+                POINTS = Some(val.into_string().unwrap().parse::<i32>().unwrap() == 1);
+                true
+            } else {
+                POINTS = Some(false);
+                false
+            }
+        }
+    }
 }
 
 macro_rules! add {
@@ -106,7 +141,7 @@ macro_rules! add {
         counter.sum2 += f64::powi(t as f64, 2);
         if counter.max < t { counter.max = t; }
         if counter.min > t { counter.min = t; }
-        #[cfg(feature="hist")] {
+        if hist_enabled() {
             let p = counter.points.entry(t).or_default();
             *p += 1;
         }
@@ -127,7 +162,7 @@ macro_rules! add {
         counter.sum2 = 0f64;
         counter.min = 0;
         counter.max = 0;
-        #[cfg(feature="hist")] {
+        if hist_enabled() {
             let p = counter.points.entry(t).or_default();
             *p += 1;
         }
@@ -265,7 +300,7 @@ impl AddAssign<&Stat> for Stat {
             counter.sum2 += v.sum2;
             if counter.max < v.max { counter.max = v.max; }
             if counter.min > v.min { counter.min = v.min; }
-            #[cfg(feature="hist")] {
+            if hist_enabled() {
                 for (vp,vv) in &v.points {
                     let p = counter.points.entry(*vp).or_default();
                     *p += vv;
@@ -277,15 +312,31 @@ impl AddAssign<&Stat> for Stat {
 
 impl Stat {
     pub fn save_histograms(&self, _path: &str) -> Result<()> {
-        #[cfg(feature="hist")] {
+        if hist_enabled() {
             for (k,v) in &self.custom {
                 use std::fs::File;
                 use prelude::*;
 
                 let mut f = File::create(format!("{}/{}_hist.csv", _path, k))?;
                 f.write(b"lat,freq\n")?;
+
+                let mut pairs = vec![];
                 for (tm,fr) in &v.points {
+                    pairs.push((tm,fr));
+                }
+                pairs.sort_by(|x, y| x.cmp(&y));
+
+                for (tm,fr) in &pairs {
                     f.write(format!("{},{}\n", tm, fr).to_string().as_bytes())?;
+                }
+
+                if points_enabled() {
+                    let mut f = File::create(format!("{}/{}_points.csv", _path, k))?;
+                    for (tm,fr) in &pairs {
+                        for _ in 0..**fr {
+                            f.write(format!("{}\n", tm).to_string().as_bytes())?;
+                        }
+                    }
                 }
             }
         }
@@ -375,7 +426,7 @@ Logging       {:>14} ns    avg(ns): {:<8}    cnt: {}",
             writeln!(f, "{}", ln)?;
         }
 
-        #[cfg(feature="hist")] {
+        if hist_enabled() {
             let mut _plots = vec!();
             for (k,v) in &self.custom {
                 if let Some((plt,min,max,vmax,avg)) = plot(&v.points, 1.0, 10) {
@@ -423,7 +474,7 @@ pub fn report() -> String {
 }
 
 pub fn save_histograms(_path: &'static str) -> Result<()> {
-    #[cfg(feature="hist")] {
+    if hist_enabled() {
         let stat = match STAT.lock() {
             Ok(g) => g,
             Err(p) => p.into_inner(),
@@ -433,15 +484,12 @@ pub fn save_histograms(_path: &'static str) -> Result<()> {
             total += stat;
         }
         total.save_histograms(_path)
-    }
-    #[cfg(not(feature="hist"))] {
-        println!("Use --features=\"hist\" to enable histogram info.");
+    } else {
+        println!("Use HIST=1 environment variable to enable histogram info.");
         Err(Error::from(ErrorKind::Other))
     }
 }
 
-
-#[cfg(feature="hist")]
 fn plot(data: &HashMap<u64, u64>, x: f32, freq_thr: u64) -> Option<(Vec<String>,i64,i64,i64,i64)> {
     let mut res = vec!["                                                                                ".to_string(); 20];
     let mut freqs = vec![0; 80];
