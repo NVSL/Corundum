@@ -332,6 +332,7 @@ impl Stat {
 
                 if points_enabled() {
                     let mut f = File::create(format!("{}/{}_points.csv", _path, k))?;
+                    f.write(format!("{}\n", k).to_string().as_bytes())?;
                     for (tm,fr) in &pairs {
                         for _ in 0..**fr {
                             f.write(format!("{}\n", tm).to_string().as_bytes())?;
