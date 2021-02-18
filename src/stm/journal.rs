@@ -280,7 +280,7 @@ impl<A: MemPool> Journal<A> {
             }
 
             #[cfg(feature = "pin_journals")] {
-                if self.current == page {
+                if self.current == *page {
                     _cidx = i;
                 }
             }
