@@ -192,7 +192,7 @@ impl Chaperon {
         assert!(self.len < MAX_TRANS, "reached max number of attachments");
         self.len += 1;
         self.done[self.len - 1] = false;
-        persist_obj(self);
+        persist_obj(self, true);
         self.len
     }
 

@@ -1038,13 +1038,13 @@ impl<T: PSafe, A: MemPool> Default for Vec<T, A> {
 
 // Consuming iterator
 
-// structure helper for consuming iterator.
+/// structure helper for consuming iterator.
 pub struct IntoIteratorHelper<T> {
     iter: std::vec::IntoIter<T>,
 }
 
-// implement the IntoIterator trait for a consuming iterator. Iteration will
-// consume the Words structure
+/// implement the IntoIterator trait for a consuming iterator. Iteration will
+/// consume the Words structure
 impl<T: PSafe, A: MemPool> IntoIterator for Vec<T, A> {
     type Item = T;
     type IntoIter = IntoIteratorHelper<T>;
@@ -1076,13 +1076,13 @@ impl<T: PSafe> Iterator for IntoIteratorHelper<T> {
 
 // non-consuming iterator
 
-// structure helper for non-consuming iterator.
+/// structure helper for non-consuming iterator.
 pub struct IterHelper<'a, T> {
     iter: std::slice::Iter<'a, T>,
 }
 
-// implement the IntoIterator trait for a non-consuming iterator. Iteration will
-// borrow the Words structure
+/// implement the IntoIterator trait for a non-consuming iterator. Iteration will
+/// borrow the Words structure
 impl<'a, T: PSafe, A: MemPool> IntoIterator for &'a Vec<T, A> {
     type Item = &'a T;
     type IntoIter = IterHelper<'a, T>;
@@ -1095,7 +1095,7 @@ impl<'a, T: PSafe, A: MemPool> IntoIterator for &'a Vec<T, A> {
     }
 }
 
-// now, implements Iterator trait for the helper struct, to be used by adapters
+/// now, implements Iterator trait for the helper struct, to be used by adapters
 impl<'a, T> Iterator for IterHelper<'a, T> {
     type Item = &'a T;
 

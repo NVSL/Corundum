@@ -15,14 +15,14 @@ use std::arch::x86_64::{_mm_clflush, _mm_mfence, _mm_sfence};
 
 /// Synchronize caches and memories and acts like a write barrier
 #[inline(always)]
-pub fn persist<T: ?Sized>(ptr: &T, len: usize) {
+pub fn persist<T: ?Sized>(ptr: &T, len: usize, fence: bool) {
     #[cfg(feature = "perf_stat")]
     let _perf = crate::stat::Measure::<crate::default::BuddyAlloc>::Sync(std::time::Instant::now());
 
     #[cfg(not(feature = "no_persist"))]
     {
         #[cfg(not(feature = "use_msync"))]
-        clflush(ptr, len);
+        clflush(ptr, len, fence);
 
         #[cfg(feature = "use_msync")]
         unsafe {
@@ -45,14 +45,14 @@ pub fn persist<T: ?Sized>(ptr: &T, len: usize) {
 
 /// Synchronize caches and memories and acts like a write barrier
 #[inline(always)]
-pub fn persist_obj<T: ?Sized>(obj: &T) {
+pub fn persist_obj<T: ?Sized>(obj: &T, fence: bool) {
     #[cfg(feature = "perf_stat")]
     let _perf = crate::stat::Measure::<crate::default::BuddyAlloc>::Sync(std::time::Instant::now());
 
     #[cfg(not(feature = "no_persist"))]
     {
         #[cfg(not(feature = "use_msync"))]
-        clflush_obj(obj);
+        clflush_obj(obj, fence);
 
         #[cfg(feature = "use_msync")]
         {
@@ -63,7 +63,7 @@ pub fn persist_obj<T: ?Sized>(obj: &T) {
 
 /// Flushes cache line back to memory
 #[inline(always)]
-pub fn clflush<T: ?Sized>(ptr: &T, len: usize) {
+pub fn clflush<T: ?Sized>(ptr: &T, len: usize, fence: bool) {
     #[cfg(not(feature = "no_persist"))]
     {
         let ptr = ptr as *const _ as *const u8 as *mut u8;
@@ -100,11 +100,11 @@ pub fn clflush<T: ?Sized>(ptr: &T, len: usize) {
 
 /// Flushes cache lines of a whole object back to memory
 #[inline(always)]
-pub fn clflush_obj<T: ?Sized>(obj: &T) {
+pub fn clflush_obj<T: ?Sized>(obj: &T, fence: bool) {
     #[cfg(not(feature = "no_persist"))]
     {
         let len = std::mem::size_of_val(obj);
-        clflush(obj, len)
+        clflush(obj, len, fence)
     }
 }
 

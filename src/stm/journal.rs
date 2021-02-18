@@ -4,6 +4,7 @@ use crate::ll::*;
 use crate::ptr::Ptr;
 use crate::stm::{Chaperon, Log, LogEnum, Notifier};
 use crate::*;
+use std::collections::HashMap;
 use std::fmt::{Debug, Error, Formatter};
 
 /// Determines that the changes are committed
@@ -78,7 +79,7 @@ impl<A: MemPool> Page<A> {
     /// Writes a new log to the journal
     fn write(&mut self, log: LogEnum, notifier: Notifier<A>) -> Ptr<Log<A>, A> {
         self.logs[self.len] = Log::new(log, notifier);
-        persist(&self.logs[self.len], std::mem::size_of::<Log<A>>());
+        persist(&self.logs[self.len], std::mem::size_of::<Log<A>>(), false);
 
         let log = unsafe { Ptr::new_unchecked(&self.logs[self.len]) };
         self.len += 1;
@@ -132,6 +133,10 @@ impl<A: MemPool> Page<A> {
             self.len = 0;
         }
     }
+
+    fn into_iter(&self) -> std::vec::IntoIter<Log<A>> {
+        Vec::from(self.logs).into_iter()
+    }
 }
 
 impl<A: MemPool> Debug for Page<A> {
@@ -169,7 +174,7 @@ impl<A: MemPool> Journal<A> {
     /// Sets a flag
     pub(crate) fn set(&mut self, flag: u64) {
         self.flags |= flag;
-        persist_obj(&self.flags);
+        persist_obj(&self.flags, false);
     }
 
     /// Resets a flag
@@ -263,17 +268,71 @@ impl<A: MemPool> Journal<A> {
         self.pages = Ptr::dangling();
     }
 
-    pub fn print_pages(&self) {
+    pub fn recovery_info(&self, info_level: u32) -> String {
         let mut i = 1;
+        let mut _cidx = 1;
+        let mut log_cnt = HashMap::<String, u64>::new();
         let mut curr = self.pages;
+        let mut pgs = vec![];
         while let Some(page) = curr.as_option() {
-            eprintln!("page {:<3} at offset {:x} (len = {}, full = {})", i, page.off(), page.len, page.is_full());
+            if info_level > 2 {
+                pgs.push(format!("  page {:<3} at offset {:x} (len = {}, full = {})", i, page.off(), page.len, page.is_full()));
+            }
+
+            #[cfg(feature = "pin_journals")] {
+                if self.current == page {
+                    _cidx = i;
+                }
+            }
+
+            for log in page.into_iter() {
+                let entry = log_cnt.entry(log.kind()).or_default();
+                *entry += 1;
+                if info_level > 3 && log != LogEnum::None {
+                    pgs.push(format!("    {:?}", log));
+                }
+            }
+
             i += 1;
             curr = page.next;
         }
 
-        #[cfg(feature = "pin_journals")]
-        eprintln!("current page at offset {:x}", self.current.off());
+        let mut total_logs = 0;
+        let mut logs_indv = vec![];
+        for (kind, count) in log_cnt {
+            if kind != "None" {
+                total_logs += count;
+            }
+            if info_level > 1 {
+                logs_indv.push(format!("  {:<16} {}", kind, count));
+            }
+        }
+
+        let mut res = format!("Committed: {}\n", 
+            if self.is_committed() { "Yes" } else { "No" });
+        res += &format!("Chaperoned session id: {}\n", self.sec_id);
+        res += &format!("Chaperone file: {}\n", String::from_utf8(self.chaperon.to_vec()).unwrap_or("".to_string()));
+        res += &format!("Number of pages: {}\n", i-1);
+
+        #[cfg(feature = "pin_journals")] {
+            res += &format!("current page at offset {:x} (index = {})", self.current.off(), _cidx);
+        }
+
+        res += &format!("Number of logs: {}\n", total_logs);
+        if info_level > 1 {
+            for ln in logs_indv {
+                res += &format!("{}\n", ln);
+            }
+        }
+
+        if info_level > 2 {
+            res += "Contents:\n";
+            for ln in pgs {
+                res += &format!("{}\n", ln);
+            }
+        }
+
+        res
     }
 
     /// Commits all logs in the journal
@@ -432,7 +491,7 @@ impl<A: MemPool> Journal<A> {
                     let id = self.sec_id;
                     self.chaperon = [0; 64];
                     self.sec_id = 0;
-                    persist_obj(&self.sec_id);
+                    persist_obj(&self.sec_id, true);
                     c.finish(id as usize);
                 } else {
                     self.chaperon = [0; 64];

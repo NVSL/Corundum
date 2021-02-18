@@ -12,41 +12,36 @@ pub fn rand() -> i64 {
     i64::from_be_bytes(buf)
 }
 
-static mut CRASH_AT: Option<u32> = None;
-static mut CRASH_ALLOWED: bool = false;
+static mut CRASH_PROB: Option<u64> = None;
 
-pub fn allow_crash(v: bool) {
-    unsafe {
-        CRASH_ALLOWED = v;
-    }
+#[macro_export]
+macro_rules! may_crash {
+    () => {
+        if $crate::utils::can_crash() {
+            eprintln!("\nCrashed at {}:{}", file!(), line!());
+            std::process::exit(0);
+        }
+    };
 }
 
-pub fn may_crash(ln: u32, cnt: i32) {
+#[inline]
+pub fn can_crash() -> bool {
     unsafe {
-        if !CRASH_ALLOWED {
-            return;
-        }
-        if let Some(line) = CRASH_AT {
-            if ln == line {
-                static mut COUNT: i32 = 0;
-                COUNT += 1;
-                // if COUNT == cnt {
-                // if rand() % 3 == 0 {
-                println!("Crashed at line {}", ln);
-                std::process::exit(0);
-                // }
+        if let Some(p) = CRASH_PROB {
+            if p == 0 {
+                return false;
+            } else {
+                let r: u64 = rand::random();
+                return r % 10000 == 0;
             }
         } else {
-            for (key, value) in std::env::vars() {
-                if key == "CRASH_AT" {
-                    let line: u32 = value.parse().unwrap_or(u32::MAX);
-                    CRASH_AT = Some(line);
-                    may_crash(ln, cnt);
-                    return;
-                }
-            }
-            CRASH_AT = Some(u32::MAX);
+            let p = std::env::var("CRASH_PROB")
+                .unwrap_or("0".to_string())
+                .parse::<u64>()
+                .expect("CRASH_PROB should be a non-negative integer");
+            CRASH_PROB = Some(p);
         }
+        can_crash()
     }
 }
 
@@ -106,19 +101,19 @@ impl<T, const N: usize> Ring<T, N> {
         self.data[self.tail] = x;
 
         #[cfg(not(feature = "no_flush_alloc"))]
-        persist(&self.data[self.tail], 8);
+        persist(&self.data[self.tail], 8, false);
         
         self.tail = (self.tail + 1) % N;
 
         #[cfg(not(feature = "no_flush_alloc"))]
-        persist(&self.head, 16);
+        persist(&self.head, 16, false);
     }
 
     #[inline]
     pub fn sync_all(&self) {
         if self.head == self.tail {
             #[cfg(not(feature = "no_flush_alloc"))]
-            persist(&self.head, 16);
+            persist(&self.head, 16, false);
             return;
         }
         #[cfg(not(feature = "no_flush_alloc"))]
@@ -126,13 +121,13 @@ impl<T, const N: usize> Ring<T, N> {
             let h = &self.data[self.head] as *const _ as usize;
             let t = &self.data[self.tail] as *const _ as usize;
             if h < t {
-                persist(&self.data[self.head], t - h);
-                persist(&self.head, 16);
+                persist(&self.data[self.head], t - h, false);
+                persist(&self.head, 16, false);
             } else {
                 let b = self as *const Self as usize;
-                persist(self, h - b);
+                persist(self, h - b, false);
                 let b = b + std::mem::size_of::<Self>();
-                persist(&self.data[self.tail], b - t);
+                persist(&self.data[self.tail], b - t, false);
             }
         }
     }
@@ -178,7 +173,7 @@ impl<T: Copy, const N: usize> Ring<T, N> {
     }
 
     #[inline]
-    pub fn foreach<F: Fn(T) -> ()>(&mut self, f: F) {
+    pub fn foreach<F: FnMut(T) -> ()>(&self, mut f: F) {
         let mut head = self.head;
         while head != self.tail {
             f(self.data[head]);
@@ -187,7 +182,7 @@ impl<T: Copy, const N: usize> Ring<T, N> {
     }
 
     #[inline]
-    pub fn drain_atomic<F: Fn(T), E: Fn()>(&mut self, f: F, end: E) {
+    pub fn drain_atomic<F: FnMut(T), E: Fn()>(&mut self, mut f: F, end: E) {
         while self.head != self.tail {
             f(self.data[self.head]);
             self.head = (self.head + 1) % N;
@@ -196,7 +191,7 @@ impl<T: Copy, const N: usize> Ring<T, N> {
     }
 
     #[inline]
-    pub fn foreach_reverse<F: Fn(T) -> ()>(&mut self, f: F) {
+    pub fn foreach_reverse<F: FnMut(T) -> ()>(&self, mut f: F) {
         let mut tail = self.tail;
         while tail != self.head {
             let d = self.data[tail];

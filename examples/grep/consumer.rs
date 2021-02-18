@@ -44,16 +44,16 @@ impl Consumer {
     pub fn start(slf: VWeak<Consumer, P>, isolated: bool) {
         loop {
             // Read from global buffer to the local buffer
-            if !P::transaction(|j| {
-                if let Some(slf) = slf.promote(j) {
-                    let mut this = slf.data.lock(j);
-                    if this.buf.is_empty() {
-                        let mut rem = 0;
-                        let line = if !isolated {
-                            let mut lines = slf.lines.lock(j);
-                            rem = lines.len();
+            if !P::transaction(|j| {                                            may_crash!();
+                if let Some(slf) = slf.promote(j) {                             may_crash!();
+                    let mut this = slf.data.lock(j);                            may_crash!();
+                    if this.buf.is_empty() {                                    may_crash!();
+                        let mut rem = 0;                                        may_crash!();
+                        let line = if !isolated {                               may_crash!();
+                            let mut lines = slf.lines.lock(j);                  may_crash!();
+                            rem = lines.len();                                  may_crash!();
                             lines.pop(j)
-                        } else {
+                        } else {                                                may_crash!();
                             this.private_lines.pop(j)
                         };
                         if unsafe { crate::PRINT } {
@@ -70,13 +70,13 @@ impl Consumer {
                                 );
                             } 
                         }
-                        if let Some(line) = line {
-                            this.buf = line;
+                        if let Some(line) = line {                              may_crash!();
+                            this.buf = line;                                    may_crash!();
                             true // Still working
-                        } else {
+                        } else {                                                may_crash!();
                             this.active
                         }
-                    } else {
+                    } else {                                                    may_crash!();
                         true
                     }
                 } else {
@@ -88,17 +88,17 @@ impl Consumer {
 
             // counting words
             P::transaction(|j| {
-                if let Some(slf) = slf.promote(j) {
-                    let mut this = slf.data.lock(j);
-                    if !this.buf.is_empty() {
-                        let buf = this.buf.to_string();
-                        let re = Regex::new(slf.pattern.as_str()).unwrap();
+                if let Some(slf) = slf.promote(j) {                             may_crash!();
+                    let mut this = slf.data.lock(j);                            may_crash!();
+                    if !this.buf.is_empty() {                                   may_crash!();
+                        let buf = this.buf.to_string();                         may_crash!();
+                        let re = Regex::new(slf.pattern.as_str()).unwrap();     may_crash!();
 
-                        for cap in re.captures_iter(&buf) {
-                            let w = cap.get(1).unwrap().as_str().to_pstring(j);
-                            this.local.update_with(&w, j, |v| v + 1);
+                        for cap in re.captures_iter(&buf) {                     may_crash!();
+                            let w = cap.get(1).unwrap().as_str().to_pstring(j); may_crash!();
+                            this.local.update_with(&w, j, |v| v + 1);           may_crash!();
                         }
-                        this.buf.clear();
+                        this.buf.clear();                                       may_crash!();
                     }
                 }
             }).unwrap();

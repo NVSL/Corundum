@@ -10,7 +10,7 @@ use std::ptr;
 type Offset = u64;
 
 /// Log Types
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub enum LogEnum {
     /// `(src, log, len)`: An undo log of slice `src..src+len` kept in
     /// `log..log+len`.
@@ -45,20 +45,20 @@ fn offset_to_str(off: u64) -> String {
     if off == u64::MAX {
         "INF".to_string()
     } else {
-        off.to_string()
+        format!("{:x}", off)
     }
 }
 
 impl Debug for LogEnum {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::result::Result<(), fmt::Error> {
         match *self {
-            DataLog(off, _, _) => write!(f, "DataLog({})", offset_to_str(off)),
-            DropOnAbort(off, _) => write!(f, "DropOnAbort({})", offset_to_str(off)),
-            DropOnCommit(off, _) => write!(f, "DropOnCommit({})", offset_to_str(off)),
-            DropOnFailure(off, _) => write!(f, "DropOnFailure({})", offset_to_str(off)),
+            DataLog(off, _, _)       => write!(f, "DataLog         ({})", offset_to_str(off)),
+            DropOnAbort(off, _)      => write!(f, "DropOnAbort     ({})", offset_to_str(off)),
+            DropOnCommit(off, _)     => write!(f, "DropOnCommit    ({})", offset_to_str(off)),
+            DropOnFailure(off, _)    => write!(f, "DropOnFailure   ({})", offset_to_str(off)),
             RecountOnFailure(off, _) => write!(f, "RecountOnFailure({})", offset_to_str(off)),
-            UnlockOnCommit(off) => write!(f, "UnlockOnCommit({})", offset_to_str(off)),
-            None => write!(f, "None"),
+            UnlockOnCommit(off)      => write!(f, "UnlockOnCommit  ({})", offset_to_str(off)),
+            None                     => write!(f, "None"),
         }
     }
 }
@@ -71,6 +71,7 @@ impl Debug for LogEnum {
 /// keeps a pointer to the flag and updates it accordingly. The pointer is
 /// persistent meaning that it remains valid after restart of crash.
 /// 
+#[derive(PartialEq, Eq)]
 pub enum Notifier<A: MemPool> {
     /// Atomically update the log flag
     Atomic(Ptr<u8, A>),
@@ -146,6 +147,7 @@ impl<A: MemPool> Notifier<A> {
 /// [`Journal`]: ./struct.Journal.html
 /// [`LogEnum`]: ./enum.LogEnum.html
 /// [`Notifier`]: ./enum.Notifier.html
+/// 
 pub struct Log<A: MemPool>(LogEnum, Notifier<A>);
 
 impl<A: MemPool> Copy for Log<A> {}
@@ -154,6 +156,14 @@ impl<A: MemPool> Clone for Log<A> {
     fn clone(&self) -> Self {
         Self(self.0, self.1)
     }
+}
+
+impl<A: MemPool> PartialEq<LogEnum> for Log<A> {
+    fn eq(&self, other: &LogEnum) -> bool { self.0 == *other }
+}
+
+impl<A: MemPool> PartialEq for Log<A> {
+    fn eq(&self, other: &Self) -> bool { self.0 == other.0 }
 }
 
 impl<A: MemPool> Debug for Log<A> {
@@ -258,6 +268,24 @@ impl<A: MemPool> Log<A> {
             _ => {}
         }
     }
+
+    /// Returns an string specifying the type of this log
+    pub fn kind(&self) -> String {
+        match self.0 {
+            DataLog(_, _, _) => "DataLog",
+            DropOnAbort(_, _) => "DropOnAbort",
+            DropOnCommit(_, _) => "DropOnCommit",
+            DropOnFailure(_, _) => "DropOnFailure",
+            RecountOnFailure(_, _) => "RecountOnFailure",
+            UnlockOnCommit(_) => "UnlockOnCommit",
+            None => "None"
+        }.to_string()
+    }
+
+    /// Returns the inner value
+    pub fn inner(&self) -> LogEnum {
+        self.0
+    }
 }
 
 use LogEnum::*;
@@ -335,7 +363,7 @@ impl<A: MemPool> Log<A> {
 
             //     Self::take_impl(log.off(), pointer.off(), len, journal, notifier)
             // } else {
-                crate::ll::persist_obj(log.as_ref());
+                crate::ll::persist_obj(log.as_ref(), false);
                 Self::take_impl(pointer.off(), log.off(), len, journal, notifier)
             // }
         }
@@ -349,6 +377,7 @@ impl<A: MemPool> Log<A> {
     ) -> Ptr<Log<A>, A> {
         let log = journal.write(log, notifier.clone());
         notifier.update(1);
+        sfence();
         log
     }
 
@@ -461,7 +490,7 @@ impl<A: MemPool> Log<A> {
                 let src = A::get_mut_unchecked::<u8>(*src);
                 let log = A::get_mut_unchecked::<u8>(*log);
                 ptr::copy_nonoverlapping(log, src, *len);
-                persist(log, *len);
+                persist(log, *len, true);
             }
         }
     }
@@ -542,7 +571,7 @@ impl<A: MemPool> Log<A> {
 
                 #[cfg(all(not(feature = "no_flush_updates"), not(feature = "replace_with_log")))]
                 unsafe {
-                    persist::<u8>(A::get_mut_unchecked(*_src), *_len);
+                    persist::<u8>(A::get_mut_unchecked(*_src), *_len, true);
                 }
             }
             DropOnCommit(src, len) => {

@@ -549,6 +549,41 @@ impl<A: MemPool> BuddyAlg<A> {
         }
     }
 
+    pub fn recovery_info(&self, info_level: u32) -> String {
+        let mut res = format!("Crashed while operating: {}\n",
+            if self.aux_valid { "Yes" } else { "No" });
+        if info_level > 1 {
+            res += &format!("Redo Operation Logs (aux): {}\n", self.aux.len());
+            res += &format!("Redo Logs (log64):         {}\n", self.log64.len());
+            res += &format!("Drop Logs:                 {}\n", self.drop_log.len());
+        }
+        if info_level > 2 {
+            if !self.aux.is_empty() {
+                res += &format!("\nOperation Logs:\n");
+                self.aux.foreach(|(off, next)| {
+                    let n = Self::buddy(off);
+                    res += &format!("  aux @({:x}) {:x} -> {:x}\n", off, n.next, next);
+                });
+            }
+    
+            if !self.log64.is_empty() {
+                res += &format!("\nRedo Logs:\n");
+                self.log64.foreach(|(off, next)| {
+                    let n = Self::buddy(off);
+                    res += &format!("  log @({:x}) {:x} -> {:x}\n", off, n.next, next);
+                });
+            }
+    
+            if !self.drop_log.is_empty() {
+                res += &format!("\nDrop Logss:\n");
+                self.drop_log.foreach(|(off, len)| {
+                    res += &format!("  drop ({:x}; {})\n", off, len);
+                });
+            }
+        }
+        res
+    }
+
     #[inline]
     /// Returns the pool size
     pub fn size(&self) -> usize {
@@ -876,7 +911,7 @@ macro_rules! pool {
                 gen: u32,
                 root_obj: u64,
                 root_type_id: u64,
-                logs: u64,
+                journals: u64,
                 size: usize,
                 zone: Zones<BuddyAlg<BuddyAlloc>, BuddyAlloc>
             }
@@ -917,7 +952,7 @@ macro_rules! pool {
                     self.gen = 1;
                     self.root_obj = u64::MAX;
                     self.root_type_id = 0;
-                    self.logs = u64::MAX;
+                    self.journals = u64::MAX;
                     self.size = size;
 
                     type T = BuddyAlg<BuddyAlloc>;
@@ -1255,7 +1290,7 @@ macro_rules! pool {
                 #[track_caller]
                 unsafe fn journals_head() -> &'static u64 {
                     static_inner!(BUDDY_INNER, inner, {
-                        &inner.logs
+                        &inner.journals
                     })
                 }
 
@@ -1273,8 +1308,8 @@ macro_rules! pool {
                         journal.drop_pages();
 
                         let z = Self::pre_dealloc(journal as *mut _ as *mut u8, mem::size_of::<Journal>());
-                        if inner.logs == off {
-                            Self::log64(Self::off_unchecked(&inner.logs), journal.next_off(), z);
+                        if inner.journals == off {
+                            Self::log64(Self::off_unchecked(&inner.journals), journal.next_off(), z);
                         }
                         if let Ok(prev) = Self::deref_mut::<Journal>(journal.prev_off()) {
                             Self::log64(Self::off_unchecked(prev.next_off_ref()), journal.next_off(), z);
@@ -1303,10 +1338,28 @@ macro_rules! pool {
                 #[allow(unused_unsafe)]
                 unsafe fn recover() {
                     static_inner!(BUDDY_INNER, inner, {
+                        let info_level = std::env::var("RECOVERY_INFO")
+                            .unwrap_or("0".to_string())
+                            .parse::<u32>()
+                            .expect("RECOVERY_INFO should be an unsigned integer");
+                        
+                        if info_level > 0 {
+                            for i in 0..inner.zone.count() {
+                                eprintln!("{:=^60}", format!(" Restore Allocator (Zone {}) ", i));
+                                eprintln!("{}", inner.zone[i].recovery_info(info_level));
+                            }
+
+                            let mut curr = inner.journals;
+                            while let Ok(j) = Self::deref_mut::<Journal>(curr) {
+                                eprintln!("{:-^60}\n{}", format!(" Journal @({}) ", curr), j.recovery_info(info_level));
+                                curr = j.next_off();
+                            }
+                        }
+
                         for i in 0..inner.zone.count() {
                             inner.zone[i].recover();
                         }
-                        while let Ok(logs) = Self::deref_mut::<Journal>(inner.logs) {
+                        while let Ok(logs) = Self::deref_mut::<Journal>(inner.journals) {
 
                             #[cfg(feature = "verbose")]
                             println!("{:?}", logs);
@@ -1348,7 +1401,7 @@ macro_rules! pool {
                                 inner.flags |= FLAG_HAS_ROOT;
                                 inner.root_obj = root_off;
                                 inner.root_type_id = id;
-                                persist_obj(inner);
+                                persist_obj(inner, true);
                                 Ok((RootCell::new(ptr, Arc::new(slf))))
                             }
                         } else {

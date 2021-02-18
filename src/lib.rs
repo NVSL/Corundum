@@ -149,8 +149,8 @@ pub mod str;
 pub mod vec;
 pub mod convert;
 pub mod stat;
+pub mod utils;
 
-mod utils;
 mod marker;
 mod tests;
 
