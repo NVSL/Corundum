@@ -469,7 +469,7 @@ impl<A: MemPool> Log<A> {
     pub unsafe fn recount_on_failure(offset: u64, inc: bool, journal: &Journal<A>) -> Ptr<Log<A>, A> {
         log!(A, Yellow, "NEW LOG", "FOR:         ({:>4}..{:<4}) = {:<5} RecountOnFailure",
             offset_to_str(offset),
-            offset_to_str((offset as usize + 7) as u64),
+            offset_to_str(offset),
             8
         );
         Self::write_on_journal(RecountOnFailure(offset, inc), journal, Notifier::None)
@@ -542,12 +542,15 @@ impl<A: MemPool> Log<A> {
                 let off = *src;
                 if off != u64::MAX {
                     debug_assert!(A::allocated(off, 1), "Access Violation");
-                    let c = A::get_mut_unchecked::<usize>(off);
+                    let c = A::get_mut_unchecked::<u64>(off);
                     let z = A::zone(off);
-                    if *inc {
-                        A::log64(off, *c as u64 + 1, z);
-                    } else {
-                        A::log64(off, *c as u64 - 1, z);
+                    A::prepare(z);
+                    if *c != u64::MAX {
+                        if *inc {
+                            A::log64(off, *c as u64 + 1, z);
+                        } else {
+                            A::log64(off, *c as u64 - 1, z);
+                        }
                     }
                     A::log64(A::off_unchecked(src), u64::MAX, z);
                     A::perform(z);
