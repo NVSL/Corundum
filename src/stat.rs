@@ -10,6 +10,7 @@ use std::sync::Mutex;
 use std::thread::{current, ThreadId};
 use std::time::Instant;
 use std::io::*;
+use crate::utils::LazyCell;
 
 #[derive(Clone)]
 struct Data {
@@ -86,9 +87,8 @@ pub enum Measure<A: Any> {
 static mut HIST: Option<bool> = None;
 static mut POINTS: Option<bool> = None;
 
-lazy_static! {
-    static ref STAT: Mutex<HashMap<(ThreadId, &'static str), Stat>> = Mutex::new(HashMap::new());
-}
+static mut STAT: LazyCell<Mutex<HashMap<(ThreadId, &'static str), Stat>>> = 
+    LazyCell::new(|| Mutex::new(HashMap::new()));
 
 #[inline]
 fn hist_enabled() -> bool {
@@ -129,7 +129,7 @@ macro_rules! add {
         // let mut t = tsc();
         // t -= *$s;
         let t = $s.elapsed().as_nanos() as u64;
-        let mut stat = match STAT.lock() {
+        let mut stat = match unsafe { STAT.lock() } {
             Ok(g) => g,
             Err(p) => p.into_inner(),
         };
@@ -150,7 +150,7 @@ macro_rules! add {
         // let mut t = tsc();
         // t -= *$s;
         let t = $s.elapsed().as_nanos() as u64;
-        let mut stat = match STAT.lock() {
+        let mut stat = match unsafe { STAT.lock() } {
             Ok(g) => g,
             Err(p) => p.into_inner(),
         };
@@ -171,7 +171,7 @@ macro_rules! add {
         // let mut t = tsc();
         // t -= *$s;
         let t = $s.elapsed().as_nanos() as u64;
-        let mut stat = match STAT.lock() {
+        let mut stat = match unsafe { STAT.lock() } {
             Ok(g) => g,
             Err(p) => p.into_inner(),
         };
@@ -184,7 +184,7 @@ macro_rules! add {
         // let mut t = tsc();
         // t -= *$s;
         let t = $s.elapsed().as_nanos() as u64;
-        let mut stat = match STAT.lock() {
+        let mut stat = match unsafe { STAT.lock() } {
             Ok(g) => g,
             Err(p) => p.into_inner(),
         };
@@ -193,7 +193,7 @@ macro_rules! add {
         stat.$id += t;
     };
     ($tp:ty,$cnt:ident) => {
-        let mut stat = match STAT.lock() {
+        let mut stat = match unsafe { STAT.lock() } {
             Ok(g) => g,
             Err(p) => p.into_inner(),
         };
@@ -452,7 +452,7 @@ Logging       {:>14} ns    avg(ns): {:<8}    cnt: {}",
 }
 
 pub fn report() -> String {
-    let stat = match STAT.lock() {
+    let stat = match unsafe { STAT.lock() } {
         Ok(g) => g,
         Err(p) => p.into_inner(),
     };
@@ -476,7 +476,7 @@ pub fn report() -> String {
 
 pub fn save_histograms(_path: &'static str) -> Result<()> {
     if hist_enabled() {
-        let stat = match STAT.lock() {
+        let stat = match unsafe { STAT.lock() } {
             Ok(g) => g,
             Err(p) => p.into_inner(),
         };

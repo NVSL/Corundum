@@ -9,8 +9,9 @@ use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::Mutex;
 use std::thread::ThreadId;
+use crate::utils::LazyCell;
 
-pub  use crate::alloc::*;
+pub use crate::alloc::*;
 
 /// A pass-through allocator for volatile memory
 pub struct Heap {}
@@ -18,10 +19,8 @@ pub struct Heap {}
 static mut JOURNALS: Option<HashMap<ThreadId, (u64, i32)>> = None;
 static mut CHAPERONS: Option<HashMap<ThreadId, Chaperon>> = None;
 static mut MUTEX: Option<Mutex<bool>> = None;
-
-lazy_static! {
-    static ref LOGS: Mutex<Ring<(u64, u64), 8>> = Mutex::new(Ring::new());
-}
+static mut LOGS: LazyCell<Mutex<Ring<(u64, u64), 8>>> = 
+    LazyCell::new(|| Mutex::new(Ring::new()));
 
 unsafe impl MemPool for Heap {
     fn name() -> &'static str {

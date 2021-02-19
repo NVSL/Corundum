@@ -1,4 +1,5 @@
 use crate::result::Result;
+use crate::utils::LazyCell;
 use crate::{TxInSafe, TxOutSafe};
 use std::collections::hash_map::HashMap;
 use std::fmt::{self, Debug};
@@ -79,13 +80,11 @@ impl<T: ?Sized> SyncBox<T> {
 unsafe impl<T:?Sized> Sync for SyncBox<T> {}
 unsafe impl<T:?Sized> Send for SyncBox<T> {}
 
-lazy_static!{
-    static ref CLIST: Mutex<HashMap<ThreadId, SyncBox<Chaperon>>> = 
-        Mutex::new(HashMap::new());
-}
+static mut CLIST: LazyCell<Mutex<HashMap<ThreadId, SyncBox<Chaperon>>>> = 
+    LazyCell::new(|| Mutex::new(HashMap::new()));
 
 fn new_chaperon(filename: &str) -> Result<*mut Chaperon> {
-    let mut clist = match CLIST.lock() {
+    let mut clist = match unsafe { CLIST.lock() } {
         Ok(g) => g,
         Err(p) => p.into_inner()
     };
@@ -100,7 +99,7 @@ fn new_chaperon(filename: &str) -> Result<*mut Chaperon> {
 }
 
 fn drop_chaperon() {
-    let mut clist = match CLIST.lock() {
+    let mut clist = match unsafe { CLIST.lock() } {
         Ok(g) => g,
         Err(p) => p.into_inner()
     };
@@ -109,7 +108,7 @@ fn drop_chaperon() {
 }
 
 fn current_chaperon() -> Option<*mut Chaperon> {
-    let clist = match CLIST.lock() {
+    let clist = match unsafe { CLIST.lock() } {
         Ok(g) => g,
         Err(p) => p.into_inner()
     };

@@ -888,8 +888,8 @@ macro_rules! pool {
             use std::sync::atomic::{AtomicBool, Ordering};
             use std::sync::{Arc, Mutex};
             use std::thread::ThreadId;
-            use lazy_static::lazy_static;
             use $crate::ll::*;
+            use $crate::utils::LazyCell;
             use $crate::result::Result;
             pub use $crate::*;
             pub use $crate::alloc::*;
@@ -999,14 +999,12 @@ macro_rules! pool {
             static mut BUDDY_INNER: Option<&'static mut BuddyAllocInner> = None;
             static mut OPEN: AtomicBool = AtomicBool::new(false);
             static mut MAX_GEN: u32 = 0;
-
-            lazy_static! {
-                static ref VDATA: Arc<Mutex<Option<VData>>> = Arc::new(Mutex::new(None));
-            }
+            static mut VDATA: LazyCell<Arc<Mutex<Option<VData>>>> = 
+                LazyCell::new(|| Arc::new(Mutex::new(None)));
 
             impl BuddyAlloc {
                 fn running_transaction() -> bool {
-                    let vdata = match VDATA.lock() {
+                    let vdata = match unsafe { VDATA.lock() } {
                         Ok(g) => g,
                         Err(p) => p.into_inner()
                     };

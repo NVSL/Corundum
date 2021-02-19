@@ -131,8 +131,6 @@
 
 pub(crate) const PAGE_LOG_SLOTS: usize = 128;
 
-#[macro_use]
-extern crate lazy_static;
 extern crate crndm_derive;
 extern crate impl_trait_for_tuples;
 
