@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::Mutex;
 use std::thread::ThreadId;
-use crate::utils::LazyCell;
+use crate::cell::LazyCell;
 
 pub use crate::alloc::*;
 

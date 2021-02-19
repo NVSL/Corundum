@@ -1,5 +1,5 @@
 use crate::result::Result;
-use crate::utils::LazyCell;
+use crate::cell::LazyCell;
 use crate::{TxInSafe, TxOutSafe};
 use std::collections::hash_map::HashMap;
 use std::fmt::{self, Debug};

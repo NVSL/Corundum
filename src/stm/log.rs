@@ -467,10 +467,10 @@ impl<A: MemPool> Log<A> {
     #[inline]
     #[track_caller]
     pub unsafe fn recount_on_failure(offset: u64, inc: bool, journal: &Journal<A>) -> Ptr<Log<A>, A> {
-        log!(A, Yellow, "NEW LOG", "FOR:         ({:>4}..{:<4}) = {:<5} RecountOnFailure({})",
+        log!(A, Yellow, "NEW LOG", "FOR:         ({:>4}..{:<4}) = {:<5} RecountOnFailure",
             offset_to_str(offset),
             offset_to_str((offset as usize + 7) as u64),
-            8, atomic
+            8
         );
         Self::write_on_journal(RecountOnFailure(offset, inc), journal, Notifier::None)
     }

@@ -10,7 +10,7 @@ use std::sync::Mutex;
 use std::thread::{current, ThreadId};
 use std::time::Instant;
 use std::io::*;
-use crate::utils::LazyCell;
+use crate::cell::LazyCell;
 
 #[derive(Clone)]
 struct Data {

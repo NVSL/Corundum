@@ -889,7 +889,7 @@ macro_rules! pool {
             use std::sync::{Arc, Mutex};
             use std::thread::ThreadId;
             use $crate::ll::*;
-            use $crate::utils::LazyCell;
+            use $crate::cell::LazyCell;
             use $crate::result::Result;
             pub use $crate::*;
             pub use $crate::alloc::*;
