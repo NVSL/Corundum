@@ -124,6 +124,7 @@
 #![feature(unboxed_closures)]
 #![feature(let_chains)]
 #![feature(c_variadic)]
+#![feature(rustc_attrs)]
 
 #![allow(dead_code)]
 #![allow(incomplete_features)]

@@ -1076,7 +1076,6 @@ impl<A: MemPool, T: PSafe + PartialOrd> PartialOrd for Vec<T, A> {
 impl<A: MemPool, T: PSafe + PClone<A>> PClone<A> for Vec<T, A> {
     fn pclone(&self, j: &Journal<A>) -> Self {
         Vec::from_slice(PClone::pclone(&self.as_slice(), j), j)
-
     }
 }
 

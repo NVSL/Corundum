@@ -23,6 +23,10 @@ use std::fmt;
 /// we manually limit all pointers to functions with up to 32 arguments. Function
 /// pointers with a number of arguments beyond 32 are inevitably allowed.
 /// 
+#[rustc_on_unimplemented(
+    message = "`{Self}` is not safe to be stored on persistent memory",
+    label = "`{Self}` is not safe to be stored on persistent memory"
+)]
 pub unsafe auto trait PSafe {}
 
 impl<T: ?Sized> !PSafe for *const T {}
@@ -80,6 +84,10 @@ impl<T: ?Sized> !PSafe for UnsafeCell<T> {}
 ///
 /// Types that implement this trait may go in/out of a transaction. This
 /// guarantees no cross-pool referencing.
+#[rustc_on_unimplemented(
+    message = "`{Self}` cannot be sent out of a transaction safely",
+    label = "`{Self}` cannot be sent out of a transaction safely"
+)]
 pub unsafe auto trait TxOutSafe {}
 
 impl<T: ?Sized> !TxOutSafe for *const T {}
@@ -99,13 +107,25 @@ unsafe impl<T> TxOutSafe for Vec<std::thread::JoinHandle<T>> {}
 /// The user can safely specify a type as `UnwindSafe`, but `TxInSafe` is
 /// unsafe to implement. This warns the programmer that the non-existence
 /// of orphans is not guaranteed anymore.
+#[rustc_on_unimplemented(
+    message = "`{Self}` cannot be sent to a transaction safely",
+    label = "`{Self}` cannot be sent to a transaction safely"
+)]
 pub unsafe auto trait TxInSafe {}
 
 /// The implementing type can be asserted [`TxInSafe`] albeit being `!TxInSafe`
-/// by [`AssertTxInSafe`](./struct.AssertTxInSafe.html).
+/// by using [`AssertTxInSafe`](./struct.AssertTxInSafe.html).
 /// 
 /// [`TxInSafe`]: ./trait.TxInSafe.html
+#[rustc_on_unimplemented(
+    message = "`{Self}` cannot be asserted as `TxInSafe`",
+    label = "`{Self}` cannot be asserted as `TxInSafe`"
+)]
 pub unsafe auto trait LooseTxInUnsafe {}
+
+/// `Formatter` type uses `dyn Write` which is okay to be transferred to a
+/// transaction
+unsafe impl LooseTxInUnsafe for std::fmt::Formatter<'_> {}
 
 /// A simple wrapper around a type to assert that it is safe to go in a
 /// transaction.
@@ -140,6 +160,8 @@ pub unsafe auto trait LooseTxInUnsafe {}
 ///         **wrapper += other_capture;
 ///     })
 /// };
+/// 
+/// assert_eq!(variable, 7);
 /// // ...
 /// ```
 /// 
@@ -169,7 +191,7 @@ impl<T: LooseTxInUnsafe> DerefMut for AssertTxInSafe<T> {
 }
 
 impl<R, F: FnOnce() -> R> FnOnce<()> for AssertTxInSafe<F> 
-where F: LooseTxInUnsafe{
+where F: LooseTxInUnsafe {
     type Output = R;
 
     extern "rust-call" fn call_once(self, _args: ()) -> R {
@@ -194,6 +216,10 @@ impl<F: Future + LooseTxInUnsafe> Future for AssertTxInSafe<F> {
 
 /// Safe to be stored in volatile memory useful in `VCell` type to prevent
 /// storing persistent pointers in [`VCell`](./cell/struct.VCell.html)
+#[rustc_on_unimplemented(
+    message = "`{Self}` is not safe to be stored on volatile memory",
+    label = "`{Self}` is not safe to be stored on volatile memory"
+)]
 pub unsafe auto trait VSafe {}
 
 /// Safe to be sent to another thread
@@ -205,4 +231,8 @@ pub unsafe auto trait VSafe {}
 /// [`Parc`]: ../sync/struct.Parc.html
 /// [`Send`]: ../trait.Send.html
 /// [`VWeak`]: ../sync/struct.VWeak.html
+#[rustc_on_unimplemented(
+    message = "`{Self}` cannot be sent to a another thread safely",
+    label = "`{Self}` cannot be sent to a another thread safely"
+)]
 pub unsafe auto trait PSend {}
