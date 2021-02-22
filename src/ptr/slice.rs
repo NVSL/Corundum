@@ -7,7 +7,7 @@ use std::ops::Index;
 
 /// A persistent fat pointer with offset and capacity
 #[derive(Eq)]
-pub struct FatPtr<T: PSafe, A: MemPool> {
+pub struct Slice<T: PSafe, A: MemPool> {
     off: u64,
     cap: usize,
     dummy: [A; 0],
@@ -16,16 +16,16 @@ pub struct FatPtr<T: PSafe, A: MemPool> {
 
 /// `Ptr` pointers are not `Send` because the data they reference may be aliased.
 // N.B., this impl is unnecessary, but should provide better error messages.
-impl<A: MemPool, T> !Send for FatPtr<T, A> {}
+impl<A: MemPool, T> !Send for Slice<T, A> {}
 
 /// `Ptr` pointers are not `Sync` because the data they reference may be aliased.
 // N.B., this impl is unnecessary, but should provide better error messages.
-impl<A: MemPool, T> !Sync for FatPtr<T, A> {}
-impl<A: MemPool, T> !TxOutSafe for FatPtr<T, A> {}
+impl<A: MemPool, T> !Sync for Slice<T, A> {}
+impl<A: MemPool, T> !TxOutSafe for Slice<T, A> {}
 
-unsafe impl<T: PSafe, A: MemPool> PSafe for FatPtr<T, A> {}
+unsafe impl<T: PSafe, A: MemPool> PSafe for Slice<T, A> {}
 
-impl<T: PSafe, A: MemPool> FatPtr<T, A> {
+impl<T: PSafe, A: MemPool> Slice<T, A> {
 
     /// Creates a new fat pointer given a slice
     pub unsafe fn new(x: &[T]) -> Self {
@@ -49,7 +49,7 @@ impl<T: PSafe, A: MemPool> FatPtr<T, A> {
 
     #[inline]
     pub(crate) const fn from_off_cap(off: u64, cap: usize) -> Self {
-        Self {
+        Slice {
             off,
             cap,
             dummy: [],
@@ -179,7 +179,7 @@ impl<T: PSafe, A: MemPool> FatPtr<T, A> {
     }
 
     #[inline]
-    /// Creates a new copy of data and returns a `FatPtr` pointer
+    /// Creates a new copy of data and returns a `Slice` pointer
     ///
     /// # Safety
     ///
@@ -187,7 +187,7 @@ impl<T: PSafe, A: MemPool> FatPtr<T, A> {
     /// responsibility of deallocating inner value. Also, it does not clone the
     /// inner value. Instead, it just copies the memory.
     /// 
-    pub unsafe fn dup(&self, len: usize) -> FatPtr<T, A> {
+    pub unsafe fn dup(&self, len: usize) -> Slice<T, A> {
         assert!(len <= self.cap);
         if self.is_empty() {
             Self::empty()
@@ -201,48 +201,48 @@ impl<T: PSafe, A: MemPool> FatPtr<T, A> {
     }
 }
 
-impl<T: PSafe, A: MemPool> Index<usize> for FatPtr<T, A> {
+impl<T: PSafe, A: MemPool> Index<usize> for Slice<T, A> {
     type Output = T;
     fn index(&self, i: usize) -> &T {
         self.get(i)
     }
 }
 
-impl<A: MemPool, T: PSafe> From<&[T]> for FatPtr<T, A> {
+impl<A: MemPool, T: PSafe> From<&[T]> for Slice<T, A> {
     #[inline]
     fn from(other: &[T]) -> Self {
         Self::from_off_cap(A::off(other).unwrap(), other.len())
     }
 }
 
-impl<A: MemPool, T: PSafe> From<&mut [T]> for FatPtr<T, A> {
+impl<A: MemPool, T: PSafe> From<&mut [T]> for Slice<T, A> {
     #[inline]
     fn from(other: &mut [T]) -> Self {
         Self::from_off_cap(A::off(other).unwrap(), other.len())
     }
 }
 
-impl<A: MemPool + Copy, T: PSafe + Copy> Copy for FatPtr<T, A> {}
+impl<A: MemPool + Copy, T: PSafe + Copy> Copy for Slice<T, A> {}
 
-impl<A: MemPool, T: PSafe> Clone for FatPtr<T, A> {
+impl<A: MemPool, T: PSafe> Clone for Slice<T, A> {
     fn clone(&self) -> Self {
         Self::from_off_cap(self.off, self.cap)
     }
 }
 
-impl<A: MemPool, T: PSafe> PmemUsage for FatPtr<T, A> {
+impl<A: MemPool, T: PSafe> PmemUsage for Slice<T, A> {
     fn size_of() -> usize {
         std::mem::size_of::<T>() + std::mem::size_of::<Self>()
     }
 }
 
-impl<A: MemPool, T: PSafe> Default for FatPtr<T, A> {
+impl<A: MemPool, T: PSafe> Default for Slice<T, A> {
     fn default() -> Self {
-        FatPtr::empty()
+        Slice::empty()
     }
 }
 
-impl<A: MemPool, T: PSafe> PartialEq for FatPtr<T, A> {
+impl<A: MemPool, T: PSafe> PartialEq for Slice<T, A> {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
         self.off == other.off && self.cap == other.cap

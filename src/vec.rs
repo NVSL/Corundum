@@ -49,7 +49,7 @@ use std::{mem, ptr, slice};
 /// }).unwrap();
 /// ```
 pub struct Vec<T: PSafe, A: MemPool> {
-    buf: FatPtr<T, A>,
+    buf: Slice<T, A>,
     len: usize,
     marker: PhantomData<[T]>,
 }
@@ -221,7 +221,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     /// `capacity`, and the `length` of the vector.
     pub(crate) const fn from_off_len(offset: u64, capacity: usize, length: usize) -> Self {
         Self {
-            buf: FatPtr::from_off_cap(offset, capacity),
+            buf: Slice::from_off_cap(offset, capacity),
             len: length,
             marker: PhantomData,
         }
@@ -377,10 +377,10 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
                     // of each individual item
                 }
                 if rem.is_empty() {
-                    self.buf = FatPtr::empty();
+                    self.buf = Slice::empty();
                 } else {
                     let new = A::new_slice(rem, j);
-                    self.buf = FatPtr::from_off_cap(A::off_unchecked(new), new.len());
+                    self.buf = Slice::from_off_cap(A::off_unchecked(new), new.len());
                 }
             }
         }
@@ -392,7 +392,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     /// It will drop down as close as possible to the length but the allocator
     /// may still inform the vector that there is space for a few more elements.
     ///
-    /// # Examples
+    /// # ExamplesSlice
     ///
     /// ```
     /// # use corundum::vec::Vec;
@@ -447,7 +447,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
                 let new = A::new_uninit_for_layout(layout.size(), j).cast();
                 ptr::copy(old.as_ptr(), new, len);
                 A::free_slice(Self::to_slice_mut(self.off(), self.capacity()));
-                self.buf = FatPtr::new(slice::from_raw_parts(new, new_cap));
+                self.buf = Slice::new(slice::from_raw_parts(new, new_cap));
             }
         }
     }
