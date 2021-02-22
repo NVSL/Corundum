@@ -150,6 +150,66 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
         }
     }
 
+    /// Creates a `PVec<T>` directly from the raw components of another vector.
+    ///
+    /// # Safety
+    ///
+    /// This is highly unsafe, due to the number of invariants that aren't
+    /// checked:
+    ///
+    /// * `ptr` needs to have been previously allocated via [`String`]/`Vec<T>`
+    ///   (at least, it's highly likely to be incorrect if it wasn't).
+    /// * `ptr` should point to the same pool
+    /// * `T` needs to have the same size as what `ptr` was allocated with.
+    /// * `length` needs to be less than or equal to `capacity`.
+    /// * `capacity` needs to be the capacity that the pointer was allocated with.
+    ///
+    /// The ownership of `ptr` is effectively transferred to the
+    /// `PVec<T>` which may then deallocate, reallocate or change the
+    /// contents of memory pointed to by the pointer at will. Ensure
+    /// that nothing else uses the pointer after calling this
+    /// function.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::ptr;
+    /// use std::mem;
+    /// use corundum::alloc::heap::Heap;
+    /// use corundum::vec::Vec as PVec;
+    ///
+    /// let v = vec![1, 2, 3];
+    ///
+    /// // Prevent running `v`'s destructor so we are in complete control
+    /// // of the allocation.
+    /// let mut v = mem::ManuallyDrop::new(v);
+    ///
+    /// // Pull out the various important pieces of information about `v`
+    /// let p = v.as_mut_ptr();
+    /// let len = v.len();
+    /// let cap = v.capacity();
+    ///
+    /// unsafe {
+    ///     // Overwrite memory with 4, 5, 6
+    ///     for i in 0..len as isize {
+    ///         ptr::write(p.offset(i), 4 + i);
+    ///     }
+    ///
+    ///     // Put everything back together into a Vec
+    ///     let rebuilt = PVec::<isize, Heap>::from_raw_parts(p, len, cap);
+    ///     assert_eq!(rebuilt, [4, 5, 6]);
+    /// }
+    /// ```
+    #[inline]
+    pub unsafe fn from_raw_parts(ptr: *mut T, length: usize, capacity: usize) -> Self {
+        let off = A::off_unchecked(ptr);
+        Self {
+            buf: Slice::<T,A>::from_off_cap(off, capacity),
+            len: length,
+            marker: PhantomData
+        }
+    }
+
     /// Creates an empty vector with zero capacity
     pub const fn empty() -> Self {
         Self::from_off_len(u64::MAX, 0, 0)
