@@ -24,8 +24,8 @@ use std::fmt;
 /// pointers with a number of arguments beyond 32 are inevitably allowed.
 /// 
 #[rustc_on_unimplemented(
-    message = "`{Self}` is not safe to be stored on persistent memory",
-    label = "`{Self}` is not safe to be stored on persistent memory"
+    message = "`{Self}` is not safe to be stored in persistent memory",
+    label = "`{Self}` is not safe to be stored in persistent memory"
 )]
 pub unsafe auto trait PSafe {}
 
@@ -217,8 +217,8 @@ impl<F: Future + LooseTxInUnsafe> Future for AssertTxInSafe<F> {
 /// Safe to be stored in volatile memory useful in `VCell` type to prevent
 /// storing persistent pointers in [`VCell`](./cell/struct.VCell.html)
 #[rustc_on_unimplemented(
-    message = "`{Self}` is not safe to be stored on volatile memory",
-    label = "`{Self}` is not safe to be stored on volatile memory"
+    message = "`{Self}` is not safe to be stored in volatile memory",
+    label = "`{Self}` is not safe to be stored in volatile memory"
 )]
 pub unsafe auto trait VSafe {}
 

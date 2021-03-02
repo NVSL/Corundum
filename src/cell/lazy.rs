@@ -22,6 +22,7 @@ impl<T, F> LazyCell<T, F> {
 
 impl<T, F: FnOnce() -> T> LazyCell<T, F> {
     #[inline]
+    #[track_caller]
     pub fn force(this: &LazyCell<T, F>) -> &T {
         let cell = unsafe { &mut *this.cell.as_ptr() };
         if cell.is_none() {
@@ -36,6 +37,8 @@ impl<T, F: FnOnce() -> T> LazyCell<T, F> {
 
 impl<T, F: FnOnce() -> T> Deref for LazyCell<T, F> {
     type Target = T;
+    
+    #[track_caller]
     fn deref(&self) -> &T {
         Self::force(self)
     }

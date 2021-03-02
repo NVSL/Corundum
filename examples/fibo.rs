@@ -38,21 +38,17 @@ fn main() {
             let old_n2 = *n2;
             *n2 = n1_val;
             old_n2
-        })
-        .unwrap();
+        }).unwrap();
 
         P1::transaction(|j| {
             let mut n1_idx = n1.idx.borrow_mut(j);
             let mut n1 = n1.val.borrow_mut(j);
             *n1 += n2_val;
             *n1_idx += 1;
-        })
-        .unwrap();
+        }).unwrap();
 
         false
-    })
-    .unwrap()
-    {}
+    }).unwrap() {}
 
     let n1 = n1.val.read();
     let n2 = n2.val.read();
