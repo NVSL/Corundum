@@ -16,7 +16,7 @@ use std::arch::x86_64::{_mm_clflush, _mm_mfence, _mm_sfence};
 /// Synchronize caches and memories and acts like a write barrier
 #[inline(always)]
 pub fn persist<T: ?Sized>(ptr: &T, len: usize, fence: bool) {
-    #[cfg(feature = "perf_stat")]
+    #[cfg(feature = "stat_perf")]
     let _perf = crate::stat::Measure::<crate::default::BuddyAlloc>::Sync(std::time::Instant::now());
 
     #[cfg(not(feature = "no_persist"))]
@@ -46,7 +46,7 @@ pub fn persist<T: ?Sized>(ptr: &T, len: usize, fence: bool) {
 /// Synchronize caches and memories and acts like a write barrier
 #[inline(always)]
 pub fn persist_obj<T: ?Sized>(obj: &T, fence: bool) {
-    #[cfg(feature = "perf_stat")]
+    #[cfg(feature = "stat_perf")]
     let _perf = crate::stat::Measure::<crate::default::BuddyAlloc>::Sync(std::time::Instant::now());
 
     #[cfg(not(feature = "no_persist"))]
@@ -71,7 +71,7 @@ pub fn clflush<T: ?Sized>(ptr: &T, len: usize, fence: bool) {
         start = (start >> 9) << 9;
         let end = start + len;
 
-        #[cfg(feature = "display_all_flushes")]
+        #[cfg(feature = "stat_print_flushes")]
         println!("flush {:x} ({})", start, len);
 
         while start < end {

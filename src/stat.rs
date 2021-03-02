@@ -355,7 +355,7 @@ fn div(a: u64, b: u64) -> f64 {
 
 impl Display for Stat {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        #[cfg(feature = "perf_stat")] {
+        #[cfg(feature = "stat_perf")] {
             writeln!(
                 f,
 "Sync          {:>14} us    avg(ns): {:<8}    cnt: {}

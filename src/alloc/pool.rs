@@ -372,7 +372,7 @@ where
     /// The offset should be in the valid address range
     #[inline]
     unsafe fn get_unchecked<'a, T: 'a + ?Sized>(off: u64) -> &'a T {
-        #[cfg(feature = "perf_stat")]
+        #[cfg(feature = "stat_perf")]
         let _perf = crate::stat::Measure::<Self>::Deref(std::time::Instant::now());
 
         union U<'b, K: 'b + ?Sized> {
@@ -380,7 +380,7 @@ where
             raw: &'b K,
         }
 
-        #[cfg(any(feature = "access_violation_check", debug_assertions))]
+        #[cfg(any(feature = "check_access_violation", debug_assertions))]
         assert!( Self::allocated(off, 1), "Bad address (0x{:x})", off );
 
         U { off: Self::start() + off }.raw
@@ -394,7 +394,7 @@ where
     #[inline]
     #[track_caller]
     unsafe fn get_mut_unchecked<'a, T: 'a + ?Sized>(off: u64) -> &'a mut T {
-        #[cfg(feature = "perf_stat")]
+        #[cfg(feature = "stat_perf")]
         let _perf = crate::stat::Measure::<Self>::Deref(std::time::Instant::now());
 
         union U<'b, K: 'b + ?Sized> {
@@ -402,7 +402,7 @@ where
             raw: &'b mut K,
         }
 
-        #[cfg(any(feature = "access_violation_check", debug_assertions))]
+        #[cfg(any(feature = "check_access_violation", debug_assertions))]
         assert!( Self::allocated(off, 1), "Bad address (0x{:x})", off );
 
         U { off: Self::start() + off }.raw
@@ -415,7 +415,7 @@ where
     /// The offset should be in the valid address range
     #[inline]
     unsafe fn deref_slice_unchecked<'a, T: 'a>(off: u64, len: usize) -> &'a [T] {
-        #[cfg(feature = "perf_stat")]
+        #[cfg(feature = "stat_perf")]
         let _perf = crate::stat::Measure::<Self>::Deref(std::time::Instant::now());
 
         if len == 0 {
@@ -431,7 +431,7 @@ where
             .raw;
             let res = std::slice::from_raw_parts(ptr, len);
 
-            #[cfg(any(feature = "access_violation_check", debug_assertions))]
+            #[cfg(any(feature = "check_access_violation", debug_assertions))]
             assert!(
                 Self::allocated(off, mem::size_of::<T>() * len),
                 "Bad address (0x{:x}..0x{:x})",
@@ -450,7 +450,7 @@ where
     /// The offset should be in the valid address range
     #[inline]
     unsafe fn deref_slice_unchecked_mut<'a, T: 'a>(off: u64, len: usize) -> &'a mut [T] {
-        #[cfg(feature = "perf_stat")]
+        #[cfg(feature = "stat_perf")]
         let _perf = crate::stat::Measure::<Self>::Deref(std::time::Instant::now());
 
         if len == 0 {
@@ -466,7 +466,7 @@ where
             .raw;
             let res = std::slice::from_raw_parts_mut(ptr, len);
 
-            #[cfg(any(feature = "access_violation_check", debug_assertions))]
+            #[cfg(any(feature = "check_access_violation", debug_assertions))]
             assert!(
                 Self::allocated(off, mem::size_of::<T>() * len),
                 "Bad address (0x{:x}..0x{:x})",
@@ -1114,7 +1114,7 @@ where
         F: TxInSafe + UnwindSafe,
         T: TxOutSafe,
     {
-        #[cfg(feature = "perf_stat")]
+        #[cfg(feature = "stat_perf")]
         let _perf = crate::stat::Measure::<Self>::Transaction;
         
         let mut chaperoned = false;
@@ -1132,7 +1132,7 @@ where
                         &|| Self::clear(),
                     );
                     body({
-                        #[cfg(feature = "perf_stat")]
+                        #[cfg(feature = "stat_perf")]
                         let _perf = crate::stat::Measure::<Self>::Logging(std::time::Instant::now());
                         
                         let j = Journal::<Self>::current(true).unwrap();
@@ -1145,7 +1145,7 @@ where
                 }
             } else {
                 body({
-                    #[cfg(feature = "perf_stat")]
+                    #[cfg(feature = "stat_perf")]
                     let _perf = crate::stat::Measure::<Self>::Logging(std::time::Instant::now());
 
                     let j = Journal::<Self>::current(true).unwrap();
@@ -1158,7 +1158,7 @@ where
             }
         });
 
-        #[cfg(feature = "perf_stat")]
+        #[cfg(feature = "stat_perf")]
         let _perf = crate::stat::Measure::<Self>::Logging(std::time::Instant::now());
 
         unsafe {
@@ -1189,8 +1189,8 @@ where
     /// Prints memory information
     fn print_info() {}
 
-    #[cfg(feature = "footprint")]
-    fn footprint() -> usize {
+    #[cfg(feature = "stat_footprint")]
+    fn stat_footprint() -> usize {
         0
     }
 }

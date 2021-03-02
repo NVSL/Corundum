@@ -59,7 +59,7 @@ fn main() {
     }
     let duration = start.elapsed();
     println!("Time elapsed (PM): {:?}", duration);
-    // println!("Memory Footprint: {} bytes", P::footprint());
+    // println!("Memory Footprint: {} bytes", P::stat_footprint());
 
     if root.verify() {
         println!("Verification successful");

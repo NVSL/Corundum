@@ -92,8 +92,8 @@ pub struct BuddyAlg<A: MemPool> {
     /// Log of available space
     available_log: usize,
 
-    #[cfg(feature = "footprint")]
-    /// The footprint of memory usage in bytes
+    #[cfg(feature = "stat_footprint")]
+    /// The stat_footprint of memory usage in bytes
     foot_print: usize,
 
     #[cfg(not(any(feature = "no_pthread", windows)))]
@@ -350,7 +350,7 @@ impl<A: MemPool> BuddyAlg<A> {
                         self.perform();
                     }
 
-                    #[cfg(feature = "footprint")]
+                    #[cfg(feature = "stat_footprint")]
                     {
                         let usage = self.size - self.available_log;
                         if usage > self.foot_print {
@@ -455,11 +455,11 @@ impl<A: MemPool> BuddyAlg<A> {
             let len = 1 << idx;
             let mut curr = self.buddies[idx];
 
-            #[cfg(feature = "cyclic_link_check")]
+            #[cfg(feature = "check_allocator_cyclic_links")]
             let mut links = vec![];
 
             while let Some(b) = off_to_option(curr) {
-                #[cfg(feature = "cyclic_link_check")]
+                #[cfg(feature = "check_allocator_cyclic_links")]
                 {
                     if links.contains(&b) {
                         self.discard();
@@ -602,10 +602,10 @@ impl<A: MemPool> BuddyAlg<A> {
         self.size - self.available
     }
 
-    #[cfg(feature = "footprint")]
+    #[cfg(feature = "stat_footprint")]
     /// Returns the total number of bytes written to the pool. It may exceed the
     /// pool size as it does not subtract the reclaimed space after being used.
-    pub fn footprint(&self) -> usize {
+    pub fn stat_footprint(&self) -> usize {
         self.foot_print
     }
 
@@ -1168,7 +1168,7 @@ macro_rules! pool {
                 #[allow(unused_unsafe)]
                 #[track_caller]
                 unsafe fn pre_alloc(size: usize) -> (*mut u8, u64, usize, usize) {
-                    #[cfg(feature = "perf_stat")]
+                    #[cfg(feature = "stat_perf")]
                     let _perf = $crate::stat::Measure::<Self>::Alloc(std::time::Instant::now());
 
                     static_inner!(BUDDY_INNER, inner, {
@@ -1192,13 +1192,13 @@ macro_rules! pool {
                 #[allow(unused_unsafe)]
                 #[track_caller]
                 unsafe fn pre_dealloc(ptr: *mut u8, size: usize) -> usize {
-                    #[cfg(feature = "perf_stat")]
+                    #[cfg(feature = "stat_perf")]
                     let _perf = $crate::stat::Measure::<Self>::Dealloc(std::time::Instant::now());
 
                     static_inner!(BUDDY_INNER, inner, {
                         let off = Self::off(ptr).expect("invalid pointer");
                         let (zone,zidx) = inner.zone.from_off(off);
-                        if cfg!(feature = "access_violation_check") {
+                        if cfg!(feature = "check_access_violation") {
                             if zone.is_allocated(off, size) {
                                 zone.dealloc_impl(off, size, false);
                             } else {
@@ -1272,7 +1272,7 @@ macro_rules! pool {
                         if off >= Self::end() {
                             false
                         } else if Self::contains(off + Self::start()) {
-                            if cfg!(feature = "access_violation_check") {
+                            if cfg!(feature = "check_access_violation") {
                                 inner.zone.from_off(off).0.is_allocated(off, len)
                             } else {
                                 true
@@ -1460,9 +1460,9 @@ macro_rules! pool {
                     }
                 }
 
-                #[cfg(feature = "footprint")]
-                fn footprint() -> usize {
-                    static_inner!(BUDDY_INNER, inner, { inner.zone.footprint() })
+                #[cfg(feature = "stat_footprint")]
+                fn stat_footprint() -> usize {
+                    static_inner!(BUDDY_INNER, inner, { inner.zone.stat_footprint() })
                 }
 
                 fn print_info() {
@@ -1489,7 +1489,7 @@ macro_rules! pool {
                         Self::close().unwrap();
                     }
 
-                    #[cfg(feature = "perf_stat")] {
+                    #[cfg(feature = "stat_perf")] {
                         eprintln!("{}", $crate::stat::report());
                     }
                 }
