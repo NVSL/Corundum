@@ -78,7 +78,12 @@ impl<A: MemPool> Page<A> {
     #[inline]
     /// Writes a new log to the journal
     fn write(&mut self, log: LogEnum, notifier: Notifier<A>) -> Ptr<Log<A>, A> {
-        self.logs[self.len] = Log::new(log, notifier);
+        #[cfg(not(feature = "use_ntstore"))] {
+            self.logs[self.len] = Log::new(log, notifier);
+        }
+        #[cfg(feature = "use_ntstore")] unsafe {
+            std::intrinsics::nontemporal_store(&mut self.logs[self.len], Log::new(log, notifier));
+        }
         persist(&self.logs[self.len], std::mem::size_of::<Log<A>>(), false);
 
         let log = unsafe { Ptr::new_unchecked(&self.logs[self.len]) };
