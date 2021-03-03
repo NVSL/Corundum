@@ -1,8 +1,9 @@
 //! Software transactional memory APIs
 
 mod chaperon;
-pub mod journal;
+mod journal;
 mod log;
+mod scratchpad;
 
 use crate::alloc::MemPool;
 use crate::result::Result;
@@ -12,6 +13,7 @@ use std::panic::UnwindSafe;
 pub use chaperon::*;
 pub use journal::*;
 pub use log::*;
+pub use scratchpad::*;
 
 /// Atomically executes commands
 /// 

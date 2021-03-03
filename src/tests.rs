@@ -1545,7 +1545,7 @@ pub(crate) mod test {
             value: Parc<PMutex<i32, A>, A>,
         }
         impl RootObj<A> for SB {
-            fn init(j: &stm::journal::Journal<A>) -> Self {
+            fn init(j: &stm::Journal<A>) -> Self {
                 SB {
                     value: Parc::new(PMutex::new(0), j),
                 }
@@ -1634,7 +1634,7 @@ pub(crate) mod test {
             value: Parc<PMutex<i32, A>, A>,
         }
         impl RootObj<A> for SB {
-            fn init(j: &stm::journal::Journal<A>) -> Self {
+            fn init(j: &stm::Journal<A>) -> Self {
                 SB {
                     value: Parc::new(PMutex::new(0), j),
                 }

@@ -232,7 +232,6 @@ impl<A: MemPool> BuddyAlg<A> {
     /// [`alloc_impl`]: #method.alloc_impl
     /// [`dealloc_impl`]: #method.dealloc_impl
     pub fn drain_aux(&mut self) {
-        #[cfg(any(feature = "use_clflushopt", feature = "use_clwb"))]
         sfence();
 
         self.aux_valid = true;

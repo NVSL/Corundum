@@ -1,6 +1,6 @@
 use crate::cell::{RootCell, RootObj};
 use crate::result::Result;
-use crate::stm::{journal::*, Chaperon, Log};
+use crate::stm::*;
 use crate::*;
 use std::collections::HashMap;
 use std::fs::OpenOptions;
@@ -1162,7 +1162,6 @@ where
         let _perf = crate::stat::Measure::<Self>::Logging(std::time::Instant::now());
 
         unsafe {
-            #[cfg(any(feature = "use_clflushopt", feature = "use_clwb"))]
             crate::ll::sfence();
 
             if let Ok(res) = res {

@@ -112,7 +112,7 @@ pub fn clflush_obj<T: ?Sized>(obj: &T, fence: bool) {
 #[inline(always)]
 pub fn sfence() {
     #[cfg(any(feature = "use_clwb", feature = "use_clflushopt"))] unsafe {
-        llvm_asm!("sfence");
+        _mm_sfence();
     }
 }
 
