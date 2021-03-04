@@ -112,13 +112,13 @@ impl<A: MemPool> Scratchpad<A> {
     pub(crate) unsafe fn clear(&mut self) {
         if let Some(spd) = self.pm.try_deref_mut() {
             let z = A::pre_dealloc(spd as *mut _ as *mut u8, mem::size_of_val(spd));
+            ptr::drop_in_place(spd);
             A::log64(A::off_unchecked(self.pm.off_mut()), u64::MAX, z);
             A::log64(A::off_unchecked(&self.len), 0, z);
             A::perform(z);
-        } else {
-            self.pm = Ptr::dangling();
-            self.len = 0;
         }
+        self.pm = Ptr::dangling();
+        self.len = 0;
     }
 }
 
@@ -130,7 +130,7 @@ impl<A: MemPool> Drop for Scratchpad<A> {
                     self.base,
                     Layout::from_size_align_unchecked(SCRATCHPAD_SIZE, 1)
                 );
-            } else {
+            } else if self.len != 0 {
                 let z = A::pre_dealloc((self.base as u64 + A::start()) as *mut u8, self.len);
                 A::log64(A::off_unchecked(&self.len), 0, z);
                 A::perform(z);
