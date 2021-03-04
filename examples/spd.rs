@@ -27,7 +27,7 @@ fn main() {
         return;
     }
 
-    let root = P::open::<Root>(&args[1], O_CFNE).unwrap();
+    let root = P::open::<Root>(&args[1], O_CF).unwrap();
 
     for c in &[10, 100, 500, 1000, 2000, 3000] {
         measure!(format!("Transaction Size {:4}", c), {
