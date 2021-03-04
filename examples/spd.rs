@@ -1,6 +1,7 @@
+use std::time::Instant;
+
 fn main() {
     use corundum::default::*;
-    use corundum::stat::*;
     use std::env;
 
     type P = BuddyAlloc;
@@ -30,15 +31,14 @@ fn main() {
     let root = P::open::<Root>(&args[1], O_CF).unwrap();
 
     for c in &[10, 100, 500, 1000, 2000, 3000] {
-        let s = format!("Transaction Size {:4}", c);
-        measure!(s, 1, {
-            transaction(|j| {
-                for i in 0..*c {
-                    root.list[i].set(root.list[(i + 1) % *c].get(), j);
-                }
-            }).unwrap();
-        });
+        let now = Instant::now();
+        transaction(|j| {
+            for i in 0..*c {
+                root.list[i].set(root.list[(i + 1) % *c].get(), j);
+            }
+        }).unwrap();
+        let t = now.elapsed().as_micros();
+        println!("Transaction Size {:4}: {:>8} us", c, t);
     }
 
-    println!("{}", report());
 }
