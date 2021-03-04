@@ -18,6 +18,7 @@ pub struct Scratchpad<A: MemPool> {
     base: VCell<RawPtr, A>,
     cap: usize,
     len: usize,
+    off: u64,
     pm: Ptr<Self, A>
 }
 
@@ -29,6 +30,7 @@ impl<A: MemPool> Scratchpad<A> {
             })),
             cap: SCRATCHPAD_SIZE,
             len: 0,
+            off: u64::MAX,
             pm: Ptr::dangling()
         }
     }
@@ -65,28 +67,28 @@ impl<A: MemPool> Scratchpad<A> {
     }
 
     unsafe fn apply(&mut self) {
-        let mut cur = self.base.0 as u64 + A::start();
-        while cur < self.len as u64 {
-            let p = utils::read_addr::<u8>(cur + A::start()) as *mut u8;
-            let org_off = *utils::read::<u64>(p);
-
-            let p = p.add(8);
-            let dist = *utils::read::<usize>(p);
-
-            let p = p.add(8);
-            let len = dist - 16;
-            let org = utils::read_addr::<u8>(org_off + A::start());
-            ptr::copy_nonoverlapping(p, org, len);
-            ll::persist(org, len, false);
-
-            cur += dist as u64;
+        if self.off != u64::MAX {
+            let mut cur = 0;
+            while cur < self.len as u64 {
+                let p = utils::read_addr::<u8>(cur + self.off + A::start()) as *mut u8;
+                let org_off = *utils::read::<u64>(p);
+    
+                let p = p.add(8);
+                let dist = *utils::read::<usize>(p);
+    
+                let p = p.add(8);
+                let len = dist - 16;
+                let org = utils::read_addr::<u8>(org_off + A::start());
+                ptr::copy_nonoverlapping(p, org, len);
+                ll::persist(org, len, false);
+    
+                cur += dist as u64;
+            }
         }
     }
 
     pub(crate) unsafe fn recover(&mut self) {
         if let Some(spd) = self.pm.try_deref_mut() {
-            let base = spd.base.0 as u64 + A::start();
-            let spd = utils::read_addr::<Self>(base);
             spd.apply();
         }
     }
@@ -96,9 +98,10 @@ impl<A: MemPool> Scratchpad<A> {
         let (p, off, len, z) = A::pre_alloc(size + self.len);
         let base = off + size as u64;
         let spd = Self {
-            base: VCell::new(RawPtr(base as *mut u8)),
+            base: VCell::new(RawPtr(ptr::null_mut())),
             cap: 0,
             len: self.len,
+            off: base,
             pm: Ptr::dangling()
         };
         mem::forget(mem::replace(utils::read(p), spd));
@@ -111,7 +114,7 @@ impl<A: MemPool> Scratchpad<A> {
         A::log64(A::off_unchecked(self.pm.off_mut()), off, z);
         A::perform(z);
 
-        self.apply();
+        spd.apply();
     }
 
     pub(crate) unsafe fn rollback(&mut self) {
@@ -140,9 +143,10 @@ impl<A: MemPool> Drop for Scratchpad<A> {
                         self.base.0,
                         Layout::from_size_align_unchecked(self.cap, 2)
                     );
-                } else if self.len != 0 {
-                    let z = A::pre_dealloc((self.base.0 as u64 + A::start()) as *mut u8, self.len);
+                } else if self.len != 0 && self.off != u64::MAX {
+                    let z = A::pre_dealloc((self.off as u64 + A::start()) as *mut u8, self.len);
                     A::log64(A::off_unchecked(&self.len), 0, z);
+                    A::log64(A::off_unchecked(&self.off), u64::MAX, z);
                     A::perform(z);
                 }
             }

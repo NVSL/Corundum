@@ -1,7 +1,6 @@
 use std::marker::PhantomData;
 use crate::alloc::MemPool;
-use crate::ptr::Ptr;
-use crate::stm::{Journal, Notifier, Logger};
+use crate::stm::Journal;
 use crate::{PSafe, TxOutSafe};
 use std::fmt;
 use std::ops::{Deref, DerefMut};
@@ -134,7 +133,10 @@ impl<T: fmt::Debug + PSafe + ?Sized> fmt::Debug for NonNull<T> {
 pub struct LogNonNull<T: PSafe + ?Sized, A: MemPool> {
     ptr: *mut T,
     journal: *const Journal<A>,
+
+    #[cfg(not(feature = "use_scratchpad"))]
     logged: *mut u8,
+
     phantom: PhantomData<*mut T>
 }
 
@@ -144,7 +146,10 @@ impl<T: PSafe + ?Sized, A: MemPool> Clone for LogNonNull<T, A> {
         Self {
             ptr: self.ptr,
             journal: self.journal,
+
+            #[cfg(not(feature = "use_scratchpad"))]
             logged: self.logged,
+
             phantom: PhantomData
         }
     }
@@ -161,23 +166,48 @@ impl<T: PSafe, A: MemPool> LogNonNull<T, A> {
     ///
     /// `ptr` and `logged` must be non-null.
     #[inline]
-    pub const unsafe fn new_unchecked(ptr: *mut T, logged: *mut u8, j: &Journal<A>) -> Self {
+    pub const unsafe fn new_unchecked(ptr: *mut T,
+
+        #[cfg(not(feature = "use_scratchpad"))]
+        logged: *mut u8,
+
+        j: &Journal<A>
+    ) -> Self {
         // SAFETY: the caller must guarantee that `ptr` is non-null.
         Self {
             ptr,
             journal: j as *const _,
+
+            #[cfg(not(feature = "use_scratchpad"))]
             logged,
+            
             phantom: PhantomData
         } 
     }
 
     /// Creates a `Some(LogNonNull)` if `ptr` is not null; otherwise `None`.
     #[inline]
-    pub unsafe fn new(ptr: *mut T, logged: *mut u8, j: &Journal<A>) -> Option<Self> {
-        if !ptr.is_null() && !logged.is_null() {
-            Some(Self::new_unchecked(ptr, logged, j))
-        } else {
-            None
+    pub unsafe fn new(ptr: *mut T,
+
+        #[cfg(not(feature = "use_scratchpad"))]
+        logged: *mut u8,
+
+        j: &Journal<A>
+    ) -> Option<Self> {
+        #[cfg(feature = "use_scratchpad")] {
+            if !ptr.is_null() {
+                Some(Self::new_unchecked(ptr, j))
+            } else {
+                None
+            }
+        }
+
+        #[cfg(not(feature = "use_scratchpad"))] {
+            if !ptr.is_null() && !logged.is_null() {
+                Some(Self::new_unchecked(ptr, logged, j))
+            } else {
+                None
+            }
         }
     }
 }
@@ -193,8 +223,12 @@ impl<T: PSafe + ?Sized, A: MemPool> DerefMut for LogNonNull<T, A> {
     fn deref_mut(&mut self) -> &mut T {
         unsafe {
             let value = &mut *self.ptr;
-            if *self.logged == 0 {
-                value.take_log(&*self.journal, Notifier::NonAtomic(Ptr::from_raw(self.logged)));
+            #[cfg(not(feature = "use_scratchpad"))] {
+                use crate::ptr::Ptr;
+                use crate::stm::{Notifier, Logger};
+                if *self.logged == 0 {
+                    value.take_log(&*self.journal, Notifier::NonAtomic(Ptr::from_raw(self.logged)));
+                }
             }
             value
         }

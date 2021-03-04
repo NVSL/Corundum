@@ -2,14 +2,16 @@ use crate::ptr::{LogNonNull,NonNull};
 use crate::convert::PFrom;
 use crate::alloc::MemPool;
 use crate::cell::VCell;
-use crate::ptr::Ptr;
-use crate::stm::{Journal, Notifier, Logger};
+use crate::stm::Journal;
 use crate::*;
 use std::cell::UnsafeCell;
 use std::fmt::{self, Debug, Display};
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 use std::panic::{RefUnwindSafe, UnwindSafe};
+
+#[cfg(feature = "use_scratchpad")]
+use crate::cell::TCell;
 
 /// A persistent memory location with safe interior mutability and dynamic
 /// borrow checking
@@ -42,7 +44,16 @@ use std::panic::{RefUnwindSafe, UnwindSafe};
 ///
 pub struct PRefCell<T: PSafe + ?Sized, A: MemPool> {
     heap: PhantomData<A>,
+
     borrow: VCell<i8, A>,
+
+    #[cfg(feature = "use_scratchpad")]
+    temp: TCell<Option<*mut T>, A>,
+
+    #[cfg(feature = "use_scratchpad")]
+    value: UnsafeCell<T>,
+
+    #[cfg(not(feature = "use_scratchpad"))]
     value: UnsafeCell<(u8, T)>,
 }
 
@@ -71,6 +82,14 @@ impl<T: PSafe, A: MemPool> PRefCell<T, A> {
         PRefCell {
             heap: PhantomData,
             borrow: VCell::new(0),
+
+            #[cfg(feature = "use_scratchpad")]
+            temp: TCell::invalid(None),
+
+            #[cfg(feature = "use_scratchpad")]
+            value: UnsafeCell::new(value),
+
+            #[cfg(not(feature = "use_scratchpad"))]
             value: UnsafeCell::new((0, value)),
         }
     }
@@ -199,7 +218,17 @@ impl<T: PSafe + ?Sized, A: MemPool> PRefCell<T, A> {
         let inner = unsafe { &mut *self.value.get() };
         self.take_log(journal);
 
-        &mut inner.1
+        #[cfg(feature = "use_scratchpad")] unsafe {
+            if let Some(tmp) = *self.temp {
+                &mut *tmp
+            } else {
+                &mut *inner
+            }
+        }
+    
+        #[cfg(not(feature = "use_scratchpad"))] unsafe {
+            &mut *inner.1
+        }
     }
 
     #[inline]
@@ -253,7 +282,17 @@ impl<T: PSafe + ?Sized, A: MemPool> PRefCell<T, A> {
     /// 
     /// ```
     pub unsafe fn as_mut(&self) -> &mut T {
-        &mut (*self.value.get()).1
+        #[cfg(feature = "use_scratchpad")] {
+            if let Some(tmp) = *self.temp {
+                &mut *tmp
+            } else {
+                &mut *self.value.get()
+            }
+        }
+    
+        #[cfg(not(feature = "use_scratchpad"))] {
+            &mut (*self.value.get()).1
+        }
     }
 
     #[inline]
@@ -261,7 +300,19 @@ impl<T: PSafe + ?Sized, A: MemPool> PRefCell<T, A> {
     #[inline]
     /// Returns an immutable reference of the inner value
     pub(crate) fn as_ref(&self) -> &T {
-        unsafe { &(*self.value.get()).1 }
+        unsafe {
+            #[cfg(feature = "use_scratchpad")] {
+                if let Some(tmp) = *self.temp {
+                    &*tmp
+                } else {
+                    &*self.value.get()
+                }
+            }
+        
+            #[cfg(not(feature = "use_scratchpad"))] {
+                &(*self.value.get()).1
+            }
+        }
     }
 
     #[inline]
@@ -315,9 +366,18 @@ impl<T: PSafe + ?Sized, A: MemPool> PRefCell<T, A> {
     pub(crate) fn take_log(&self, journal: &Journal<A>) {
         unsafe {
             let inner = &mut *self.value.get();
-            if inner.0 == 0 {
-                assert!(A::valid(inner), "The object is not in the pool's valid range");
-                inner.1.take_log(journal, Notifier::NonAtomic(Ptr::from_ref(&inner.0)));
+            #[cfg(feature = "use_scratchpad")] {
+                if self.temp.is_none() {
+                    self.temp.as_mut().replace(journal.draft(&inner));
+                }
+            }
+            #[cfg(not(feature = "use_scratchpad"))] {
+                use crate::ptr::Ptr;
+                use crate::stm::{Notifier, Logger};
+                if inner.0 == 0 {
+                    assert!(A::valid(inner), "The object is not in the pool's valid range");
+                    inner.1.take_log(journal, Notifier::NonAtomic(Ptr::from_ref(&inner.0)));
+                }
             }
         }
     }
@@ -427,15 +487,25 @@ impl<T: PSafe, A: MemPool> PRefCell<T, A> {
     /// recommended to use this function without necessary manual checks.
     /// 
     pub unsafe fn as_non_null_mut(&self, journal: &Journal<A>) -> LogNonNull<T, A> {
-        let (logged, ptr) = &mut *self.value.get();
-        LogNonNull::new_unchecked(ptr, logged, journal)
+        let inner = &mut *self.value.get();
+        #[cfg(feature = "use_scratchpad")] {
+            LogNonNull::new_unchecked(inner, journal)
+        }
+        #[cfg(not(feature = "use_scratchpad"))] {
+            LogNonNull::new_unchecked(inner.1, inner.0, journal)
+        }
     }
 
     /// Returns a `NonNull` pointer to the data
     pub fn as_non_null(&self) -> NonNull<T> {
         unsafe { 
-            let (_, ptr) = &mut *self.value.get();
-            NonNull::new_unchecked(ptr)
+            let inner = &mut *self.value.get();
+            #[cfg(feature = "use_scratchpad")] {
+                NonNull::new_unchecked(inner)
+            }
+            #[cfg(not(feature = "use_scratchpad"))] {
+                NonNull::new_unchecked(inner.1)
+            }
         }
     }
 }
