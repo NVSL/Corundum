@@ -1,10 +1,15 @@
-use crate::cell::VCell;
+use crate::cell::{LazyCell,VCell};
 use crate::alloc::MemPool;
 use crate::ptr::Ptr;
 use crate::{utils, ll};
 use std::{mem, ptr, alloc::*};
 
-const SCRATCHPAD_SIZE: usize = 1024;
+static SCRATCHPAD_SIZE: LazyCell<usize> = LazyCell::new(|| {
+    std::env::var("SPD_SIZE")
+        .unwrap_or("1024".to_string())
+        .parse::<usize>()
+        .expect("RECOVERY_INFO should be an unsigned integer")
+});
 
 struct RawPtr(*mut u8);
 
@@ -24,11 +29,12 @@ pub struct Scratchpad<A: MemPool> {
 
 impl<A: MemPool> Scratchpad<A> {
     pub(crate) fn new() -> Self {
+        let size = *SCRATCHPAD_SIZE;
         Self {
             base: VCell::new(RawPtr(unsafe {
-                alloc(Layout::from_size_align_unchecked(SCRATCHPAD_SIZE, 2))
+                alloc(Layout::from_size_align_unchecked(size, 2))
             })),
-            cap: SCRATCHPAD_SIZE,
+            cap: size,
             len: 0,
             off: u64::MAX,
             pm: Ptr::dangling()
@@ -44,7 +50,7 @@ impl<A: MemPool> Scratchpad<A> {
         //   * data                              (T)
         let len = 8 + 8 + size;
         if self.len + len > self.cap {
-            let new_cap = self.cap + SCRATCHPAD_SIZE;
+            let new_cap = self.cap + *SCRATCHPAD_SIZE;
             self.base = VCell::new(RawPtr(realloc(self.base.0,
                 Layout::from_size_align_unchecked(self.cap, 2),
                 new_cap)));
