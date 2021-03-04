@@ -3,7 +3,7 @@ use crate::ptr::Ptr;
 use crate::{utils, ll};
 use std::{mem, ptr, alloc::*};
 
-const SCRATCHPAD_SIZE: usize = utils::nearest_pow2(4096) as usize;
+const SCRATCHPAD_SIZE: usize = 1024;
 
 pub struct Scratchpad<A: MemPool> {
     base: *mut u8,
@@ -33,7 +33,7 @@ impl<A: MemPool> Scratchpad<A> {
         //   * data                              (T)
         let len = 8 + 8 + size;
         if self.len + len > self.cap {
-            let new_cap = self.cap << 1;
+            let new_cap = self.cap + SCRATCHPAD_SIZE;
             self.base = realloc(self.base,
                 Layout::from_size_align_unchecked(self.cap, 1),
                 new_cap);
@@ -110,21 +110,29 @@ impl<A: MemPool> Scratchpad<A> {
     }
 
     pub(crate) unsafe fn clear(&mut self) {
-        self.pm = Ptr::dangling();
-        self.len = 0;
+        if let Some(spd) = self.pm.try_deref_mut() {
+            let z = A::pre_dealloc(spd as *mut _ as *mut u8, mem::size_of_val(spd));
+            A::log64(A::off_unchecked(self.pm.off_mut()), u64::MAX, z);
+            A::log64(A::off_unchecked(&self.len), 0, z);
+            A::perform(z);
+        } else {
+            self.pm = Ptr::dangling();
+            self.len = 0;
+        }
     }
 }
 
 impl<A: MemPool> Drop for Scratchpad<A> {
     fn drop(&mut self) {
         unsafe {
-            dealloc(
-                self.base,
-                Layout::from_size_align_unchecked(SCRATCHPAD_SIZE, 1)
-            );
-            if let Some(spd) = self.pm.try_deref_mut() {
-                let z = A::pre_dealloc(spd as *mut _ as *mut u8, mem::size_of_val(spd));
-                A::log64(A::off_unchecked(self.pm.off_mut()), u64::MAX, z);
+            if self.cap != 0 {
+                dealloc(
+                    self.base,
+                    Layout::from_size_align_unchecked(SCRATCHPAD_SIZE, 1)
+                );
+            } else {
+                let z = A::pre_dealloc((self.base as u64 + A::start()) as *mut u8, self.len);
+                A::log64(A::off_unchecked(&self.len), 0, z);
                 A::perform(z);
             }
         }

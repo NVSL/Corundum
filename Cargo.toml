@@ -31,7 +31,7 @@ no_log_rc = []
 no_flush_alloc = []
 no_flush_updates = []
 no_pthread = []
-default = ["use_scratchpad", "pin_journals"]
+default = []
 
 [dependencies]
 memmap = "0.7.0"
