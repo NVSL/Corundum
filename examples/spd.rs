@@ -30,7 +30,8 @@ fn main() {
     let root = P::open::<Root>(&args[1], O_CF).unwrap();
 
     for c in &[10, 100, 500, 1000, 2000, 3000] {
-        measure!(format!("Transaction Size {:4}", c), {
+        let s = format!("Transaction Size {:4}", c);
+        measure!(s, {
             transaction(|j| {
                 for i in 0..*c {
                     root.list[i].set(root.list[(i + 1) % *c].get(), j);
