@@ -226,8 +226,8 @@ impl<T: PSafe + ?Sized, A: MemPool> PRefCell<T, A> {
             }
         }
     
-        #[cfg(not(feature = "use_scratchpad"))] unsafe {
-            &mut *inner.1
+        #[cfg(not(feature = "use_scratchpad"))] {
+            &mut inner.1
         }
     }
 
@@ -492,7 +492,7 @@ impl<T: PSafe, A: MemPool> PRefCell<T, A> {
             LogNonNull::new_unchecked(inner, journal)
         }
         #[cfg(not(feature = "use_scratchpad"))] {
-            LogNonNull::new_unchecked(inner.1, inner.0, journal)
+            LogNonNull::new_unchecked(&mut inner.1, &mut inner.0, journal)
         }
     }
 
@@ -504,7 +504,7 @@ impl<T: PSafe, A: MemPool> PRefCell<T, A> {
                 NonNull::new_unchecked(inner)
             }
             #[cfg(not(feature = "use_scratchpad"))] {
-                NonNull::new_unchecked(inner.1)
+                NonNull::new_unchecked(&mut inner.1)
             }
         }
     }
