@@ -25,7 +25,7 @@ impl<A: MemPool> Scratchpad<A> {
     pub(crate) fn new() -> Self {
         Self {
             base: VCell::new(RawPtr(unsafe {
-                alloc(Layout::from_size_align_unchecked(SCRATCHPAD_SIZE, 1))
+                alloc(Layout::from_size_align_unchecked(SCRATCHPAD_SIZE, 2))
             })),
             cap: SCRATCHPAD_SIZE,
             len: 0,
@@ -44,7 +44,7 @@ impl<A: MemPool> Scratchpad<A> {
         if self.len + len > self.cap {
             let new_cap = self.cap + SCRATCHPAD_SIZE;
             self.base = VCell::new(RawPtr(realloc(self.base.0,
-                Layout::from_size_align_unchecked(self.cap, 1),
+                Layout::from_size_align_unchecked(self.cap, 2),
                 new_cap)));
             self.cap = new_cap;
         }
@@ -138,7 +138,7 @@ impl<A: MemPool> Drop for Scratchpad<A> {
                 if self.cap != 0 {
                     dealloc(
                         self.base.0,
-                        Layout::from_size_align_unchecked(self.cap, 1)
+                        Layout::from_size_align_unchecked(self.cap, 2)
                     );
                 } else if self.len != 0 {
                     let z = A::pre_dealloc((self.base.0 as u64 + A::start()) as *mut u8, self.len);
