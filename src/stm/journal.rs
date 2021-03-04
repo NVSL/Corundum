@@ -460,6 +460,10 @@ impl<A: MemPool> Journal<A> {
                 journals.remove(&std::thread::current().id());
             });
         }
+
+        #[cfg(feature = "use_scratchpad")] {
+            std::ptr::drop_in_place(&mut self.spd);
+        }
     }
 
     /// Determines whether to fast-forward or rollback the transaction
