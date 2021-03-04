@@ -126,6 +126,7 @@
 #![feature(c_variadic)]
 #![feature(rustc_attrs)]
 #![feature(allocator_api)]
+#![feature(once_cell)]
 
 #![allow(dead_code)]
 #![allow(incomplete_features)]

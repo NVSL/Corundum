@@ -31,7 +31,7 @@ fn main() {
 
     for c in &[10, 100, 500, 1000, 2000, 3000] {
         let s = format!("Transaction Size {:4}", c);
-        measure!(s, {
+        measure!(s, 1, {
             transaction(|j| {
                 for i in 0..*c {
                     root.list[i].set(root.list[(i + 1) % *c].get(), j);

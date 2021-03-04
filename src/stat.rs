@@ -1,5 +1,6 @@
 #![cfg(target_arch = "x86_64")]
 
+use std::lazy::SyncLazy;
 use std::any::type_name;
 use std::any::Any;
 use std::marker::PhantomData;
@@ -10,7 +11,6 @@ use std::sync::Mutex;
 use std::thread::{current, ThreadId};
 use std::time::Instant;
 use std::io::*;
-use crate::cell::LazyCell;
 
 #[derive(Clone)]
 struct Data {
@@ -87,8 +87,8 @@ pub enum Measure<A: Any> {
 static mut HIST: Option<bool> = None;
 static mut POINTS: Option<bool> = None;
 
-static mut STAT: LazyCell<Mutex<HashMap<(ThreadId, &'static str), Stat>>> = 
-    LazyCell::new(|| Mutex::new(HashMap::new()));
+static mut STAT: SyncLazy<Mutex<HashMap<(ThreadId, &'static str), Stat>>> = 
+    SyncLazy::new(|| Mutex::new(HashMap::new()));
 
 #[inline]
 fn hist_enabled() -> bool {

@@ -707,41 +707,6 @@ pub(crate) mod test {
     }
 
     #[test]
-    fn test_pcell_lat() {
-        use crate::default::*;
-        use crate::stat::*;
-        type P = BuddyAlloc;
-
-        struct Root {
-            list: PVec<PCell<i32>>
-        }
-
-        impl RootObj<P> for Root {
-            fn init(j: &Journal) -> Self {
-                let mut list = PVec::with_capacity(3000, j);
-                for i in 0..3000 {
-                    list.push(PCell::new(i), j);
-                }
-                Self { list }
-            }
-        }
-
-        let root = P::open::<Root>("pcell.pool", O_CFNE).unwrap();
-
-        for c in &[10, 100, 500, 1000, 2000, 3000] {
-            measure!(format!("Transaction Size {:4}", c), {
-                transaction(|j| {
-                    for i in 0..*c {
-                        root.list[i].set(root.list[(i + 1) % *c].get(), j);
-                    }
-                }).unwrap();
-            });
-        }
-
-        println!("{}", report());
-    }
-
-    #[test]
     fn test_maybe_null_drop() {
         struct D {
             val: i32,
