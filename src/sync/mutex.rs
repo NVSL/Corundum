@@ -122,13 +122,13 @@ impl MutexInner {
         if self.borrowed {
             false
         } else {
-            as_mut(self).borrowed = true;
+            utils::as_mut(self).borrowed = true;
             true
         }
     }
 
     fn release(&self) {
-        as_mut(self).borrowed = false;
+        utils::as_mut(self).borrowed = false;
     }
 }
 

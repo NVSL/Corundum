@@ -45,6 +45,14 @@ pub fn can_crash() -> bool {
     }
 }
 
+#[inline]
+#[doc(hidden)]
+pub(crate) fn as_mut<'a, T: ?Sized>(v: *const T) -> &'a mut T {
+    unsafe {
+        &mut *(v as *mut T)
+    }
+}
+
 pub fn as_slice<T: ?Sized>(x: &T) -> &[u8] {
     let ptr: *const T = x;
     let ptr: *const u8 = ptr as *const u8;
@@ -61,6 +69,24 @@ pub fn as_slice64<T: ?Sized>(x: &T) -> &[u64] {
     unsafe {
         std::slice::from_raw_parts(ptr, len/8)
     }
+}
+
+#[inline(always)]
+pub unsafe fn read<'a, T: ?Sized>(raw: *mut u8) -> &'a mut T {
+    union U<T: ?Sized> {
+        raw: *mut u8,
+        rf: *mut T,
+    }
+    &mut *U { raw }.rf
+}
+
+#[inline(always)]
+pub unsafe fn read_addr<'a, T: ?Sized>(addr: u64) -> &'a mut T {
+    union U<T: ?Sized> {
+        addr: u64,
+        rf: *mut T,
+    }
+    &mut *U { addr }.rf
 }
 
 #[repr(C)]
@@ -276,4 +302,15 @@ macro_rules! log {
                 $c.paint(format!("{:>10}  {}", $tag, format!($msg, $($args)*))));
         }
     };
+}
+
+pub const fn nearest_pow2(mut v: u32) -> u32 {
+    v -= 1;
+    v |= v >> 1;
+    v |= v >> 2;
+    v |= v >> 4;
+    v |= v >> 8;
+    v |= v >> 16;
+    v += 1;
+    v
 }

@@ -1,6 +1,7 @@
 use crate::cell::{RootCell, RootObj};
 use crate::result::Result;
 use crate::stm::*;
+use crate::utils::*;
 use crate::*;
 use std::collections::HashMap;
 use std::fs::OpenOptions;
@@ -375,15 +376,10 @@ where
         #[cfg(feature = "stat_perf")]
         let _perf = crate::stat::Measure::<Self>::Deref(std::time::Instant::now());
 
-        union U<'b, K: 'b + ?Sized> {
-            off: u64,
-            raw: &'b K,
-        }
-
         #[cfg(any(feature = "check_access_violation", debug_assertions))]
         assert!( Self::allocated(off, 1), "Bad address (0x{:x})", off );
 
-        U { off: Self::start() + off }.raw
+        utils::read_addr(Self::start() + off)
     }
 
     /// Acquires a mutable reference to the object
@@ -397,15 +393,10 @@ where
         #[cfg(feature = "stat_perf")]
         let _perf = crate::stat::Measure::<Self>::Deref(std::time::Instant::now());
 
-        union U<'b, K: 'b + ?Sized> {
-            off: u64,
-            raw: &'b mut K,
-        }
-
         #[cfg(any(feature = "check_access_violation", debug_assertions))]
         assert!( Self::allocated(off, 1), "Bad address (0x{:x})", off );
 
-        U { off: Self::start() + off }.raw
+        utils::read_addr(Self::start() + off)
     }
 
     /// Acquires a reference to the slice
@@ -421,14 +412,7 @@ where
         if len == 0 {
             &[]
         } else {
-            union U<'b, K: 'b> {
-                off: u64,
-                raw: &'b K,
-            }
-            let ptr = U {
-                off: Self::start() + off,
-            }
-            .raw;
+            let ptr = utils::read_addr(Self::start() + off);
             let res = std::slice::from_raw_parts(ptr, len);
 
             #[cfg(any(feature = "check_access_violation", debug_assertions))]
@@ -456,14 +440,7 @@ where
         if len == 0 {
             &mut []
         } else {
-            union U<'b, K: 'b> {
-                off: u64,
-                raw: &'b mut K,
-            }
-            let ptr = U {
-                off: Self::start() + off,
-            }
-            .raw;
+            let ptr = utils::read_addr(Self::start() + off);
             let res = std::slice::from_raw_parts_mut(ptr, len);
 
             #[cfg(any(feature = "check_access_violation", debug_assertions))]
@@ -792,11 +769,11 @@ where
     }
 
     /// Allocates a new slice and then places `x` into it with `DropOnAbort` log
-    unsafe fn new_slice<'a, T: PSafe + 'a>(x: &'a [T], _journal: &Journal<Self>) -> &'a mut [T] {
+    unsafe fn new_slice<'a, T: PSafe + 'a>(x: &'a [T], journal: &Journal<Self>) -> &'a mut [T] {
         debug_assert!(mem::size_of::<T>() != 0, "Cannot allocate ZST");
         debug_assert!(!x.is_empty(), "Cannot allocate empty slice");
 
-        let mut log = Log::drop_on_abort(u64::MAX, 1, _journal);
+        let mut log = Log::drop_on_abort(u64::MAX, 1, journal);
         let (p, off, size, z) = Self::atomic_new_slice(x);
         log.set(off, size, z);
         Self::perform(z);
@@ -805,11 +782,6 @@ where
 
     /// Allocates new memory and then places `x` into it without realizing the allocation
     unsafe fn atomic_new<'a, T: 'a>(x: T) -> (&'a mut T, u64, usize, usize) {
-        union U<'b, K: 'b + ?Sized> {
-            raw: *mut u8,
-            rf: &'b mut K,
-        }
-
         log!(Self, White, "ALLOC", "TYPE: {}", std::any::type_name::<T>());
 
         let size = mem::size_of::<T>();
@@ -818,7 +790,7 @@ where
             panic!("Memory exhausted");
         }
         Self::drop_on_failure(off, len, z);
-        let p = U { raw }.rf;
+        let p = utils::read(raw);
         mem::forget(ptr::replace(p, x));
         (p, off, size, z)
     }
@@ -871,30 +843,21 @@ where
 
     /// Allocates new memory without copying data and realizing the allocation
     unsafe fn atomic_new_uninit<'a, T: 'a>() -> (&'a mut T, u64, usize, usize) {
-        union U<'b, K: 'b + ?Sized> {
-            ptr: *mut u8,
-            rf: &'b mut K,
-        }
-
         let (ptr, off, len, z) = Self::pre_alloc(mem::size_of::<T>());
         if ptr.is_null() {
             panic!("Memory exhausted");
         }
         Self::drop_on_failure(off, len, z);
-        (U { ptr }.rf, off, len, z)
+        (utils::read(ptr), off, len, z)
     }
 
     /// Allocates new memory for value `x`
     unsafe fn alloc_for_value<'a, T: ?Sized>(x: &T) -> &'a mut T {
-        union U<'b, K: 'b + ?Sized> {
-            raw: *mut u8,
-            rf: &'b mut K,
-        }
         let raw = Self::alloc(mem::size_of_val(x));
         if raw.0.is_null() {
             panic!("Memory exhausted");
         }
-        U { raw: raw.0 }.rf
+        utils::read(raw.0)
     }
 
     /// Creates a `DropOnCommit` log for the value `x`
@@ -1127,9 +1090,9 @@ where
                     *cptr = true;
                     let mut chaperon = &mut *ptr;
                     chaperon.postpone(
-                        &|| Self::commit_no_clear(),
-                        &|| Self::rollback_no_clear(),
-                        &|| Self::clear(),
+                        Self::commit_no_clear,
+                        Self::rollback_no_clear,
+                        Self::clear,
                     );
                     body({
                         #[cfg(feature = "stat_perf")]
@@ -1151,7 +1114,7 @@ where
                     let j = Journal::<Self>::current(true).unwrap();
                     unsafe {
                         *j.1 += 1;
-                        as_mut(j.0).unset(JOURNAL_COMMITTED);
+                        utils::as_mut(j.0).unset(JOURNAL_COMMITTED);
                         &*j.0
                     }
                 })
@@ -1182,6 +1145,10 @@ where
     }
 
     fn gen() -> u32 {
+        0
+    }
+
+    fn tx_gen() -> u32 {
         0
     }
 

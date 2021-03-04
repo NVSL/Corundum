@@ -2,10 +2,10 @@
 use crate::alloc::MemPool;
 use crate::ll::*;
 use crate::ptr::Ptr;
-use crate::stm::{Chaperon, Log, LogEnum, Notifier};
+use crate::stm::*;
 use crate::*;
 use std::collections::HashMap;
-use std::fmt::{Debug, Error, Formatter};
+use std::fmt::{self, Debug, Formatter};
 
 /// Determines that the changes are committed
 pub const JOURNAL_COMMITTED: u64 = 0x0000_0001;
@@ -50,6 +50,10 @@ pub struct Journal<A: MemPool> {
     #[cfg(feature = "pin_journals")]
     current: Ptr<Page<A>, A>,
 
+    #[cfg(feature = "use_scratchpad")]
+    spd: Scratchpad<A>,
+
+    gen: u32,
     flags: u64,
     sec_id: u64,
     prev_off: u64,
@@ -145,7 +149,7 @@ impl<A: MemPool> Page<A> {
 }
 
 impl<A: MemPool> Debug for Page<A> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         writeln!(f, "LOGS:")?;
         for i in 0..self.len {
             writeln!(f, "    {:?}", self.logs[i])?;
@@ -156,19 +160,28 @@ impl<A: MemPool> Debug for Page<A> {
 
 impl<A: MemPool> Journal<A> {
     /// Create new `Journal` with default values
-    pub unsafe fn new() -> Self {
+    pub unsafe fn new(gen: u32) -> Self {
         Self {
             pages: Ptr::dangling(),
 
             #[cfg(feature = "pin_journals")]
             current: Ptr::dangling(),
 
+            #[cfg(feature = "use_scratchpad")]
+            spd: Scratchpad::new(),
+
+            gen,
             flags: 0,
             sec_id: 0,
             next_off: u64::MAX,
             prev_off: u64::MAX,
             chaperon: [0; 64],
         }
+    }
+
+    /// Returns the generation number of this journal
+    pub fn gen(&self) -> u32 {
+        self.gen
     }
 
     /// Returns true if the journal is committed
@@ -273,6 +286,14 @@ impl<A: MemPool> Journal<A> {
         self.pages = Ptr::dangling();
     }
 
+    /// Writes a new log to the journal
+    #[cfg(feature = "use_scratchpad")]
+    #[inline]
+    pub(crate) fn draft<T: ?Sized>(&self, val: &T) -> *mut T {
+        unsafe { utils::as_mut(self).spd.write(val, A::off(val).unwrap()) }
+    }
+
+    /// Returns a string containing the logging information
     pub fn recovery_info(&self, info_level: u32) -> String {
         let mut i = 1;
         let mut _cidx = 1;
@@ -342,6 +363,10 @@ impl<A: MemPool> Journal<A> {
 
     /// Commits all logs in the journal
     pub unsafe fn commit(&mut self) {
+        #[cfg(feature = "use_scratchpad")] {
+            self.spd.commit();
+        }
+
         let mut curr = self.pages;
         while let Some(page) = curr.as_option() {
             page.notify();
@@ -357,6 +382,10 @@ impl<A: MemPool> Journal<A> {
 
     /// Reverts all changes
     pub unsafe fn rollback(&mut self) {
+        #[cfg(feature = "use_scratchpad")] {
+            self.spd.rollback();
+        }
+
         let mut curr = self.pages;
         while let Some(page) = curr.as_option() {
             page.notify();
@@ -372,6 +401,10 @@ impl<A: MemPool> Journal<A> {
 
     /// Recovers from a crash or power failure
     pub unsafe fn recover(&mut self) {
+        #[cfg(feature = "use_scratchpad")] {
+            self.spd.recover();
+        }
+
         let mut curr = self.pages;
         while let Some(page) = curr.as_option() {
             page.notify();
@@ -390,6 +423,10 @@ impl<A: MemPool> Journal<A> {
 
     /// Clears all logs and drops itself from the memory pool
     pub unsafe fn clear(&mut self) {
+        #[cfg(feature = "use_scratchpad")] {
+            self.spd.clear();
+        }
+
         #[cfg(feature = "pin_journals")]
         {
             let mut page = self.pages.as_option();
@@ -544,7 +581,7 @@ impl<A: MemPool> Journal<A> {
                     #[cfg(feature = "stat_perf")]
                     let _perf = crate::stat::Measure::<A>::NewJournal(std::time::Instant::now());
 
-                    let (journal, offset, _, z) = A::atomic_new(Journal::<A>::new());
+                    let (journal, offset, _, z) = A::atomic_new(Journal::<A>::new(A::tx_gen()));
                     journal.enter_into(A::journals_head(), z);
                     A::perform(z);
                     journals.insert(tid, (offset, 0));
@@ -594,7 +631,7 @@ impl<A: MemPool> Journal<A> {
     /// 
     /// This function is only for measuring some properties such as log latency.
     pub unsafe fn ignore(&self) {
-        let mut page = as_mut(self).pages.as_option();
+        let mut page = utils::as_mut(self).pages.as_option();
         while let Some(p) = page {
             p.ignore();
             page = p.next.as_option();
@@ -603,7 +640,7 @@ impl<A: MemPool> Journal<A> {
 }
 
 impl<A: MemPool> Debug for Journal<A> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         writeln!(f, "LOGS:")?;
         let mut curr = self.pages.clone();
         while let Some(page) = curr.as_option() {

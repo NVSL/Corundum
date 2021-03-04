@@ -1,6 +1,6 @@
 use crate::result::Result;
 use crate::cell::LazyCell;
-use crate::{TxInSafe, TxOutSafe};
+use crate::{TxInSafe, TxOutSafe, utils};
 use std::collections::hash_map::HashMap;
 use std::fmt::{self, Debug};
 use std::fs::OpenOptions;
@@ -38,9 +38,9 @@ pub struct Chaperon {
 
 struct VData {
     mmap: memmap::MmapMut,
-    delayed_commit: HashMap<ThreadId, Vec<&'static dyn Fn() -> ()>>,
-    delayed_rollback: HashMap<ThreadId, Vec<&'static dyn Fn() -> ()>>,
-    delayed_clear: HashMap<ThreadId, Vec<&'static dyn Fn() -> ()>>,
+    delayed_commit: HashMap<ThreadId, Vec<unsafe fn() -> ()>>,
+    delayed_rollback: HashMap<ThreadId, Vec<unsafe fn() -> ()>>,
+    delayed_clear: HashMap<ThreadId, Vec<unsafe fn() -> ()>>,
     mutex: u8,
 }
 
@@ -155,11 +155,7 @@ impl Chaperon {
     }
 
     fn deref(raw: *mut u8) -> &'static mut Self {
-        union U<'b, K: 'b + ?Sized> {
-            raw: *mut u8,
-            ref_mut: &'b mut K,
-        }
-        unsafe { U { raw }.ref_mut }
+        unsafe { utils::read(raw) }
     }
 
     fn as_bytes(&self) -> &[u8] {
@@ -238,11 +234,11 @@ impl Chaperon {
         }
     }
 
-    pub(crate) fn postpone<F: Fn() -> (), R: Fn() -> (), E: Fn() -> ()>(
+    pub(crate) fn postpone(
         &mut self,
-        commit: &'static F,
-        rollback: &'static R,
-        clear: &'static E,
+        commit: unsafe fn()->(),
+        rollback: unsafe fn()->(),
+        clear: unsafe fn()->(),
     ) {
         if let Some(vdata) = self.vdata.as_mut() {
             let tid = thread::current().id();
@@ -261,11 +257,11 @@ impl Chaperon {
             let commits = vdata.delayed_commit.entry(tid).or_insert(Vec::new());
             let clears = vdata.delayed_clear.entry(tid).or_insert(Vec::new());
             for commit in commits {
-                commit();
+                unsafe { commit(); }
             }
             self.completed = true;
             for clear in clears {
-                clear();
+                unsafe { clear(); }
             }
             vdata.delayed_commit.remove(&tid);
             vdata.delayed_clear.remove(&tid);
@@ -279,11 +275,11 @@ impl Chaperon {
             let rollbacks = vdata.delayed_rollback.entry(tid).or_insert(Vec::new());
             let clears = vdata.delayed_clear.entry(tid).or_insert(Vec::new());
             for rollback in rollbacks {
-                rollback();
+                unsafe { rollback(); }
             }
             self.completed = true;
             for clear in clears {
-                clear();
+                unsafe { clear(); }
             }
             vdata.delayed_rollback.remove(&tid);
             vdata.delayed_clear.remove(&tid);

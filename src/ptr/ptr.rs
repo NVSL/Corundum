@@ -38,14 +38,14 @@ impl<A: MemPool, T> !TxOutSafe for Ptr<T, A> {}
 /// The allocator does not need to implement `PSafe`
 unsafe impl<A: MemPool, T: PSafe + ?Sized> PSafe for Ptr<T, A> {}
 
-impl<A: MemPool, T: PSafe> Ptr<T, A> {
+impl<A: MemPool, T: ?Sized> Ptr<T, A> {
     #[inline]
     /// Gives a reference to the inner value if it is not dangling, otherwise, None.
     pub(crate) fn try_deref(&self) -> Option<&T> {
         if self.is_dangling() {
             None
         } else {
-            Some(&*self)
+            Some(self.as_ref())
         }
     }
 
@@ -55,7 +55,7 @@ impl<A: MemPool, T: PSafe> Ptr<T, A> {
         if self.is_dangling() {
             None
         } else {
-            Some(&mut *self)
+            Some(self.as_mut())
         }
     }
 }
@@ -268,7 +268,7 @@ impl<A: MemPool, T: PSafe> PmemUsage for Ptr<T, A> {
     }
 }
 
-impl<A: MemPool, T: PSafe + ?Sized> Ptr<T, A> {    
+impl<A: MemPool, T: ?Sized> Ptr<T, A> {    
     #[inline]
     #[track_caller]
     pub(crate) fn from_raw(other: *const T) -> Self {

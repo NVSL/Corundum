@@ -125,6 +125,7 @@
 #![feature(let_chains)]
 #![feature(c_variadic)]
 #![feature(rustc_attrs)]
+#![feature(allocator_api)]
 
 #![allow(dead_code)]
 #![allow(incomplete_features)]
@@ -166,12 +167,4 @@ crate::pool!(default);
 /// A `Result` type with string error messages
 pub mod result {
     pub type Result<T: ?Sized> = std::result::Result<T, String>;
-}
-
-#[inline]
-#[doc(hidden)]
-pub(crate) fn as_mut<'a, T: ?Sized>(v: *const T) -> &'a mut T {
-    unsafe {
-        &mut *(v as *mut T)
-    }
 }

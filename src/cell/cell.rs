@@ -1,13 +1,15 @@
 use crate::clone::PClone;
 use crate::alloc::MemPool;
-use crate::ptr::Ptr;
-use crate::stm::{Journal, Notifier, Logger};
+use crate::stm::{Journal, Logger};
 use crate::*;
 use std::cell::UnsafeCell;
 use std::cmp::Ordering;
 use std::marker::PhantomData;
 use std::panic::{RefUnwindSafe, UnwindSafe};
 use std::{fmt, mem, ptr};
+
+#[cfg(feature = "use_scratchpad")]
+use crate::cell::TCell;
 
 /// A persistent mutable memory location with recoverability
 ///
@@ -32,6 +34,14 @@ use std::{fmt, mem, ptr};
 /// 
 pub struct PCell<T: PSafe + ?Sized, A: MemPool> {
     heap: PhantomData<A>,
+
+    #[cfg(feature = "use_scratchpad")]
+    temp: TCell<Option<*mut T>, A>,
+
+    #[cfg(feature = "use_scratchpad")]
+    value: UnsafeCell<T>,
+
+    #[cfg(not(feature = "use_scratchpad"))]
     value: UnsafeCell<(u8, T)>,
 }
 
@@ -49,6 +59,14 @@ impl<T: PSafe + Default, A: MemPool> Default for PCell<T, A> {
     fn default() -> Self {
         PCell {
             heap: PhantomData,
+    
+            #[cfg(feature = "use_scratchpad")]
+            temp: TCell::invalid(None),
+
+            #[cfg(feature = "use_scratchpad")]
+            value: UnsafeCell::new(T::default()),
+
+            #[cfg(not(feature = "use_scratchpad"))]
             value: UnsafeCell::new((0, T::default())),
         }
     }
@@ -113,6 +131,14 @@ impl<T: PSafe, A: MemPool> PCell<T, A> {
     pub const fn new(value: T) -> PCell<T, A> {
         PCell {
             heap: PhantomData,
+
+            #[cfg(feature = "use_scratchpad")]
+            temp: TCell::invalid(None),
+
+            #[cfg(feature = "use_scratchpad")]
+            value: UnsafeCell::new(value),
+
+            #[cfg(not(feature = "use_scratchpad"))]
             value: UnsafeCell::new((0, value)),
         }
     }
@@ -169,8 +195,8 @@ impl<T: PSafe, A: MemPool> PCell<T, A> {
     /// ```
     #[inline]
     pub fn swap(&self, other: &Self, journal: &Journal<A>) {
-        let this = unsafe { &mut (*self.value.get()).1 };
-        let that = unsafe { &mut (*other.value.get()).1 };
+        let this = unsafe { self.as_mut() };
+        let that = unsafe { other.as_mut() };
         if ptr::eq(this, that) {
             return;
         }
@@ -205,9 +231,20 @@ impl<T: PSafe, A: MemPool> PCell<T, A> {
     /// }).unwrap();
     /// ```
     pub fn replace(&self, val: T, journal: &Journal<A>) -> T {
-        self.take_log(journal);
         // SAFETY: This can cause data races if called from a separate thread,
         // but `PCell` is `!Sync` so this won't happen.
+
+        self.take_log(journal);
+
+        #[cfg(feature = "use_scratchpad")] {
+            if let Some(tmp) = *self.temp {
+                mem::replace(unsafe { &mut *tmp }, val)
+            } else {
+                mem::replace(unsafe { &mut *self.value.get() }, val)
+            }
+        }
+
+        #[cfg(not(feature = "use_scratchpad"))]
         mem::replace(unsafe { &mut (*self.value.get()).1 }, val)
     }
 
@@ -226,7 +263,14 @@ impl<T: PSafe, A: MemPool> PCell<T, A> {
     /// }).unwrap();
     /// ```
     pub fn into_inner(self) -> T {
-        self.value.into_inner().1
+
+        #[cfg(feature = "use_scratchpad")] {
+            self.value.into_inner()
+        }
+
+        #[cfg(not(feature = "use_scratchpad"))] {
+            self.value.into_inner().1
+        }
     }
 
     #[inline]
@@ -304,14 +348,38 @@ impl<T: PSafe, A: MemPool> PCell<T, A> {
     pub fn get(&self) -> T where T: Copy {
         // SAFETY: This can cause data races if called from a separate thread,
         // but `PCell` is `!Sync` so this won't happen.
-        unsafe { (*self.value.get()).1 }
+
+        unsafe {
+            #[cfg(feature = "use_scratchpad")] {
+                if let Some(tmp) = *self.temp {
+                    *tmp
+                } else {
+                    *self.value.get()
+                }
+            }
+            
+            #[cfg(not(feature = "use_scratchpad"))] {
+                (*self.value.get()).1
+            }
+        }
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn get_ref(&self) -> &T {
         // SAFETY: This can cause data races if called from a separate thread,
         // but `PCell` is `!Sync` so this won't happen.
-        unsafe { &(*self.value.get()).1 }
+
+        #[cfg(feature = "use_scratchpad")] unsafe {
+            if let Some(tmp) = *self.temp {
+                &*tmp
+            } else {
+                &*self.value.get()
+            }
+        }
+
+        #[cfg(not(feature = "use_scratchpad"))] {
+            unsafe { &(*self.value.get()).1 }
+        }
     }
 
     /// Updates the contained value using a function and returns the new value.
@@ -364,7 +432,7 @@ impl<T: PSafe, A: MemPool> PCell<T, A> {
     where
         F: FnOnce(&T)
     {
-        f(unsafe { &(*self.value.get()).1 })
+        f(self.get_ref())
     }
 
     /// Updates the contained value using an updater function with a mutable
@@ -390,7 +458,7 @@ impl<T: PSafe, A: MemPool> PCell<T, A> {
         F: FnOnce(&mut T)
     {
         self.take_log(journal);
-        f(unsafe { &mut (*self.value.get()).1 })
+        f(unsafe { self.as_mut() })
     }
 }
 
@@ -400,9 +468,18 @@ impl<T: PSafe + ?Sized, A: MemPool> PCell<T, A> {
     pub(crate) fn take_log(&self, journal: &Journal<A>) {
         unsafe {
             let inner = &mut *self.value.get();
-            if inner.0 == 0 {
-                assert!(A::valid(inner), "The object is not in the pool's valid range");
-                inner.1.take_log(journal, Notifier::NonAtomic(Ptr::from_ref(&inner.0)));
+            #[cfg(feature = "use_scratchpad")] {
+                if self.temp.is_none() {
+                    self.temp.as_mut().replace(journal.draft(&inner));
+                }
+            }
+            #[cfg(not(feature = "use_scratchpad"))] {
+                use crate::ptr::Ptr;
+                use crate::stm::Notifier;
+                if inner.0 == 0 {
+                    assert!(A::valid(inner), "The object is not in the pool's valid range");
+                    inner.1.take_log(journal, Notifier::NonAtomic(Ptr::from_ref(&inner.0)));
+                }
             }
         }
     }
@@ -432,8 +509,20 @@ impl<T: PSafe + ?Sized, A: MemPool> PCell<T, A> {
         // SAFETY: This can cause data races if called from a separate thread,
         // but `PCell` is `!Sync` so this won't happen, and `&mut` guarantees
         // unique access.
+
         self.take_log(journal);
-        unsafe { &mut (*self.value.get()).1 }
+
+        #[cfg(feature = "use_scratchpad")] unsafe {
+            if let Some(tmp) = *self.temp {
+                &mut *tmp
+            } else {
+                &mut *self.value.get()
+            }
+        }
+
+        #[cfg(not(feature = "use_scratchpad"))] {
+            unsafe { &mut (*self.value.get()).1 }
+        }
     }
     
     /// Returns a mutable reference to the underlying data without taking a log
@@ -461,7 +550,16 @@ impl<T: PSafe + ?Sized, A: MemPool> PCell<T, A> {
     /// ```
     #[inline]
     pub unsafe fn as_mut(&self) -> &mut T {
-        &mut (*self.value.get()).1
+        #[cfg(feature = "use_scratchpad")] {
+            if let Some(tmp) = *self.temp {
+                &mut *tmp
+            } else {
+                &mut *self.value.get()
+            }
+        }
+        #[cfg(not(feature = "use_scratchpad"))] {
+            &mut (*self.value.get()).1
+        }
     }
 }
 
@@ -490,20 +588,38 @@ impl<T: PSafe + Default, A: MemPool> PCell<T, A> {
 
 impl<T: fmt::Debug + PSafe, A: MemPool> fmt::Debug for PCell<T, A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        unsafe { (*self.value.get()).1.fmt(f) }
+        #[cfg(feature = "use_scratchpad")] {
+            unsafe { (*self.value.get()).fmt(f) }
+        }
+
+        #[cfg(not(feature = "use_scratchpad"))] {
+            unsafe { (*self.value.get()).1.fmt(f) }
+        }
     }
 }
 
 impl<T: PSafe + Logger<A> + Copy, A: MemPool> PClone<A> for PCell<T, A> {
     #[inline]
     fn pclone(&self, _j: &Journal<A>) -> PCell<T, A> {
-        unsafe { PCell::new((*self.value.get()).1) }
+        #[cfg(feature = "use_scratchpad")] {
+            unsafe { PCell::new(*self.value.get()) }
+        }
+
+        #[cfg(not(feature = "use_scratchpad"))] {
+            unsafe { PCell::new((*self.value.get()).1) }
+        }
     }
 }
 
 impl<T: PSafe + Logger<A> + Clone, A: MemPool> Clone for PCell<T, A> {
     #[inline]
     fn clone(&self) -> PCell<T, A> {
-        unsafe { PCell::new((*self.value.get()).1.clone()) }
+        #[cfg(feature = "use_scratchpad")] {
+            unsafe { PCell::new((*self.value.get()).clone()) }
+        }
+
+        #[cfg(not(feature = "use_scratchpad"))] {
+            unsafe { PCell::new((*self.value.get()).1.clone()) }
+        }
     }
 }

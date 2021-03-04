@@ -154,26 +154,12 @@ impl<A: MemPool> BuddyAlg<A> {
     fn buddy<'a>(off: u64) -> &'a mut Buddy {
         debug_assert!(off < u64::MAX - A::start(), "off(0x{:x}) out of range", off);
         debug_assert!(off + A::start() < A::end(), "off(0x{:x}) out of range", off);
-        union U<'a> {
-            off: u64,
-            raw: &'a mut Buddy,
-        }
-        unsafe {
-            U {off: A::start() + off}.raw
-        }
+        unsafe { read_addr(A::start() + off) }
     }
 
     #[inline]
     fn byte<'a>(off: u64) -> &'a mut u8 {
-        union U<'a> {
-            off: u64,
-            raw: &'a mut u8,
-        }
-        unsafe {
-            U {
-                off: A::start() + off,
-            }.raw
-        }
+        unsafe { read_addr(A::start() + off) }
     }
 
     #[inline]
@@ -703,11 +689,7 @@ impl<T, A: MemPool> Zones<T, A> {
 
     #[inline]
     fn read<'a>(off: u64) -> &'a mut T {
-        union U<'b, K: 'b + ?Sized> {
-            off: u64,
-            raw: &'b mut K,
-        }
-        unsafe { U { off: A::start() + off }.raw }
+        unsafe { read_addr(A::start() + off) }
     }
 }
 
@@ -817,6 +799,7 @@ mod test {
 /// * `PCell<T>` = [`corundum::cell::PCell`]`<T, `[`BuddyAlloc`]`>`
 /// * `PRefCell<T>` = [`corundum::cell::PRefCell`]`<T, `[`BuddyAlloc`]`>`
 /// * `VCell<T>` = [`corundum::cell::VCell`]`<T, `[`BuddyAlloc`]`>`
+/// * `TCell<T>` = [`corundum::cell::TCell`]`<T, `[`BuddyAlloc`]`>`
 /// * `PVec<T>` = [`corundum::vec::Vec`]`<T, `[`BuddyAlloc`]`>`
 /// * `PString` = [`corundum::str::String`]`<`[`BuddyAlloc`]`>`
 ///
@@ -870,6 +853,7 @@ mod test {
 /// [`corundum::cell::PCell`]: ./cell/struct.PCell.html
 /// [`corundum::cell::PRefCell`]: ./cell/struct.PRefCell.html
 /// [`corundum::cell::VCell`]: ./cell/struct.VCell.html
+/// [`corundum::cell::TCell`]: ./cell/struct.TCell.html
 /// [`corundum::vec::Vec`]: ./vec/struct.Vec.html
 /// [`corundum::str::String`]: ./str/struct.String.html
 macro_rules! pool {
@@ -890,6 +874,7 @@ macro_rules! pool {
             use $crate::ll::*;
             use $crate::cell::LazyCell;
             use $crate::result::Result;
+            use $crate::utils::read;
             pub use $crate::*;
             pub use $crate::alloc::*;
             pub use $crate::cell::{RootCell, RootObj};
@@ -908,6 +893,7 @@ macro_rules! pool {
                 magic_number: u64,
                 flags: u64,
                 gen: u32,
+                tx_gen: u32,
                 root_obj: u64,
                 root_type_id: u64,
                 journals: u64,
@@ -919,17 +905,6 @@ macro_rules! pool {
                 filename: String,
                 journals: HashMap<ThreadId, (u64, i32)>,
                 mmap: MmapMut,
-            }
-
-            union U<T> {
-                raw: *mut u8,
-                rf: *mut T,
-            }
-
-            impl<T> U<T> {
-                pub fn read<'a>(raw: *mut u8) -> &'a mut T {
-                    unsafe { &mut *U { raw }.rf }
-                }
             }
 
             impl VData {
@@ -949,6 +924,7 @@ macro_rules! pool {
                     id.hash(&mut s);
                     self.flags = 0;
                     self.gen = 1;
+                    self.tx_gen = 0;
                     self.root_obj = u64::MAX;
                     self.root_type_id = 0;
                     self.journals = u64::MAX;
@@ -1046,7 +1022,9 @@ macro_rules! pool {
                             id.hash(&mut s);
                             let id = s.finish();
 
-                            let inner = U::<BuddyAllocInner>::read(raw_offset);
+                            let inner = unsafe {
+                                read::<BuddyAllocInner>(raw_offset)
+                            };
                             assert_eq!(
                                 inner.magic_number, id,
                                 "Invalid magic number for the pool image file"
@@ -1055,6 +1033,7 @@ macro_rules! pool {
                             let base = raw_offset as *mut _ as u64;
                             unsafe {
                                 inner.gen = MAX_GEN.max(inner.gen + 1);
+                                inner.tx_gen = 0;
                                 MAX_GEN = inner.gen;
                                 BUDDY_START = base;
                                 BUDDY_VALID_START = base
@@ -1105,7 +1084,7 @@ macro_rules! pool {
                             BUDDY_START = begin as *const _ as u64;
                             BUDDY_END = u64::MAX;
 
-                            let inner = U::<BuddyAllocInner>::read(begin);
+                            let inner = read::<BuddyAllocInner>(begin);
                             inner.init(len);
                             mmap.flush().unwrap();
                             Ok(())
@@ -1119,6 +1098,15 @@ macro_rules! pool {
                 #[track_caller]
                 fn gen() -> u32 {
                     static_inner!(BUDDY_INNER, inner, { inner.gen })
+                }
+
+                #[inline]
+                #[track_caller]
+                fn tx_gen() -> u32 {
+                    static_inner!(BUDDY_INNER, inner, {
+                        inner.tx_gen += 1;
+                        inner.tx_gen
+                    })
                 }
 
                 #[track_caller]
@@ -1533,6 +1521,10 @@ macro_rules! pool {
             /// Compact form of [`VCell`](../../cell/struct.VCell.html)
             /// `<T,`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
             pub type VCell<T> = $crate::cell::VCell<T, BuddyAlloc>;
+
+            /// Compact form of [`TCell`](../../cell/struct.TCell.html)
+            /// `<T,`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
+            pub type TCell<T> = $crate::cell::TCell<T, BuddyAlloc>;
 
             /// Compact form of [`Vec`](../../vec/struct.Vec.html)
             /// `<T,`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.

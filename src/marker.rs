@@ -222,6 +222,11 @@ impl<F: Future + LooseTxInUnsafe> Future for AssertTxInSafe<F> {
 )]
 pub unsafe auto trait VSafe {}
 
+unsafe impl<T: ?Sized> VSafe for *const T {}
+unsafe impl<T: ?Sized> VSafe for *mut T {}
+unsafe impl<T: ?Sized> VSafe for &T {}
+unsafe impl<T: ?Sized> VSafe for &mut T {}
+
 /// Safe to be sent to another thread
 /// 
 /// This marker is used to allow [`Parc`] to be sent to another thread only if

@@ -385,7 +385,7 @@ pub(crate) mod problems {
     }
 
     #[test]
-    fn trans_inside_fn() {
+    fn chaperon_swap() {
         use crate::cell::PRefCell as RefCell;
         use crate::boxed::Pbox;
 
@@ -405,19 +405,31 @@ pub(crate) mod problems {
 
         let root1 = P1::open::<Pbox<RefCell<i32, P1>, P1>>("pool5.pool", O_CFNE).unwrap();
         let root2 = P2::open::<Pbox<RefCell<i32, P2>, P2>>("pool6.pool", O_CFNE).unwrap();
+
+        println!("root1 = {}", root1);
+        println!("root2 = {}", root2);
+
         let _res = Chaperon::session("foo1.pool", || {
-            let other = foo::<P2>(&root2, 10); // <-- foo commits here
-            P1::transaction(|j| {
+            let root1_old = P1::transaction(|j| {
                 let mut root = root1.borrow_mut(j);
-                *root = other
+                let old = *root;
+                *root = *root2.borrow();
+                if *root == 0 {
+                    *root = 10;
+                }
+                old
             }).unwrap();
             P2::transaction(|j| {
                 // <-- Creates a Journal<P2>
                 let mut root = root2.borrow_mut(j);
-                *root = other;
+                *root = root1_old;
+                if *root == 0 {
+                    *root = 20;
+                }
                 // std::process::exit(0);
             }).unwrap();
-            let _other = foo::<P1>(&root1, 20); // <-- foo dose not commit here (postponed) because a trans is open
+            // let _other = foo::<P1>(&root1, 20); // <-- foo dose not commit here (postponed) because a trans is open
+            // std::process::exit(0);
         });
 
         println!("P1: {}", P1::used());
@@ -2123,30 +2135,16 @@ mod test_btree {
 
 mod temp_test {
     #[test]
-    fn abort_prc() {
-        use std::mem::drop;
-        use crate::default::*;
-        type P = BuddyAlloc;
-        let obj = P::open::<Root>("foo.pool", O_CF).unwrap();
-
-        struct Root(PRefCell<Option<Parc<i32>>>);
-        impl RootObj<P> for Root {
-            fn init(j: &Journal) -> Self {
-                Root(PRefCell::new(Some(Parc::new(10, j))))
-            }
-        }
-
-        let vweak_obj = obj.0.borrow().as_ref().unwrap().demote();
-        
-        P::transaction(|j| {
-            let strong_obj = vweak_obj.promote(j);
-            assert!(strong_obj.is_some());
-            
-            // Destroy all strong pointers.
-            drop(strong_obj);
-            *obj.0.borrow_mut(j) = None;
-        
-            assert!(vweak_obj.promote(j).is_none());
-        }).unwrap();
+    fn temp() {
+        let m = 10927;
+        let mut len = m;
+        len -= 1;
+        len |= len >> 1;
+        len |= len >> 2;
+        len |= len >> 4;
+        len |= len >> 8;
+        len |= len >> 16;
+        len += 1;
+        println!("fn({}) = {} {}", m, len, ((u32::MAX as u64) + 2) >> 33);
     }
 }

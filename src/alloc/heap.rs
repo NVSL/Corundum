@@ -93,11 +93,7 @@ unsafe impl MemPool for Heap {
             Err(p) => p.into_inner()
         };
         logs.foreach(|(off, data)| {
-            union U<'a> {
-                off: u64,
-                raw: &'a mut u64,
-            }
-            *U {off}.raw = data;
+            *utils::read_addr(off) = data;
         });
         logs.clear();
     }

@@ -1,5 +1,5 @@
 use crate::alloc::MemPool;
-use crate::{PSafe, VSafe};
+use crate::{PSafe, VSafe, utils};
 use std::cmp::*;
 use std::mem::*;
 use std::marker::PhantomData;
@@ -26,11 +26,10 @@ use std::ops::{Deref, DerefMut};
 ///
 /// let root = P::open::<Root>("foo.pool", O_CF).unwrap();
 ///     
-/// P::transaction(|j| {
-///     let mut v = root.v.borrow_mut();
-///     assert_eq!(*v, i32::default());
-///     *v = 20; // This value is volatile and resets on restart
-/// }).unwrap();
+/// let mut v = root.v.borrow_mut();
+/// assert_eq!(*v, i32::default());
+/// *v = 20; // This value is volatile and resets on restart
+/// assert_eq!(*v, 20);
 /// ```
 /// 
 /// [`Default`]: std::default::Default
@@ -49,6 +48,7 @@ unsafe impl<T: Default + VSafe + ?Sized, A: MemPool> PSafe for VCell<T, A> {}
 impl<T, A: MemPool> !Sync for VCell<T, A> {}
 
 impl<T: Default + VSafe, A: MemPool> VCell<T, A> {
+    /// Create a new valid cell
     pub fn new(v: T) -> Self {
         Self {
             gen: A::gen(),
@@ -60,6 +60,33 @@ impl<T: Default + VSafe, A: MemPool> VCell<T, A> {
     #[inline]
     pub(crate) fn as_mut(&self) -> &mut T {
         unsafe { &mut *(self.deref() as *const T as *mut T) }
+    }
+
+    #[inline]
+    /// Create a new invalid cell to be used in const functions
+    pub const fn invalid(v: T) -> Self {
+        Self {
+            gen: 0,
+            value: v,
+            phantom: PhantomData,
+        }
+    }
+
+    fn force(&mut self) -> &mut T {
+        unsafe {
+            let gen = A::gen();
+            if self.gen != gen {
+                let off = A::off_unchecked(&self.gen);
+                let z = A::zone(off);
+                A::prepare(z); // Used as a global lock
+                if self.gen != gen {
+                    forget(replace(&mut self.value, T::default()));
+                    self.gen = gen;
+                }
+                A::perform(z);
+            }
+            &mut self.value
+        }
     }
 }
 
@@ -78,28 +105,14 @@ impl<T: Default + VSafe, A: MemPool> Deref for VCell<T, A> {
 
     #[inline]
     fn deref(&self) -> &T {
-        unsafe {
-            let gen = A::gen();
-            if self.gen != gen {
-                let off = A::off_unchecked(&self.gen);
-                let z = A::zone(off);
-                A::prepare(z); // Used as a global lock
-                if self.gen != gen {
-                    let self_mut = crate::as_mut(self);
-                    forget(replace(&mut self_mut.value, T::default()));
-                    self_mut.gen = gen;
-                }
-                A::perform(z);
-            }
-            &self.value
-        }
+        utils::as_mut(self).force()
     }
 }
 
 impl<T: Default + VSafe, A: MemPool> DerefMut for VCell<T, A> {
     #[inline]
     fn deref_mut(&mut self) -> &mut T {
-        &mut self.value
+        self.force()
     }
 }
 
