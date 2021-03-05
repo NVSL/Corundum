@@ -202,7 +202,7 @@ impl<A: MemPool> Journal<A> {
     /// Sets a flag
     pub(crate) fn set(&mut self, flag: u64) {
         self.flags |= flag;
-        persist_obj(&self.flags, false);
+        persist_obj(&self.flags, true);
     }
 
     /// Resets a flag
@@ -373,6 +373,10 @@ impl<A: MemPool> Journal<A> {
 
     /// Commits all logs in the journal
     pub unsafe fn commit(&mut self) {
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
+            self.spd.commit();
+        }
+        self.set(JOURNAL_COMMITTED);
         let mut curr = self.pages;
         while let Some(page) = curr.as_option() {
             page.notify();
@@ -383,14 +387,13 @@ impl<A: MemPool> Journal<A> {
             page.commit();
             curr = page.next;
         }
-        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
-            self.spd.commit();
-        }
-        self.set(JOURNAL_COMMITTED);
     }
 
     /// Reverts all changes
     pub unsafe fn rollback(&mut self) {
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
+            self.spd.rollback();
+        }
         let mut curr = self.pages;
         while let Some(page) = curr.as_option() {
             page.notify();
@@ -401,18 +404,11 @@ impl<A: MemPool> Journal<A> {
             page.rollback();
             curr = page.next;
         }
-        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
-            self.spd.rollback();
-        }
         self.set(JOURNAL_COMMITTED);
     }
 
     /// Recovers from a crash or power failure
     pub unsafe fn recover(&mut self) {
-        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
-            self.spd.recover();
-        }
-
         let mut curr = self.pages;
         while let Some(page) = curr.as_option() {
             page.notify();
@@ -421,8 +417,16 @@ impl<A: MemPool> Journal<A> {
         let mut curr = self.pages;
         let fast_forward = self.fast_forward();
         if !self.is_set(JOURNAL_COMMITTED) || fast_forward {
+            let rollback = !fast_forward || !self.is_set(JOURNAL_COMMITTED);
+            #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
+                if rollback {
+                    self.spd.rollback();
+                } else {
+                    self.spd.recover();
+                }
+            }
             while let Some(page) = curr.as_option() {
-                page.recover(!fast_forward || !self.is_set(JOURNAL_COMMITTED));
+                page.recover(rollback);
                 curr = page.next;
             }
             self.set(JOURNAL_COMMITTED);

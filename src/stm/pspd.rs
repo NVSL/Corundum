@@ -64,7 +64,8 @@ impl<A: MemPool> Page<A> {
         }
     }
 
-    unsafe fn apply(&mut self) {
+    unsafe fn commit(&mut self) {
+        ll::persist(self, self.len, true);
         let off = A::off_unchecked(self) + mem::size_of::<Page<A>>() as u64;
         let mut cur = 0;
         while cur < self.len as u64 {
@@ -84,7 +85,7 @@ impl<A: MemPool> Page<A> {
         }
 
         if let Some(next) = self.next.as_option() {
-            next.apply();
+            next.commit();
         }
     }
 
@@ -103,8 +104,7 @@ impl<A: MemPool> Page<A> {
 }
 
 pub struct Scratchpad<A: MemPool> {
-    pages: Ptr<Page<A>, A>,
-    committed: bool
+    pages: Ptr<Page<A>, A>
 }
 
 impl<A: MemPool> Scratchpad<A> {
@@ -118,8 +118,7 @@ impl<A: MemPool> Scratchpad<A> {
             pg.len = 0;
             pg.next = Ptr::dangling();
             Self {
-                pages: Ptr::from_raw(pg),
-                committed: false
+                pages: Ptr::from_raw(pg)
             }
         }
     }
@@ -131,17 +130,12 @@ impl<A: MemPool> Scratchpad<A> {
 
     #[inline]
     pub(crate) unsafe fn recover(&mut self) {
-        if self.committed {
-            self.commit();
-        }
+        self.commit();
     }
 
     #[inline]
     pub(crate) unsafe fn commit(&mut self) {
-        ll::sfence();
-        self.committed = true;
-        ll::persist_obj(&self.committed, false);
-        self.pages.apply();
+        self.pages.commit();
     }
 
     #[inline]
