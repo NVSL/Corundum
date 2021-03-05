@@ -1,4 +1,8 @@
 //! Volatile Scratchpad Memory
+//! 
+//! This features is still under development. To enable it, you need to add
+//! `"use_pspd"` to the feature list.
+//! 
 
 use crate::cell::{LazyCell,VCell};
 use crate::alloc::MemPool;
