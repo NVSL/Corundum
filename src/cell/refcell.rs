@@ -212,25 +212,6 @@ impl<T: PSafe + ?Sized, A: MemPool> PRefCell<T, A> {
         }
     }
 
-    #[inline(always)]
-    #[track_caller]
-    fn _get_mut(&mut self, journal: &Journal<A>) -> &mut T {
-        let inner = unsafe { &mut *self.value.get() };
-        self.take_log(journal);
-
-        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] unsafe {
-            if let Some(tmp) = *self.temp {
-                &mut *tmp
-            } else {
-                &mut *inner
-            }
-        }
-    
-        #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))] {
-            &mut inner.1
-        }
-    }
-
     #[inline]
     #[allow(clippy::mut_from_ref)]
     /// Takes a log and returns a mutable reference to the underlying data.
@@ -254,7 +235,20 @@ impl<T: PSafe + ?Sized, A: MemPool> PRefCell<T, A> {
     /// }).unwrap();
     /// ```
     pub fn get_mut(&mut self, journal: &Journal<A>) -> &mut T {
-        self._get_mut(journal)
+        let inner = unsafe { &mut *self.value.get() };
+        self.take_log(journal);
+
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] unsafe {
+            if let Some(tmp) = *self.temp {
+                &mut *tmp
+            } else {
+                &mut *inner
+            }
+        }
+    
+        #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))] {
+            &mut inner.1
+        }
     }
 
     #[inline]
@@ -733,7 +727,7 @@ impl<T: PSafe + ?Sized, A: MemPool> DerefMut for RefMut<'_, T, A> {
     #[inline]
     #[track_caller]
     fn deref_mut(&mut self) -> &mut T {
-        unsafe { (*self.value)._get_mut(&*self.journal) }
+        unsafe { (*self.value).get_mut(&*self.journal) }
     }
 }
 

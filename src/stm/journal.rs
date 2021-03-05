@@ -373,10 +373,6 @@ impl<A: MemPool> Journal<A> {
 
     /// Commits all logs in the journal
     pub unsafe fn commit(&mut self) {
-        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
-            self.spd.commit();
-        }
-
         let mut curr = self.pages;
         while let Some(page) = curr.as_option() {
             page.notify();
@@ -387,15 +383,14 @@ impl<A: MemPool> Journal<A> {
             page.commit();
             curr = page.next;
         }
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
+            self.spd.commit();
+        }
         self.set(JOURNAL_COMMITTED);
     }
 
     /// Reverts all changes
     pub unsafe fn rollback(&mut self) {
-        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
-            self.spd.rollback();
-        }
-
         let mut curr = self.pages;
         while let Some(page) = curr.as_option() {
             page.notify();
@@ -405,6 +400,9 @@ impl<A: MemPool> Journal<A> {
         while let Some(page) = curr.as_option() {
             page.rollback();
             curr = page.next;
+        }
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
+            self.spd.rollback();
         }
         self.set(JOURNAL_COMMITTED);
     }
@@ -436,7 +434,6 @@ impl<A: MemPool> Journal<A> {
         #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
             self.spd.clear();
         }
-
         #[cfg(feature = "pin_journals")]
         {
             let mut page = self.pages.as_option();

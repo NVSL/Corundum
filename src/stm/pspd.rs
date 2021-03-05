@@ -6,7 +6,7 @@ use crate::{utils, ll};
 use std::{mem, ptr};
 
 static SCRATCHPAD_SIZE: LazyCell<usize> = LazyCell::new(|| {
-    utils::nearest_pow2(std::env::var("SP_BLOCK_SIZE")
+    utils::nearest_pow2(std::env::var("SPD_SIZE")
         .unwrap_or("1024".to_string())
         .parse::<u64>()
         .expect("RECOVERY_INFO should be an unsigned integer")) as usize
@@ -33,11 +33,10 @@ impl<A: MemPool> Page<A> {
             } else {
                 let cap = *SCRATCHPAD_SIZE;
                 let cap = utils::nearest_pow2(usize::max(cap, dist) as u64) as usize;
-                let cap = cap - mem::size_of::<Page<A>>();
                 // FIXME: Memory leak
-                let (p, off, _, z) = A::pre_alloc(mem::size_of::<Page<A>>() + cap);
+                let (p, off, _, z) = A::pre_alloc(cap);
                 let pg = utils::read::<Page<A>>(p);
-                pg.cap = cap;
+                pg.cap = cap - mem::size_of::<Page<A>>();
                 pg.len = 0;
                 pg.next = self.next;
                 A::log64(A::off_unchecked(self.next.off_mut()), off, z);
@@ -139,9 +138,10 @@ impl<A: MemPool> Scratchpad<A> {
 
     #[inline]
     pub(crate) unsafe fn commit(&mut self) {
-        self.pages.apply();
         ll::sfence();
         self.committed = true;
+        ll::persist_obj(&self.committed, false);
+        self.pages.apply();
     }
 
     #[inline]
