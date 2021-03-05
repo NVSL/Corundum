@@ -19,20 +19,20 @@ struct Page<A: MemPool> {
 }
 
 impl<A: MemPool> Page<A> {
-    unsafe fn write<T: ?Sized>(&mut self, val: &T, off: u64) -> *mut T {
+    unsafe fn write<T: ?Sized>(&mut self, val: &T, org_off: u64) -> *mut T {
         let size = mem::size_of_val(val);
 
         // Data Layout:
         //   * org_off                           (u64)
         //   * relative distance from next item  (u64)
         //   * data                              (T)
-        let len = 8 + 8 + size;
-        if self.len + len > self.cap {
+        let dist = 8 + 8 + size;
+        if self.len + dist > self.cap {
             if let Some(next) = self.next.as_option() {
-                next.write(val, off)
+                next.write(val, org_off)
             } else {
                 let cap = *SCRATCHPAD_SIZE;
-                let cap = utils::nearest_pow2(usize::max(cap, len) as u64) as usize;
+                let cap = utils::nearest_pow2(usize::max(cap, dist) as u64) as usize;
                 let cap = cap - mem::size_of::<Page<A>>();
                 // FIXME: Memory leak
                 let (p, off, _, z) = A::pre_alloc(mem::size_of::<Page<A>>() + cap);
@@ -42,7 +42,7 @@ impl<A: MemPool> Page<A> {
                 pg.next = self.next;
                 A::log64(A::off_unchecked(self.next.off_mut()), off, z);
                 A::perform(z);
-                pg.write(val, off)
+                pg.write(val, org_off)
             }
         } else {
             let p = self as *mut Self as *mut u8;
@@ -50,17 +50,17 @@ impl<A: MemPool> Page<A> {
             
             // First 8 bytes is org_off
             let p = p.add(self.len);
-            *utils::read::<u64>(p) = off;
+            *utils::read::<u64>(p) = org_off;
             
             // Second 8 bytes is the relative distance
             let p = p.add(8);
-            *utils::read::<usize>(p) = len;
+            *utils::read::<usize>(p) = dist;
             
             // The last bytes contain data
             let p = p.add(8);
             ptr::copy_nonoverlapping(val as *const _ as *const u8, p, size);
     
-            self.len += len;
+            self.len += dist;
             utils::read(p)
         }
     }

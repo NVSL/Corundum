@@ -28,7 +28,7 @@ function help() {
     echo "    -h, --help            Display this information"
 }
 
-features="pin_journals"
+features="pin_journals,$FEATURES"
 while test $# -gt 0
 do
     case "$1" in
