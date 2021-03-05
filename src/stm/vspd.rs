@@ -1,3 +1,5 @@
+//! Volatile Scratchpad Memory
+
 use crate::cell::{LazyCell,VCell};
 use crate::alloc::MemPool;
 use crate::ptr::Ptr;

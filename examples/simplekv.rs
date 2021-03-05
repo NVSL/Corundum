@@ -69,8 +69,7 @@ where
                 P::transaction(|j| {
                     let values = self.values.borrow();
                     values[e.1].set(val, j);
-                })
-                .unwrap();
+                }).unwrap();
                 return;
             }
         }
@@ -81,8 +80,7 @@ where
             values.push(PCell::new(val), j);
             let mut bucket = self.buckets[index].borrow_mut(j);
             bucket.push((key, values.len() - 1), j);
-        })
-        .unwrap();
+        }).unwrap();
     }
 }
 

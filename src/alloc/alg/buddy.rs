@@ -614,7 +614,7 @@ impl<A: MemPool> BuddyAlg<A> {
             while let Some(b) = off_to_option(curr) {
                 let e = Self::buddy(b);
                 if A::contains(b+A::start()) {
-                    print!("({}..{})", b, b + (1 << idx) - 1);
+                    print!("({}:{})", b, b + (1 << idx) - 1);
                 } else {
                     print!("(ERR)");
                     break;
@@ -1563,12 +1563,12 @@ macro_rules! pool {
 
 #[cfg(feature = "verbose")]
 pub fn debug_alloc<A: MemPool>(addr: u64, len: usize, pre: usize, post: usize) {
-    crate::log!(A, Green, "", "PRE: {:<6}  ({:>4}..{:<4}) = {:<4}  POST = {:<6}",
+    crate::log!(A, Green, "", "PRE: {:<6}  ({:>6x}:{:<6x}) = {:<6} POST = {:<6}",
         pre, addr, addr + len as u64 - 1, len, post);
 }
 
 #[cfg(feature = "verbose")]
 pub fn debug_dealloc<A: MemPool>(addr: u64, len: usize, pre: usize, post: usize) {
-    crate::log!(A, Red, "DEALLOC", "PRE: {:<6}  ({:>4}..{:<4}) = {:<4}  POST = {:<6}",
+    crate::log!(A, Red, "DEALLOC", "PRE: {:<6}  ({:>6x}:{:<6x}) = {:<6} POST = {:<6}",
         pre, addr, addr + len as u64 - 1, len, post);
 }

@@ -3,7 +3,8 @@
 mod chaperon;
 mod journal;
 mod log;
-mod scratchpad;
+pub mod pspd;
+pub mod vspd;
 
 use crate::alloc::MemPool;
 use crate::result::Result;
@@ -13,7 +14,6 @@ use std::panic::UnwindSafe;
 pub use chaperon::*;
 pub use journal::*;
 pub use log::*;
-pub use scratchpad::*;
 
 /// Atomically executes commands
 /// 

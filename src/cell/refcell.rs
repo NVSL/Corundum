@@ -10,7 +10,7 @@ use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 use std::panic::{RefUnwindSafe, UnwindSafe};
 
-#[cfg(feature = "use_scratchpad")]
+#[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
 use crate::cell::TCell;
 
 /// A persistent memory location with safe interior mutability and dynamic
@@ -47,13 +47,13 @@ pub struct PRefCell<T: PSafe + ?Sized, A: MemPool> {
 
     borrow: VCell<i8, A>,
 
-    #[cfg(feature = "use_scratchpad")]
+    #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
     temp: TCell<Option<*mut T>, A>,
 
-    #[cfg(feature = "use_scratchpad")]
+    #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
     value: UnsafeCell<T>,
 
-    #[cfg(not(feature = "use_scratchpad"))]
+    #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))]
     value: UnsafeCell<(u8, T)>,
 }
 
@@ -83,13 +83,13 @@ impl<T: PSafe, A: MemPool> PRefCell<T, A> {
             heap: PhantomData,
             borrow: VCell::new(0),
 
-            #[cfg(feature = "use_scratchpad")]
+            #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
             temp: TCell::invalid(None),
 
-            #[cfg(feature = "use_scratchpad")]
+            #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
             value: UnsafeCell::new(value),
 
-            #[cfg(not(feature = "use_scratchpad"))]
+            #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))]
             value: UnsafeCell::new((0, value)),
         }
     }
@@ -218,7 +218,7 @@ impl<T: PSafe + ?Sized, A: MemPool> PRefCell<T, A> {
         let inner = unsafe { &mut *self.value.get() };
         self.take_log(journal);
 
-        #[cfg(feature = "use_scratchpad")] unsafe {
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] unsafe {
             if let Some(tmp) = *self.temp {
                 &mut *tmp
             } else {
@@ -226,7 +226,7 @@ impl<T: PSafe + ?Sized, A: MemPool> PRefCell<T, A> {
             }
         }
     
-        #[cfg(not(feature = "use_scratchpad"))] {
+        #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))] {
             &mut inner.1
         }
     }
@@ -282,7 +282,7 @@ impl<T: PSafe + ?Sized, A: MemPool> PRefCell<T, A> {
     /// 
     /// ```
     pub unsafe fn as_mut(&self) -> &mut T {
-        #[cfg(feature = "use_scratchpad")] {
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
             if let Some(tmp) = *self.temp {
                 &mut *tmp
             } else {
@@ -290,7 +290,7 @@ impl<T: PSafe + ?Sized, A: MemPool> PRefCell<T, A> {
             }
         }
     
-        #[cfg(not(feature = "use_scratchpad"))] {
+        #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))] {
             &mut (*self.value.get()).1
         }
     }
@@ -301,7 +301,7 @@ impl<T: PSafe + ?Sized, A: MemPool> PRefCell<T, A> {
     /// Returns an immutable reference of the inner value
     pub(crate) fn as_ref(&self) -> &T {
         unsafe {
-            #[cfg(feature = "use_scratchpad")] {
+            #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
                 if let Some(tmp) = *self.temp {
                     &*tmp
                 } else {
@@ -309,7 +309,7 @@ impl<T: PSafe + ?Sized, A: MemPool> PRefCell<T, A> {
                 }
             }
         
-            #[cfg(not(feature = "use_scratchpad"))] {
+            #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))] {
                 &(*self.value.get()).1
             }
         }
@@ -366,12 +366,12 @@ impl<T: PSafe + ?Sized, A: MemPool> PRefCell<T, A> {
     pub(crate) fn take_log(&self, journal: &Journal<A>) {
         unsafe {
             let inner = &mut *self.value.get();
-            #[cfg(feature = "use_scratchpad")] {
+            #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
                 if self.temp.is_none() {
                     self.temp.as_mut().replace(journal.draft(&inner));
                 }
             }
-            #[cfg(not(feature = "use_scratchpad"))] {
+            #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))] {
                 use crate::ptr::Ptr;
                 use crate::stm::{Notifier, Logger};
                 if inner.0 == 0 {
@@ -488,10 +488,10 @@ impl<T: PSafe, A: MemPool> PRefCell<T, A> {
     /// 
     pub unsafe fn as_non_null_mut(&self, journal: &Journal<A>) -> LogNonNull<T, A> {
         let inner = &mut *self.value.get();
-        #[cfg(feature = "use_scratchpad")] {
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
             LogNonNull::new_unchecked(inner, journal)
         }
-        #[cfg(not(feature = "use_scratchpad"))] {
+        #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))] {
             LogNonNull::new_unchecked(&mut inner.1, &mut inner.0, journal)
         }
     }
@@ -500,10 +500,10 @@ impl<T: PSafe, A: MemPool> PRefCell<T, A> {
     pub fn as_non_null(&self) -> NonNull<T> {
         unsafe { 
             let inner = &mut *self.value.get();
-            #[cfg(feature = "use_scratchpad")] {
+            #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
                 NonNull::new_unchecked(inner)
             }
-            #[cfg(not(feature = "use_scratchpad"))] {
+            #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))] {
                 NonNull::new_unchecked(&mut inner.1)
             }
         }

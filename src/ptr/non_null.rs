@@ -134,7 +134,7 @@ pub struct LogNonNull<T: PSafe + ?Sized, A: MemPool> {
     ptr: *mut T,
     journal: *const Journal<A>,
 
-    #[cfg(not(feature = "use_scratchpad"))]
+    #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))]
     logged: *mut u8,
 
     phantom: PhantomData<*mut T>
@@ -147,7 +147,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Clone for LogNonNull<T, A> {
             ptr: self.ptr,
             journal: self.journal,
 
-            #[cfg(not(feature = "use_scratchpad"))]
+            #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))]
             logged: self.logged,
 
             phantom: PhantomData
@@ -168,7 +168,7 @@ impl<T: PSafe, A: MemPool> LogNonNull<T, A> {
     #[inline]
     pub const unsafe fn new_unchecked(ptr: *mut T,
 
-        #[cfg(not(feature = "use_scratchpad"))]
+        #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))]
         logged: *mut u8,
 
         j: &Journal<A>
@@ -178,7 +178,7 @@ impl<T: PSafe, A: MemPool> LogNonNull<T, A> {
             ptr,
             journal: j as *const _,
 
-            #[cfg(not(feature = "use_scratchpad"))]
+            #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))]
             logged,
             
             phantom: PhantomData
@@ -189,12 +189,12 @@ impl<T: PSafe, A: MemPool> LogNonNull<T, A> {
     #[inline]
     pub unsafe fn new(ptr: *mut T,
 
-        #[cfg(not(feature = "use_scratchpad"))]
+        #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))]
         logged: *mut u8,
 
         j: &Journal<A>
     ) -> Option<Self> {
-        #[cfg(feature = "use_scratchpad")] {
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
             if !ptr.is_null() {
                 Some(Self::new_unchecked(ptr, j))
             } else {
@@ -202,7 +202,7 @@ impl<T: PSafe, A: MemPool> LogNonNull<T, A> {
             }
         }
 
-        #[cfg(not(feature = "use_scratchpad"))] {
+        #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))] {
             if !ptr.is_null() && !logged.is_null() {
                 Some(Self::new_unchecked(ptr, logged, j))
             } else {
@@ -223,7 +223,7 @@ impl<T: PSafe + ?Sized, A: MemPool> DerefMut for LogNonNull<T, A> {
     fn deref_mut(&mut self) -> &mut T {
         unsafe {
             let value = &mut *self.ptr;
-            #[cfg(not(feature = "use_scratchpad"))] {
+            #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))] {
                 use crate::ptr::Ptr;
                 use crate::stm::{Notifier, Logger};
                 if *self.logged == 0 {

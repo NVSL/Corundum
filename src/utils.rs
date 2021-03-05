@@ -304,13 +304,14 @@ macro_rules! log {
     };
 }
 
-pub const fn nearest_pow2(mut v: u32) -> u32 {
+pub const fn nearest_pow2(mut v: u64) -> u64 {
     v -= 1;
     v |= v >> 1;
     v |= v >> 2;
     v |= v >> 4;
     v |= v >> 8;
     v |= v >> 16;
+    v |= v >> 32;
     v += 1;
     v
 }

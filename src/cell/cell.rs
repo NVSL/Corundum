@@ -8,7 +8,7 @@ use std::marker::PhantomData;
 use std::panic::{RefUnwindSafe, UnwindSafe};
 use std::{fmt, mem, ptr};
 
-#[cfg(feature = "use_scratchpad")]
+#[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
 use crate::cell::TCell;
 
 /// A persistent mutable memory location with recoverability
@@ -35,13 +35,13 @@ use crate::cell::TCell;
 pub struct PCell<T: PSafe + ?Sized, A: MemPool> {
     heap: PhantomData<A>,
 
-    #[cfg(feature = "use_scratchpad")]
+    #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
     temp: TCell<Option<*mut T>, A>,
 
-    #[cfg(feature = "use_scratchpad")]
+    #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
     value: UnsafeCell<T>,
 
-    #[cfg(not(feature = "use_scratchpad"))]
+    #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))]
     value: UnsafeCell<(u8, T)>,
 }
 
@@ -60,13 +60,13 @@ impl<T: PSafe + Default, A: MemPool> Default for PCell<T, A> {
         PCell {
             heap: PhantomData,
     
-            #[cfg(feature = "use_scratchpad")]
+            #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
             temp: TCell::invalid(None),
 
-            #[cfg(feature = "use_scratchpad")]
+            #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
             value: UnsafeCell::new(T::default()),
 
-            #[cfg(not(feature = "use_scratchpad"))]
+            #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))]
             value: UnsafeCell::new((0, T::default())),
         }
     }
@@ -132,13 +132,13 @@ impl<T: PSafe, A: MemPool> PCell<T, A> {
         PCell {
             heap: PhantomData,
 
-            #[cfg(feature = "use_scratchpad")]
+            #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
             temp: TCell::invalid(None),
 
-            #[cfg(feature = "use_scratchpad")]
+            #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
             value: UnsafeCell::new(value),
 
-            #[cfg(not(feature = "use_scratchpad"))]
+            #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))]
             value: UnsafeCell::new((0, value)),
         }
     }
@@ -236,7 +236,7 @@ impl<T: PSafe, A: MemPool> PCell<T, A> {
 
         self.take_log(journal);
 
-        #[cfg(feature = "use_scratchpad")] {
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
             if let Some(tmp) = *self.temp {
                 mem::replace(unsafe { &mut *tmp }, val)
             } else {
@@ -244,7 +244,7 @@ impl<T: PSafe, A: MemPool> PCell<T, A> {
             }
         }
 
-        #[cfg(not(feature = "use_scratchpad"))]
+        #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))]
         mem::replace(unsafe { &mut (*self.value.get()).1 }, val)
     }
 
@@ -264,11 +264,11 @@ impl<T: PSafe, A: MemPool> PCell<T, A> {
     /// ```
     pub fn into_inner(self) -> T {
 
-        #[cfg(feature = "use_scratchpad")] {
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
             self.value.into_inner()
         }
 
-        #[cfg(not(feature = "use_scratchpad"))] {
+        #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))] {
             self.value.into_inner().1
         }
     }
@@ -350,7 +350,7 @@ impl<T: PSafe, A: MemPool> PCell<T, A> {
         // but `PCell` is `!Sync` so this won't happen.
 
         unsafe {
-            #[cfg(feature = "use_scratchpad")] {
+            #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
                 if let Some(tmp) = *self.temp {
                     *tmp
                 } else {
@@ -358,7 +358,7 @@ impl<T: PSafe, A: MemPool> PCell<T, A> {
                 }
             }
             
-            #[cfg(not(feature = "use_scratchpad"))] {
+            #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))] {
                 (*self.value.get()).1
             }
         }
@@ -369,7 +369,7 @@ impl<T: PSafe, A: MemPool> PCell<T, A> {
         // SAFETY: This can cause data races if called from a separate thread,
         // but `PCell` is `!Sync` so this won't happen.
 
-        #[cfg(feature = "use_scratchpad")] unsafe {
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] unsafe {
             if let Some(tmp) = *self.temp {
                 &*tmp
             } else {
@@ -377,7 +377,7 @@ impl<T: PSafe, A: MemPool> PCell<T, A> {
             }
         }
 
-        #[cfg(not(feature = "use_scratchpad"))] {
+        #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))] {
             unsafe { &(*self.value.get()).1 }
         }
     }
@@ -468,12 +468,12 @@ impl<T: PSafe + ?Sized, A: MemPool> PCell<T, A> {
     pub(crate) fn take_log(&self, journal: &Journal<A>) {
         unsafe {
             let inner = &mut *self.value.get();
-            #[cfg(feature = "use_scratchpad")] {
+            #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
                 if self.temp.is_none() {
                     self.temp.as_mut().replace(journal.draft(&inner));
                 }
             }
-            #[cfg(not(feature = "use_scratchpad"))] {
+            #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))] {
                 use crate::ptr::Ptr;
                 use crate::stm::Notifier;
                 if inner.0 == 0 {
@@ -512,7 +512,7 @@ impl<T: PSafe + ?Sized, A: MemPool> PCell<T, A> {
 
         self.take_log(journal);
 
-        #[cfg(feature = "use_scratchpad")] unsafe {
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] unsafe {
             if let Some(tmp) = *self.temp {
                 &mut *tmp
             } else {
@@ -520,7 +520,7 @@ impl<T: PSafe + ?Sized, A: MemPool> PCell<T, A> {
             }
         }
 
-        #[cfg(not(feature = "use_scratchpad"))] {
+        #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))] {
             unsafe { &mut (*self.value.get()).1 }
         }
     }
@@ -550,14 +550,14 @@ impl<T: PSafe + ?Sized, A: MemPool> PCell<T, A> {
     /// ```
     #[inline]
     pub unsafe fn as_mut(&self) -> &mut T {
-        #[cfg(feature = "use_scratchpad")] {
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
             if let Some(tmp) = *self.temp {
                 &mut *tmp
             } else {
                 &mut *self.value.get()
             }
         }
-        #[cfg(not(feature = "use_scratchpad"))] {
+        #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))] {
             &mut (*self.value.get()).1
         }
     }
@@ -588,11 +588,11 @@ impl<T: PSafe + Default, A: MemPool> PCell<T, A> {
 
 impl<T: fmt::Debug + PSafe, A: MemPool> fmt::Debug for PCell<T, A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        #[cfg(feature = "use_scratchpad")] {
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
             unsafe { (*self.value.get()).fmt(f) }
         }
 
-        #[cfg(not(feature = "use_scratchpad"))] {
+        #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))] {
             unsafe { (*self.value.get()).1.fmt(f) }
         }
     }
@@ -601,11 +601,11 @@ impl<T: fmt::Debug + PSafe, A: MemPool> fmt::Debug for PCell<T, A> {
 impl<T: PSafe + Logger<A> + Copy, A: MemPool> PClone<A> for PCell<T, A> {
     #[inline]
     fn pclone(&self, _j: &Journal<A>) -> PCell<T, A> {
-        #[cfg(feature = "use_scratchpad")] {
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
             unsafe { PCell::new(*self.value.get()) }
         }
 
-        #[cfg(not(feature = "use_scratchpad"))] {
+        #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))] {
             unsafe { PCell::new((*self.value.get()).1) }
         }
     }
@@ -614,11 +614,11 @@ impl<T: PSafe + Logger<A> + Copy, A: MemPool> PClone<A> for PCell<T, A> {
 impl<T: PSafe + Logger<A> + Clone, A: MemPool> Clone for PCell<T, A> {
     #[inline]
     fn clone(&self) -> PCell<T, A> {
-        #[cfg(feature = "use_scratchpad")] {
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
             unsafe { PCell::new((*self.value.get()).clone()) }
         }
 
-        #[cfg(not(feature = "use_scratchpad"))] {
+        #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))] {
             unsafe { PCell::new((*self.value.get()).1.clone()) }
         }
     }

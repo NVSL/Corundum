@@ -7,6 +7,16 @@ use crate::*;
 use std::collections::HashMap;
 use std::fmt::{self, Debug, Formatter};
 
+
+#[cfg(all(feature = "use_pspd", feature = "use_vspd"))]
+compile_error!("Cannot use both volatile and persistent scratchpad");
+
+#[cfg(all(feature = "use_pspd", not(feature = "use_vspd")))]
+use crate::stm::pspd::Scratchpad;
+
+#[cfg(all(feature = "use_vspd", not(feature = "use_pspd")))]
+use crate::stm::vspd::Scratchpad;
+
 /// Determines that the changes are committed
 pub const JOURNAL_COMMITTED: u64 = 0x0000_0001;
 
@@ -50,7 +60,7 @@ pub struct Journal<A: MemPool> {
     #[cfg(feature = "pin_journals")]
     current: Ptr<Page<A>, A>,
 
-    #[cfg(feature = "use_scratchpad")]
+    #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
     spd: Scratchpad<A>,
 
     gen: u32,
@@ -167,7 +177,7 @@ impl<A: MemPool> Journal<A> {
             #[cfg(feature = "pin_journals")]
             current: Ptr::dangling(),
 
-            #[cfg(feature = "use_scratchpad")]
+            #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
             spd: Scratchpad::new(),
 
             gen,
@@ -287,7 +297,7 @@ impl<A: MemPool> Journal<A> {
     }
 
     /// Writes a new log to the journal
-    #[cfg(feature = "use_scratchpad")]
+    #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
     #[inline]
     pub(crate) fn draft<T: ?Sized>(&self, val: &T) -> *mut T {
         unsafe { utils::as_mut(self).spd.write(val, A::off(val).unwrap()) }
@@ -363,7 +373,7 @@ impl<A: MemPool> Journal<A> {
 
     /// Commits all logs in the journal
     pub unsafe fn commit(&mut self) {
-        #[cfg(feature = "use_scratchpad")] {
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
             self.spd.commit();
         }
 
@@ -382,7 +392,7 @@ impl<A: MemPool> Journal<A> {
 
     /// Reverts all changes
     pub unsafe fn rollback(&mut self) {
-        #[cfg(feature = "use_scratchpad")] {
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
             self.spd.rollback();
         }
 
@@ -401,7 +411,7 @@ impl<A: MemPool> Journal<A> {
 
     /// Recovers from a crash or power failure
     pub unsafe fn recover(&mut self) {
-        #[cfg(feature = "use_scratchpad")] {
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
             self.spd.recover();
         }
 
@@ -423,7 +433,7 @@ impl<A: MemPool> Journal<A> {
 
     /// Clears all logs and drops itself from the memory pool
     pub unsafe fn clear(&mut self) {
-        #[cfg(feature = "use_scratchpad")] {
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
             self.spd.clear();
         }
 

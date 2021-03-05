@@ -53,7 +53,7 @@ unsafe impl MemPool for Heap {
         let r = alloc(Layout::from_size_align_unchecked(size, 1));
         let addr = r as u64;
         let len = size as u64;
-        log!(Self, Green, "", "PRE: {:<6}  ({:>4}..{:<4}) = {:<4}  POST = {:<6}",
+        log!(Self, Green, "", "PRE: {:<6}  ({:>6x}:{:<6x}) = {:<6} POST = {:<6}",
             0, addr, addr + len - 1, len, 0);
         (r, addr, size, 0)
     }
@@ -63,7 +63,7 @@ unsafe impl MemPool for Heap {
         Self::discard(0);
         let start = ptr as u64;
         let end = start + size as u64;
-        log!(Self, Red, "DEALLOC", "PRE: {:<6}  ({:>4}..{:<4}) = {:<4}  POST = {:<6}",
+        log!(Self, Red, "DEALLOC", "PRE: {:<6}  ({:>6x}:{:<6x}) = {:<6} POST = {:<6}",
             0, start, end, end - start + 1, 0);
         dealloc(ptr, Layout::from_size_align_unchecked(size, 1));
         0

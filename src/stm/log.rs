@@ -250,7 +250,7 @@ impl<A: MemPool> Log<A> {
     pub fn set(&mut self, off: u64, len: usize, zone: usize) {
         debug_assert_ne!(len, 0);
 
-        log!(A, Yellow, "CHNGE LOG", "TO:          ({:>4}..{:<4}) = {:<5} {:?}",
+        log!(A, Yellow, "CHNGE LOG", "TO:          ({:>6}:{:<6}) = {:<6} {:?}",
             offset_to_str(off), offset_to_str((off as usize + (len - 1)) as u64),
             len, self.0
         );
@@ -343,7 +343,7 @@ impl<A: MemPool> Log<A> {
         } else {
             let pointer = unsafe { Ptr::<T, A>::new_unchecked(x) };
 
-            log!(A, Yellow, "LOG", "FOR:         ({:>4}..{:<4}) = {:<5} DataLog  TYPE: {}",
+            log!(A, Yellow, "LOG", "FOR:         ({:>6}:{:<6}) = {:<6} DataLog  TYPE: {}",
                 offset_to_str(pointer.off()), offset_to_str((pointer.off() as usize + (len - 1)) as u64),
                 len, std::any::type_name_of_val(x)
             );
@@ -391,7 +391,7 @@ impl<A: MemPool> Log<A> {
         #[cfg(feature = "stat_perf")]
         let _perf = crate::stat::Measure::<A>::DropLog(std::time::Instant::now());
 
-        log!(A, Yellow, "NEW LOG", "FOR:         ({:>4}..{:<4}) = {:<5} DropOnCommit",
+        log!(A, Yellow, "NEW LOG", "FOR:         ({:>6}:{:<6}) = {:<6} DropOnCommit",
             offset_to_str(offset),
             offset_to_str((offset as usize + (len - 1)) as u64),
             len
@@ -409,7 +409,7 @@ impl<A: MemPool> Log<A> {
         #[cfg(feature = "stat_perf")]
         let _perf = crate::stat::Measure::<A>::DropLog(std::time::Instant::now());
 
-        log!(A, Yellow, "NEW LOG", "FOR:         ({:>4}..{:<4}) = {:<5} DropOnAbort",
+        log!(A, Yellow, "NEW LOG", "FOR:         ({:>6}:{:<6}) = {:<6} DropOnAbort",
             offset_to_str(offset),
             offset_to_str((offset as usize + (len - 1)) as u64),
             len
@@ -428,7 +428,7 @@ impl<A: MemPool> Log<A> {
         #[cfg(feature = "stat_perf")]
         let _perf = crate::stat::Measure::<A>::DropLog(std::time::Instant::now());
 
-        log!(A, Yellow, "NEW LOG", "FOR:         ({:>4}..{:<4}) = {:<5} DropOnFailure",
+        log!(A, Yellow, "NEW LOG", "FOR:         ({:>6}:{:<6}) = {:<6} DropOnFailure",
             offset_to_str(offset),
             offset_to_str((offset as usize + (len - 1)) as u64),
             len
@@ -467,7 +467,7 @@ impl<A: MemPool> Log<A> {
     #[inline]
     #[track_caller]
     pub unsafe fn recount_on_failure(offset: u64, inc: bool, journal: &Journal<A>) -> Ptr<Log<A>, A> {
-        log!(A, Yellow, "NEW LOG", "FOR:         ({:>4}..{:<4}) = {:<5} RecountOnFailure",
+        log!(A, Yellow, "NEW LOG", "FOR:         ({:>6}:{:<6}) = {:<6} RecountOnFailure",
             offset_to_str(offset),
             offset_to_str(offset),
             8
@@ -479,7 +479,7 @@ impl<A: MemPool> Log<A> {
         debug_assert_ne!(*len, 0);
 
         if *log != u64::MAX && *src != u64::MAX {
-            log!(A, Magenta, "ROLLBACK", "FOR:         ({:>4}..{:<4}) = {:<5} DataLog({})",
+            log!(A, Magenta, "ROLLBACK", "FOR:         ({:>6}:{:<6}) = {:<6} DataLog({})",
                 *src, *src as usize + (len - 1), len, log   
             );
             #[cfg(feature = "verbose")] {
@@ -604,7 +604,7 @@ impl<A: MemPool> Log<A> {
         match &mut self.0 {
             DataLog(_src, log, len) => {
                 if *log != u64::MAX {
-                    log!(A, Magenta, "DEL LOG", "FOR:         ({:>4}..{:<4}) = {:<5} DataLog({})",
+                    log!(A, Magenta, "DEL LOG", "FOR:         ({:>6x}:{:<6x}) = {:<6} DataLog({})",
                         *_src, *_src as usize + (*len - 1), *len, log
                     );
                     debug_assert!(A::allocated(*log, 1), "Access Violation at address 0x{:x}", *log);
