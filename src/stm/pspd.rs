@@ -151,7 +151,16 @@ impl<A: MemPool> Scratchpad<A> {
 
     #[inline]
     pub(crate) unsafe fn clear(&mut self) {
-        let org_off = A::off_unchecked(self.pages.off_mut());
-        self.pages.release(org_off);
+        #[cfg(not(feature = "pin_journals"))] {
+            let org_off = A::off_unchecked(self.pages.off_mut());
+            self.pages.release(org_off);
+        }
+        #[cfg(feature = "pin_journals")] {
+            let next_off = A::off_unchecked(self.pages.next.off_mut());
+            if let Some(next) = self.pages.next.as_option() {
+                next.release(next_off);
+            }
+            self.pages.len = 0;
+        }
     }
 }
