@@ -1,1 +1,1 @@
-initSidebarItems({"enum":[["Measure",""]],"fn":[["report",""]]});
+initSidebarItems({"enum":[["Measure",""]],"fn":[["report",""],["save_histograms",""]]});

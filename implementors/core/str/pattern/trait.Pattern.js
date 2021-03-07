@@ -1,3 +1,3 @@
 (function() {var implementors = {};
-implementors["corundum"] = [{"text":"impl&lt;'a, 'b, A:&nbsp;MemPool&gt; Pattern&lt;'a&gt; for &amp;'b String&lt;A&gt;","synthetic":false,"types":[]}];
+implementors["corundum"] = [{"text":"impl&lt;'a, 'b, A:&nbsp;<a class=\"trait\" href=\"corundum/alloc/trait.MemPool.html\" title=\"trait corundum::alloc::MemPool\">MemPool</a>&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/str/pattern/trait.Pattern.html\" title=\"trait core::str::pattern::Pattern\">Pattern</a>&lt;'a&gt; for &amp;'b <a class=\"struct\" href=\"corundum/str/struct.String.html\" title=\"struct corundum::str::String\">String</a>&lt;A&gt;","synthetic":false,"types":["corundum::str::String"]}];
 if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

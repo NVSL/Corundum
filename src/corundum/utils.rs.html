@@ -285,6 +285,39 @@
 <span id="282">282</span>
 <span id="283">283</span>
 <span id="284">284</span>
+<span id="285">285</span>
+<span id="286">286</span>
+<span id="287">287</span>
+<span id="288">288</span>
+<span id="289">289</span>
+<span id="290">290</span>
+<span id="291">291</span>
+<span id="292">292</span>
+<span id="293">293</span>
+<span id="294">294</span>
+<span id="295">295</span>
+<span id="296">296</span>
+<span id="297">297</span>
+<span id="298">298</span>
+<span id="299">299</span>
+<span id="300">300</span>
+<span id="301">301</span>
+<span id="302">302</span>
+<span id="303">303</span>
+<span id="304">304</span>
+<span id="305">305</span>
+<span id="306">306</span>
+<span id="307">307</span>
+<span id="308">308</span>
+<span id="309">309</span>
+<span id="310">310</span>
+<span id="311">311</span>
+<span id="312">312</span>
+<span id="313">313</span>
+<span id="314">314</span>
+<span id="315">315</span>
+<span id="316">316</span>
+<span id="317">317</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">fmt</span>::{<span class="ident">Debug</span>, <span class="ident">Error</span>, <span class="ident">Formatter</span>};
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">fs</span>::<span class="ident">File</span>;
@@ -300,41 +333,44 @@
     <span class="ident">i64</span>::<span class="ident">from_be_bytes</span>(<span class="ident">buf</span>)
 }
 
-<span class="kw">static</span> <span class="kw-2">mut</span> <span class="ident">CRASH_AT</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">u32</span><span class="op">&gt;</span> <span class="op">=</span> <span class="prelude-val">None</span>;
-<span class="kw">static</span> <span class="kw-2">mut</span> <span class="ident">CRASH_ALLOWED</span>: <span class="ident">bool</span> <span class="op">=</span> <span class="bool-val">false</span>;
+<span class="kw">static</span> <span class="kw-2">mut</span> <span class="ident">CRASH_PROB</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">u64</span><span class="op">&gt;</span> <span class="op">=</span> <span class="prelude-val">None</span>;
 
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">allow_crash</span>(<span class="ident">v</span>: <span class="ident">bool</span>) {
+<span class="attribute">#[<span class="ident">macro_export</span>]</span>
+<span class="macro">macro_rules</span><span class="macro">!</span> <span class="ident">may_crash</span> {
+    () <span class="op">=</span><span class="op">&gt;</span> {
+        <span class="kw">if</span> <span class="macro-nonterminal">$</span><span class="kw">crate</span>::<span class="macro-nonterminal">utils</span>::<span class="ident">can_crash</span>() {
+            <span class="macro">eprintln</span><span class="macro">!</span>(<span class="string">&quot;\nCrashed at {}:{}&quot;</span>, <span class="macro">file</span><span class="macro">!</span>(), <span class="macro">line</span><span class="macro">!</span>());
+            <span class="ident">std</span>::<span class="ident">process</span>::<span class="ident">exit</span>(<span class="number">0</span>);
+        }
+    };
+}
+
+<span class="attribute">#[<span class="ident">inline</span>]</span>
+<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">can_crash</span>() <span class="op">-</span><span class="op">&gt;</span> <span class="ident">bool</span> {
     <span class="kw">unsafe</span> {
-        <span class="ident">CRASH_ALLOWED</span> <span class="op">=</span> <span class="ident">v</span>;
+        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">p</span>) <span class="op">=</span> <span class="ident">CRASH_PROB</span> {
+            <span class="kw">if</span> <span class="ident">p</span> <span class="op">=</span><span class="op">=</span> <span class="number">0</span> {
+                <span class="kw">return</span> <span class="bool-val">false</span>;
+            } <span class="kw">else</span> {
+                <span class="kw">let</span> <span class="ident">r</span>: <span class="ident">u64</span> <span class="op">=</span> <span class="ident">rand</span>::<span class="ident">random</span>();
+                <span class="kw">return</span> <span class="ident">r</span> <span class="op">%</span> <span class="number">10000</span> <span class="op">=</span><span class="op">=</span> <span class="number">0</span>;
+            }
+        } <span class="kw">else</span> {
+            <span class="kw">let</span> <span class="ident">p</span> <span class="op">=</span> <span class="ident">std</span>::<span class="ident">env</span>::<span class="ident">var</span>(<span class="string">&quot;CRASH_PROB&quot;</span>)
+                .<span class="ident">unwrap_or</span>(<span class="string">&quot;0&quot;</span>.<span class="ident">to_string</span>())
+                .<span class="ident">parse</span>::<span class="op">&lt;</span><span class="ident">u64</span><span class="op">&gt;</span>()
+                .<span class="ident">expect</span>(<span class="string">&quot;CRASH_PROB should be a non-negative integer&quot;</span>);
+            <span class="ident">CRASH_PROB</span> <span class="op">=</span> <span class="prelude-val">Some</span>(<span class="ident">p</span>);
+        }
+        <span class="ident">can_crash</span>()
     }
 }
 
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">may_crash</span>(<span class="ident">ln</span>: <span class="ident">u32</span>, <span class="ident">cnt</span>: <span class="ident">i32</span>) {
+<span class="attribute">#[<span class="ident">inline</span>]</span>
+<span class="attribute">#[<span class="ident">doc</span>(<span class="ident">hidden</span>)]</span>
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn</span> <span class="ident">as_mut</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span>, <span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span><span class="op">&gt;</span>(<span class="ident">v</span>: <span class="kw-2">*</span><span class="kw">const</span> <span class="ident">T</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="kw-2">mut</span> <span class="ident">T</span> {
     <span class="kw">unsafe</span> {
-        <span class="kw">if</span> <span class="op">!</span><span class="ident">CRASH_ALLOWED</span> {
-            <span class="kw">return</span>;
-        }
-        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">line</span>) <span class="op">=</span> <span class="ident">CRASH_AT</span> {
-            <span class="kw">if</span> <span class="ident">ln</span> <span class="op">=</span><span class="op">=</span> <span class="ident">line</span> {
-                <span class="kw">static</span> <span class="kw-2">mut</span> <span class="ident">COUNT</span>: <span class="ident">i32</span> <span class="op">=</span> <span class="number">0</span>;
-                <span class="ident">COUNT</span> <span class="op">+</span><span class="op">=</span> <span class="number">1</span>;
-                <span class="comment">// if COUNT == cnt {</span>
-                <span class="comment">// if rand() % 3 == 0 {</span>
-                <span class="macro">println</span><span class="macro">!</span>(<span class="string">&quot;Crashed at line {}&quot;</span>, <span class="ident">ln</span>);
-                <span class="ident">std</span>::<span class="ident">process</span>::<span class="ident">exit</span>(<span class="number">0</span>);
-                <span class="comment">// }</span>
-            }
-        } <span class="kw">else</span> {
-            <span class="kw">for</span> (<span class="ident">key</span>, <span class="ident">value</span>) <span class="kw">in</span> <span class="ident">std</span>::<span class="ident">env</span>::<span class="ident">vars</span>() {
-                <span class="kw">if</span> <span class="ident">key</span> <span class="op">=</span><span class="op">=</span> <span class="string">&quot;CRASH_AT&quot;</span> {
-                    <span class="kw">let</span> <span class="ident">line</span>: <span class="ident">u32</span> <span class="op">=</span> <span class="ident">value</span>.<span class="ident">parse</span>().<span class="ident">unwrap_or</span>(<span class="ident">u32</span>::<span class="ident">MAX</span>);
-                    <span class="ident">CRASH_AT</span> <span class="op">=</span> <span class="prelude-val">Some</span>(<span class="ident">line</span>);
-                    <span class="ident">may_crash</span>(<span class="ident">ln</span>, <span class="ident">cnt</span>);
-                    <span class="kw">return</span>;
-                }
-            }
-            <span class="ident">CRASH_AT</span> <span class="op">=</span> <span class="prelude-val">Some</span>(<span class="ident">u32</span>::<span class="ident">MAX</span>);
-        }
+        <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="kw-2">*</span>(<span class="ident">v</span> <span class="kw">as</span> <span class="kw-2">*</span><span class="kw-2">mut</span> <span class="ident">T</span>)
     }
 }
 
@@ -354,6 +390,24 @@
     <span class="kw">unsafe</span> {
         <span class="ident">std</span>::<span class="ident">slice</span>::<span class="ident">from_raw_parts</span>(<span class="ident">ptr</span>, <span class="ident">len</span><span class="op">/</span><span class="number">8</span>)
     }
+}
+
+<span class="attribute">#[<span class="ident">inline</span>(<span class="ident">always</span>)]</span>
+<span class="kw">pub</span> <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">read</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span>, <span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span><span class="op">&gt;</span>(<span class="ident">raw</span>: <span class="kw-2">*</span><span class="kw-2">mut</span> <span class="ident">u8</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="kw-2">mut</span> <span class="ident">T</span> {
+    <span class="ident">union</span> <span class="ident">U</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span><span class="op">&gt;</span> {
+        <span class="ident">raw</span>: <span class="kw-2">*</span><span class="kw-2">mut</span> <span class="ident">u8</span>,
+        <span class="ident">rf</span>: <span class="kw-2">*</span><span class="kw-2">mut</span> <span class="ident">T</span>,
+    }
+    <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="kw-2">*</span><span class="ident">U</span> { <span class="ident">raw</span> }.<span class="ident">rf</span>
+}
+
+<span class="attribute">#[<span class="ident">inline</span>(<span class="ident">always</span>)]</span>
+<span class="kw">pub</span> <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">read_addr</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span>, <span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span><span class="op">&gt;</span>(<span class="ident">addr</span>: <span class="ident">u64</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="kw-2">mut</span> <span class="ident">T</span> {
+    <span class="ident">union</span> <span class="ident">U</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span><span class="op">&gt;</span> {
+        <span class="ident">addr</span>: <span class="ident">u64</span>,
+        <span class="ident">rf</span>: <span class="kw-2">*</span><span class="kw-2">mut</span> <span class="ident">T</span>,
+    }
+    <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="kw-2">*</span><span class="ident">U</span> { <span class="ident">addr</span> }.<span class="ident">rf</span>
 }
 
 <span class="attribute">#[<span class="ident">repr</span>(<span class="ident">C</span>)]</span>
@@ -378,7 +432,7 @@
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">push</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">x</span>: <span class="ident">T</span>) {
         <span class="macro">debug_assert</span><span class="macro">!</span>(
             (<span class="self">self</span>.<span class="ident">tail</span><span class="op">+</span><span class="number">1</span>)<span class="op">%</span><span class="ident">N</span> <span class="op">!</span><span class="op">=</span> <span class="self">self</span>.<span class="ident">head</span>,
-            <span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;too many slots are used (len = {})&quot;</span>, <span class="ident">N</span>)
+            <span class="string">&quot;too many slots are used (len = {})&quot;</span>, <span class="ident">N</span>
         );
 
         <span class="self">self</span>.<span class="ident">data</span>[<span class="self">self</span>.<span class="ident">tail</span>] <span class="op">=</span> <span class="ident">x</span>;
@@ -389,24 +443,24 @@
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">push_sync</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">x</span>: <span class="ident">T</span>) {
         <span class="macro">debug_assert</span><span class="macro">!</span>(
             (<span class="self">self</span>.<span class="ident">tail</span><span class="op">+</span><span class="number">1</span>)<span class="op">%</span><span class="ident">N</span> <span class="op">!</span><span class="op">=</span> <span class="self">self</span>.<span class="ident">head</span>,
-            <span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;too many slots are used (len = {})&quot;</span>, <span class="ident">N</span>)
+            <span class="string">&quot;too many slots are used (len = {})&quot;</span>, <span class="ident">N</span>
         );
         <span class="self">self</span>.<span class="ident">data</span>[<span class="self">self</span>.<span class="ident">tail</span>] <span class="op">=</span> <span class="ident">x</span>;
 
         <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_flush_alloc&quot;</span>))]</span>
-        <span class="ident">persist</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">data</span>[<span class="self">self</span>.<span class="ident">tail</span>], <span class="number">8</span>);
+        <span class="ident">persist</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">data</span>[<span class="self">self</span>.<span class="ident">tail</span>], <span class="number">8</span>, <span class="bool-val">false</span>);
         
         <span class="self">self</span>.<span class="ident">tail</span> <span class="op">=</span> (<span class="self">self</span>.<span class="ident">tail</span> <span class="op">+</span> <span class="number">1</span>) <span class="op">%</span> <span class="ident">N</span>;
 
         <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_flush_alloc&quot;</span>))]</span>
-        <span class="ident">persist</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">head</span>, <span class="number">16</span>);
+        <span class="ident">persist</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">head</span>, <span class="number">16</span>, <span class="bool-val">false</span>);
     }
 
     <span class="attribute">#[<span class="ident">inline</span>]</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">sync_all</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         <span class="kw">if</span> <span class="self">self</span>.<span class="ident">head</span> <span class="op">=</span><span class="op">=</span> <span class="self">self</span>.<span class="ident">tail</span> {
             <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_flush_alloc&quot;</span>))]</span>
-            <span class="ident">persist</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">head</span>, <span class="number">16</span>);
+            <span class="ident">persist</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">head</span>, <span class="number">16</span>, <span class="bool-val">false</span>);
             <span class="kw">return</span>;
         }
         <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_flush_alloc&quot;</span>))]</span>
@@ -414,13 +468,13 @@
             <span class="kw">let</span> <span class="ident">h</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">data</span>[<span class="self">self</span>.<span class="ident">head</span>] <span class="kw">as</span> <span class="kw-2">*</span><span class="kw">const</span> <span class="kw">_</span> <span class="kw">as</span> <span class="ident">usize</span>;
             <span class="kw">let</span> <span class="ident">t</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">data</span>[<span class="self">self</span>.<span class="ident">tail</span>] <span class="kw">as</span> <span class="kw-2">*</span><span class="kw">const</span> <span class="kw">_</span> <span class="kw">as</span> <span class="ident">usize</span>;
             <span class="kw">if</span> <span class="ident">h</span> <span class="op">&lt;</span> <span class="ident">t</span> {
-                <span class="ident">persist</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">data</span>[<span class="self">self</span>.<span class="ident">head</span>], <span class="ident">t</span> <span class="op">-</span> <span class="ident">h</span>);
-                <span class="ident">persist</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">head</span>, <span class="number">16</span>);
+                <span class="ident">persist</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">data</span>[<span class="self">self</span>.<span class="ident">head</span>], <span class="ident">t</span> <span class="op">-</span> <span class="ident">h</span>, <span class="bool-val">false</span>);
+                <span class="ident">persist</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">head</span>, <span class="number">16</span>, <span class="bool-val">false</span>);
             } <span class="kw">else</span> {
                 <span class="kw">let</span> <span class="ident">b</span> <span class="op">=</span> <span class="self">self</span> <span class="kw">as</span> <span class="kw-2">*</span><span class="kw">const</span> <span class="self">Self</span> <span class="kw">as</span> <span class="ident">usize</span>;
-                <span class="ident">persist</span>(<span class="self">self</span>, <span class="ident">h</span> <span class="op">-</span> <span class="ident">b</span>);
+                <span class="ident">persist</span>(<span class="self">self</span>, <span class="ident">h</span> <span class="op">-</span> <span class="ident">b</span>, <span class="bool-val">false</span>);
                 <span class="kw">let</span> <span class="ident">b</span> <span class="op">=</span> <span class="ident">b</span> <span class="op">+</span> <span class="ident">std</span>::<span class="ident">mem</span>::<span class="ident">size_of</span>::<span class="op">&lt;</span><span class="self">Self</span><span class="op">&gt;</span>();
-                <span class="ident">persist</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">data</span>[<span class="self">self</span>.<span class="ident">tail</span>], <span class="ident">b</span> <span class="op">-</span> <span class="ident">t</span>);
+                <span class="ident">persist</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">data</span>[<span class="self">self</span>.<span class="ident">tail</span>], <span class="ident">b</span> <span class="op">-</span> <span class="ident">t</span>, <span class="bool-val">false</span>);
             }
         }
     }
@@ -466,7 +520,7 @@
     }
 
     <span class="attribute">#[<span class="ident">inline</span>]</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">foreach</span><span class="op">&lt;</span><span class="ident">F</span>: <span class="ident">Fn</span>(<span class="ident">T</span>) <span class="op">-</span><span class="op">&gt;</span> ()<span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">f</span>: <span class="ident">F</span>) {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">foreach</span><span class="op">&lt;</span><span class="ident">F</span>: <span class="ident">FnMut</span>(<span class="ident">T</span>) <span class="op">-</span><span class="op">&gt;</span> ()<span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut</span> <span class="ident">f</span>: <span class="ident">F</span>) {
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">head</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">head</span>;
         <span class="kw">while</span> <span class="ident">head</span> <span class="op">!</span><span class="op">=</span> <span class="self">self</span>.<span class="ident">tail</span> {
             <span class="ident">f</span>(<span class="self">self</span>.<span class="ident">data</span>[<span class="ident">head</span>]);
@@ -475,7 +529,7 @@
     }
 
     <span class="attribute">#[<span class="ident">inline</span>]</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">drain_atomic</span><span class="op">&lt;</span><span class="ident">F</span>: <span class="ident">Fn</span>(<span class="ident">T</span>), <span class="ident">E</span>: <span class="ident">Fn</span>()<span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">f</span>: <span class="ident">F</span>, <span class="ident">end</span>: <span class="ident">E</span>) {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">drain_atomic</span><span class="op">&lt;</span><span class="ident">F</span>: <span class="ident">FnMut</span>(<span class="ident">T</span>), <span class="ident">E</span>: <span class="ident">Fn</span>()<span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="kw-2">mut</span> <span class="ident">f</span>: <span class="ident">F</span>, <span class="ident">end</span>: <span class="ident">E</span>) {
         <span class="kw">while</span> <span class="self">self</span>.<span class="ident">head</span> <span class="op">!</span><span class="op">=</span> <span class="self">self</span>.<span class="ident">tail</span> {
             <span class="ident">f</span>(<span class="self">self</span>.<span class="ident">data</span>[<span class="self">self</span>.<span class="ident">head</span>]);
             <span class="self">self</span>.<span class="ident">head</span> <span class="op">=</span> (<span class="self">self</span>.<span class="ident">head</span> <span class="op">+</span> <span class="number">1</span>) <span class="op">%</span> <span class="ident">N</span>;
@@ -484,7 +538,7 @@
     }
 
     <span class="attribute">#[<span class="ident">inline</span>]</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">foreach_reverse</span><span class="op">&lt;</span><span class="ident">F</span>: <span class="ident">Fn</span>(<span class="ident">T</span>) <span class="op">-</span><span class="op">&gt;</span> ()<span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">f</span>: <span class="ident">F</span>) {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">foreach_reverse</span><span class="op">&lt;</span><span class="ident">F</span>: <span class="ident">FnMut</span>(<span class="ident">T</span>) <span class="op">-</span><span class="op">&gt;</span> ()<span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut</span> <span class="ident">f</span>: <span class="ident">F</span>) {
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tail</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">tail</span>;
         <span class="kw">while</span> <span class="ident">tail</span> <span class="op">!</span><span class="op">=</span> <span class="self">self</span>.<span class="ident">head</span> {
             <span class="kw">let</span> <span class="ident">d</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">data</span>[<span class="ident">tail</span>];
@@ -569,5 +623,18 @@
                 <span class="macro-nonterminal">$</span><span class="macro-nonterminal">c</span>.<span class="ident">paint</span>(<span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;{:&gt;10}  {}&quot;</span>, <span class="macro-nonterminal">$</span><span class="macro-nonterminal">tag</span>, <span class="macro">format</span><span class="macro">!</span>(<span class="macro-nonterminal">$</span><span class="macro-nonterminal">msg</span>, $(<span class="macro-nonterminal">$</span><span class="macro-nonterminal">args</span>)<span class="kw-2">*</span>))));
         }
     };
+}
+
+<span class="kw">pub</span> <span class="kw">const</span> <span class="kw">fn</span> <span class="ident">nearest_pow2</span>(<span class="kw-2">mut</span> <span class="ident">v</span>: <span class="ident">u64</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">u64</span> {
+    <span class="ident">v</span> <span class="op">-</span><span class="op">=</span> <span class="number">1</span>;
+    <span class="ident">v</span> <span class="op">|</span><span class="op">=</span> <span class="ident">v</span> <span class="op">&gt;</span><span class="op">&gt;</span> <span class="number">1</span>;
+    <span class="ident">v</span> <span class="op">|</span><span class="op">=</span> <span class="ident">v</span> <span class="op">&gt;</span><span class="op">&gt;</span> <span class="number">2</span>;
+    <span class="ident">v</span> <span class="op">|</span><span class="op">=</span> <span class="ident">v</span> <span class="op">&gt;</span><span class="op">&gt;</span> <span class="number">4</span>;
+    <span class="ident">v</span> <span class="op">|</span><span class="op">=</span> <span class="ident">v</span> <span class="op">&gt;</span><span class="op">&gt;</span> <span class="number">8</span>;
+    <span class="ident">v</span> <span class="op">|</span><span class="op">=</span> <span class="ident">v</span> <span class="op">&gt;</span><span class="op">&gt;</span> <span class="number">16</span>;
+    <span class="ident">v</span> <span class="op">|</span><span class="op">=</span> <span class="ident">v</span> <span class="op">&gt;</span><span class="op">&gt;</span> <span class="number">32</span>;
+    <span class="ident">v</span> <span class="op">+</span><span class="op">=</span> <span class="number">1</span>;
+    <span class="ident">v</span>
 }</pre></div>
-</section><section id="search" class="content hidden"></section><section class="footer"></section><script>window.rootPath = "../../";window.currentCrate = "corundum";</script><script src="../../main.js"></script><script src="../../source-script.js"></script><script src="../../source-files.js"></script><script defer src="../../search-index.js"></script></body></html>
+</section><section id="search" class="content hidden"></section><section class="footer"></section><div id="rustdoc-vars" data-root-path="../../" data-current-crate="corundum"></div>
+    <script src="../../main.js"></script><script src="../../source-script.js"></script><script src="../../source-files.js"></script><script defer src="../../search-index.js"></script></body></html>

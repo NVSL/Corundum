@@ -2143,6 +2143,14 @@
 <span id="2140">2140</span>
 <span id="2141">2141</span>
 <span id="2142">2142</span>
+<span id="2143">2143</span>
+<span id="2144">2144</span>
+<span id="2145">2145</span>
+<span id="2146">2146</span>
+<span id="2147">2147</span>
+<span id="2148">2148</span>
+<span id="2149">2149</span>
+<span id="2150">2150</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">test</span>)]</span>
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod</span> <span class="ident">problems</span> {
@@ -2531,7 +2539,7 @@
     }
 
     <span class="attribute">#[<span class="ident">test</span>]</span>
-    <span class="kw">fn</span> <span class="ident">trans_inside_fn</span>() {
+    <span class="kw">fn</span> <span class="ident">chaperon_swap</span>() {
         <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">cell</span>::<span class="ident">PRefCell</span> <span class="kw">as</span> <span class="ident">RefCell</span>;
         <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">boxed</span>::<span class="ident">Pbox</span>;
 
@@ -2551,19 +2559,31 @@
 
         <span class="kw">let</span> <span class="ident">root1</span> <span class="op">=</span> <span class="ident">P1</span>::<span class="ident">open</span>::<span class="op">&lt;</span><span class="ident">Pbox</span><span class="op">&lt;</span><span class="ident">RefCell</span><span class="op">&lt;</span><span class="ident">i32</span>, <span class="ident">P1</span><span class="op">&gt;</span>, <span class="ident">P1</span><span class="op">&gt;</span><span class="op">&gt;</span>(<span class="string">&quot;pool5.pool&quot;</span>, <span class="ident">O_CFNE</span>).<span class="ident">unwrap</span>();
         <span class="kw">let</span> <span class="ident">root2</span> <span class="op">=</span> <span class="ident">P2</span>::<span class="ident">open</span>::<span class="op">&lt;</span><span class="ident">Pbox</span><span class="op">&lt;</span><span class="ident">RefCell</span><span class="op">&lt;</span><span class="ident">i32</span>, <span class="ident">P2</span><span class="op">&gt;</span>, <span class="ident">P2</span><span class="op">&gt;</span><span class="op">&gt;</span>(<span class="string">&quot;pool6.pool&quot;</span>, <span class="ident">O_CFNE</span>).<span class="ident">unwrap</span>();
+
+        <span class="macro">println</span><span class="macro">!</span>(<span class="string">&quot;root1 = {}&quot;</span>, <span class="ident">root1</span>);
+        <span class="macro">println</span><span class="macro">!</span>(<span class="string">&quot;root2 = {}&quot;</span>, <span class="ident">root2</span>);
+
         <span class="kw">let</span> <span class="ident">_res</span> <span class="op">=</span> <span class="ident">Chaperon</span>::<span class="ident">session</span>(<span class="string">&quot;foo1.pool&quot;</span>, <span class="op">|</span><span class="op">|</span> {
-            <span class="kw">let</span> <span class="ident">other</span> <span class="op">=</span> <span class="ident">foo</span>::<span class="op">&lt;</span><span class="ident">P2</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="ident">root2</span>, <span class="number">10</span>); <span class="comment">// &lt;-- foo commits here</span>
-            <span class="ident">P1</span>::<span class="ident">transaction</span>(<span class="op">|</span><span class="ident">j</span><span class="op">|</span> {
+            <span class="kw">let</span> <span class="ident">root1_old</span> <span class="op">=</span> <span class="ident">P1</span>::<span class="ident">transaction</span>(<span class="op">|</span><span class="ident">j</span><span class="op">|</span> {
                 <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">root</span> <span class="op">=</span> <span class="ident">root1</span>.<span class="ident">borrow_mut</span>(<span class="ident">j</span>);
-                <span class="kw-2">*</span><span class="ident">root</span> <span class="op">=</span> <span class="ident">other</span>
+                <span class="kw">let</span> <span class="ident">old</span> <span class="op">=</span> <span class="kw-2">*</span><span class="ident">root</span>;
+                <span class="kw-2">*</span><span class="ident">root</span> <span class="op">=</span> <span class="kw-2">*</span><span class="ident">root2</span>.<span class="ident">borrow</span>();
+                <span class="kw">if</span> <span class="kw-2">*</span><span class="ident">root</span> <span class="op">=</span><span class="op">=</span> <span class="number">0</span> {
+                    <span class="kw-2">*</span><span class="ident">root</span> <span class="op">=</span> <span class="number">10</span>;
+                }
+                <span class="ident">old</span>
             }).<span class="ident">unwrap</span>();
             <span class="ident">P2</span>::<span class="ident">transaction</span>(<span class="op">|</span><span class="ident">j</span><span class="op">|</span> {
                 <span class="comment">// &lt;-- Creates a Journal&lt;P2&gt;</span>
                 <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">root</span> <span class="op">=</span> <span class="ident">root2</span>.<span class="ident">borrow_mut</span>(<span class="ident">j</span>);
-                <span class="kw-2">*</span><span class="ident">root</span> <span class="op">=</span> <span class="ident">other</span>;
+                <span class="kw-2">*</span><span class="ident">root</span> <span class="op">=</span> <span class="ident">root1_old</span>;
+                <span class="kw">if</span> <span class="kw-2">*</span><span class="ident">root</span> <span class="op">=</span><span class="op">=</span> <span class="number">0</span> {
+                    <span class="kw-2">*</span><span class="ident">root</span> <span class="op">=</span> <span class="number">20</span>;
+                }
                 <span class="comment">// std::process::exit(0);</span>
             }).<span class="ident">unwrap</span>();
-            <span class="kw">let</span> <span class="ident">_other</span> <span class="op">=</span> <span class="ident">foo</span>::<span class="op">&lt;</span><span class="ident">P1</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="ident">root1</span>, <span class="number">20</span>); <span class="comment">// &lt;-- foo dose not commit here (postponed) because a trans is open</span>
+            <span class="comment">// let _other = foo::&lt;P1&gt;(&amp;root1, 20); // &lt;-- foo dose not commit here (postponed) because a trans is open</span>
+            <span class="comment">// std::process::exit(0);</span>
         });
 
         <span class="macro">println</span><span class="macro">!</span>(<span class="string">&quot;P1: {}&quot;</span>, <span class="ident">P1</span>::<span class="ident">used</span>());
@@ -3302,7 +3322,7 @@
             <span class="ident">AddNewRndNum</span> <span class="op">=</span> <span class="number">0</span>,
             <span class="ident">DelRndNum</span> <span class="op">=</span> <span class="number">1</span>,
             <span class="ident">DelAll</span> <span class="op">=</span> <span class="number">2</span>,
-        };
+        }
         <span class="kw">use</span> <span class="ident">Operation</span>::<span class="kw-2">*</span>;
         <span class="kw">let</span> <span class="ident">r</span> <span class="op">=</span> <span class="ident">rand</span>() <span class="op">%</span> <span class="number">100</span>;
         <span class="kw">let</span> <span class="ident">cmd</span> <span class="op">=</span> <span class="kw">if</span> <span class="ident">r</span> <span class="op">&lt;</span> <span class="number">20</span> {
@@ -3605,6 +3625,16 @@
         .<span class="ident">unwrap</span>();
     }
 
+
+    <span class="attribute">#[<span class="ident">test</span>]</span>
+    <span class="kw">fn</span> <span class="ident">parc_heap</span>() {
+        <span class="ident">Heap</span>::<span class="ident">transaction</span>(<span class="op">|</span><span class="ident">j</span><span class="op">|</span> {
+            <span class="comment">// the Arc is protected with a mutex.</span>
+            <span class="kw">let</span> <span class="ident">_data</span> <span class="op">=</span> <span class="ident">Parc</span>::<span class="ident">new</span>(<span class="number">10</span>, <span class="ident">j</span>);
+            <span class="kw">let</span> <span class="ident">_weak_five</span> <span class="op">=</span> <span class="ident">Parc</span>::<span class="ident">downgrade</span>(<span class="kw-2">&amp;</span><span class="ident">_data</span>, <span class="ident">j</span>);
+        }).<span class="ident">unwrap</span>();
+    }
+
     <span class="attribute">#[<span class="ident">test</span>]</span>
     <span class="kw">fn</span> <span class="ident">test_parallel_alloc</span>() {
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">threads</span> <span class="op">=</span> <span class="macro">vec</span><span class="macro">!</span>[];
@@ -3681,7 +3711,7 @@
             <span class="ident">value</span>: <span class="ident">Parc</span><span class="op">&lt;</span><span class="ident">PMutex</span><span class="op">&lt;</span><span class="ident">i32</span>, <span class="ident">A</span><span class="op">&gt;</span>, <span class="ident">A</span><span class="op">&gt;</span>,
         }
         <span class="kw">impl</span> <span class="ident">RootObj</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">SB</span> {
-            <span class="kw">fn</span> <span class="ident">init</span>(<span class="ident">j</span>: <span class="kw-2">&amp;</span><span class="ident">stm</span>::<span class="ident">journal</span>::<span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
+            <span class="kw">fn</span> <span class="ident">init</span>(<span class="ident">j</span>: <span class="kw-2">&amp;</span><span class="ident">stm</span>::<span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
                 <span class="ident">SB</span> {
                     <span class="ident">value</span>: <span class="ident">Parc</span>::<span class="ident">new</span>(<span class="ident">PMutex</span>::<span class="ident">new</span>(<span class="number">0</span>), <span class="ident">j</span>),
                 }
@@ -3770,7 +3800,7 @@
             <span class="ident">value</span>: <span class="ident">Parc</span><span class="op">&lt;</span><span class="ident">PMutex</span><span class="op">&lt;</span><span class="ident">i32</span>, <span class="ident">A</span><span class="op">&gt;</span>, <span class="ident">A</span><span class="op">&gt;</span>,
         }
         <span class="kw">impl</span> <span class="ident">RootObj</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">SB</span> {
-            <span class="kw">fn</span> <span class="ident">init</span>(<span class="ident">j</span>: <span class="kw-2">&amp;</span><span class="ident">stm</span>::<span class="ident">journal</span>::<span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
+            <span class="kw">fn</span> <span class="ident">init</span>(<span class="ident">j</span>: <span class="kw-2">&amp;</span><span class="ident">stm</span>::<span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
                 <span class="ident">SB</span> {
                     <span class="ident">value</span>: <span class="ident">Parc</span>::<span class="ident">new</span>(<span class="ident">PMutex</span>::<span class="ident">new</span>(<span class="number">0</span>), <span class="ident">j</span>),
                 }
@@ -4259,31 +4289,18 @@
 
 <span class="kw">mod</span> <span class="ident">temp_test</span> {
     <span class="attribute">#[<span class="ident">test</span>]</span>
-    <span class="kw">fn</span> <span class="ident">abort_prc</span>() {
-        <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">mem</span>::<span class="ident">drop</span>;
-        <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">default</span>::<span class="kw-2">*</span>;
-        <span class="kw">type</span> <span class="ident">P</span> <span class="op">=</span> <span class="ident">BuddyAlloc</span>;
-        <span class="kw">let</span> <span class="ident">obj</span> <span class="op">=</span> <span class="ident">P</span>::<span class="ident">open</span>::<span class="op">&lt;</span><span class="ident">Root</span><span class="op">&gt;</span>(<span class="string">&quot;foo.pool&quot;</span>, <span class="ident">O_CF</span>).<span class="ident">unwrap</span>();
-
-        <span class="kw">struct</span> <span class="ident">Root</span>(<span class="ident">PRefCell</span><span class="op">&lt;</span><span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">Parc</span><span class="op">&lt;</span><span class="ident">i32</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>);
-        <span class="kw">impl</span> <span class="ident">RootObj</span><span class="op">&lt;</span><span class="ident">P</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">Root</span> {
-            <span class="kw">fn</span> <span class="ident">init</span>(<span class="ident">j</span>: <span class="kw-2">&amp;</span><span class="ident">Journal</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
-                <span class="ident">Root</span>(<span class="ident">PRefCell</span>::<span class="ident">new</span>(<span class="prelude-val">Some</span>(<span class="ident">Parc</span>::<span class="ident">new</span>(<span class="number">10</span>, <span class="ident">j</span>))))
-            }
-        }
-
-        <span class="kw">let</span> <span class="ident">vweak_obj</span> <span class="op">=</span> <span class="ident">obj</span>.<span class="number">0</span>.<span class="ident">borrow</span>().<span class="ident">as_ref</span>().<span class="ident">unwrap</span>().<span class="ident">demote</span>();
-        
-        <span class="ident">P</span>::<span class="ident">transaction</span>(<span class="op">|</span><span class="ident">j</span><span class="op">|</span> {
-            <span class="kw">let</span> <span class="ident">strong_obj</span> <span class="op">=</span> <span class="ident">vweak_obj</span>.<span class="ident">promote</span>(<span class="ident">j</span>);
-            <span class="macro">assert</span><span class="macro">!</span>(<span class="ident">strong_obj</span>.<span class="ident">is_some</span>());
-            
-            <span class="comment">// Destroy all strong pointers.</span>
-            <span class="ident">drop</span>(<span class="ident">strong_obj</span>);
-            <span class="kw-2">*</span><span class="ident">obj</span>.<span class="number">0</span>.<span class="ident">borrow_mut</span>(<span class="ident">j</span>) <span class="op">=</span> <span class="prelude-val">None</span>;
-        
-            <span class="macro">assert</span><span class="macro">!</span>(<span class="ident">vweak_obj</span>.<span class="ident">promote</span>(<span class="ident">j</span>).<span class="ident">is_none</span>());
-        }).<span class="ident">unwrap</span>();
+    <span class="kw">fn</span> <span class="ident">temp</span>() {
+        <span class="kw">let</span> <span class="ident">m</span> <span class="op">=</span> <span class="number">10927</span>;
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">len</span> <span class="op">=</span> <span class="ident">m</span>;
+        <span class="ident">len</span> <span class="op">-</span><span class="op">=</span> <span class="number">1</span>;
+        <span class="ident">len</span> <span class="op">|</span><span class="op">=</span> <span class="ident">len</span> <span class="op">&gt;</span><span class="op">&gt;</span> <span class="number">1</span>;
+        <span class="ident">len</span> <span class="op">|</span><span class="op">=</span> <span class="ident">len</span> <span class="op">&gt;</span><span class="op">&gt;</span> <span class="number">2</span>;
+        <span class="ident">len</span> <span class="op">|</span><span class="op">=</span> <span class="ident">len</span> <span class="op">&gt;</span><span class="op">&gt;</span> <span class="number">4</span>;
+        <span class="ident">len</span> <span class="op">|</span><span class="op">=</span> <span class="ident">len</span> <span class="op">&gt;</span><span class="op">&gt;</span> <span class="number">8</span>;
+        <span class="ident">len</span> <span class="op">|</span><span class="op">=</span> <span class="ident">len</span> <span class="op">&gt;</span><span class="op">&gt;</span> <span class="number">16</span>;
+        <span class="ident">len</span> <span class="op">+</span><span class="op">=</span> <span class="number">1</span>;
+        <span class="macro">println</span><span class="macro">!</span>(<span class="string">&quot;fn({}) = {} {}&quot;</span>, <span class="ident">m</span>, <span class="ident">len</span>, ((<span class="ident">u32</span>::<span class="ident">MAX</span> <span class="kw">as</span> <span class="ident">u64</span>) <span class="op">+</span> <span class="number">2</span>) <span class="op">&gt;</span><span class="op">&gt;</span> <span class="number">33</span>);
     }
 }</pre></div>
-</section><section id="search" class="content hidden"></section><section class="footer"></section><script>window.rootPath = "../../";window.currentCrate = "corundum";</script><script src="../../main.js"></script><script src="../../source-script.js"></script><script src="../../source-files.js"></script><script defer src="../../search-index.js"></script></body></html>
+</section><section id="search" class="content hidden"></section><section class="footer"></section><div id="rustdoc-vars" data-root-path="../../" data-current-crate="corundum"></div>
+    <script src="../../main.js"></script><script src="../../source-script.js"></script><script src="../../source-files.js"></script><script defer src="../../search-index.js"></script></body></html>
