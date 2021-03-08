@@ -163,8 +163,7 @@ if $all || $micro; then
     done 
 fi
 
-
-if $all || $pmdk || $atlas || $go || $micro || $mnemosyne || $crndm then
+if $all || $pmdk || $atlas || $go || $micro || $mnemosyne || $crndm; then
     echo -e "\nPerformance Results"
     cat $dir_path/outputs/perf.csv | perl -pe 's/((?<=,)|(?<=^)),/ ,/g;' | column -t -s,
 fi
