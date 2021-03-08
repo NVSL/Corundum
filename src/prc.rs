@@ -16,17 +16,30 @@ use std::mem::MaybeUninit;
 use std::ops::Deref;
 use std::*;
 
-#[derive(Debug)]
-struct Counter {
+#[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
+use crate::cell::TCell;
+
+struct Counter<A: MemPool> {
     strong: usize,
     weak: usize,
 
-    #[cfg(not(feature = "no_log_rc"))]
+    #[cfg(not(any(
+        feature = "no_log_rc",
+        feature = "use_pspd",
+        feature = "use_vspd"
+    )))]
     has_log: u8,
+
+    #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
+    temp: TCell<Option<*mut Self>, A>,
+
+    phantom: PhantomData<A>
 }
 
+unsafe impl<A: MemPool> PSafe for Counter<A> {}
+
 pub struct PrcBox<T: ?Sized, A: MemPool> {
-    counter: Counter,
+    counter: Counter<A>,
 
     #[cfg(not(feature = "no_volatile_pointers"))]
     vlist: VCell<VWeakList, A>,
@@ -150,8 +163,17 @@ impl<T: PSafe, A: MemPool> Prc<T, A> {
                         strong: 1,
                         weak: 1,
 
-                        #[cfg(not(feature = "no_log_rc"))]
+                        #[cfg(not(any(
+                            feature = "no_log_rc",
+                            feature = "use_pspd",
+                            feature = "use_vspd"
+                        )))]
                         has_log: 0,
+
+                        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
+                        temp: TCell::invalid(None),
+
+                        phantom: PhantomData
                     },
 
                     #[cfg(not(feature = "no_volatile_pointers"))]
@@ -198,8 +220,17 @@ impl<T: PSafe, A: MemPool> Prc<T, A> {
                         strong: 1,
                         weak: 1,
 
-                        #[cfg(not(feature = "no_log_rc"))]
+                        #[cfg(not(any(
+                            feature = "no_log_rc",
+                            feature = "use_pspd",
+                            feature = "use_vspd"
+                        )))]
                         has_log: 0,
+
+                        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
+                        temp: TCell::invalid(None),
+
+                        phantom: PhantomData
                     },
 
                     #[cfg(not(feature = "no_volatile_pointers"))]
@@ -589,8 +620,17 @@ impl<T: PSafe, A: MemPool> Prc<T, A> {
                                 strong: 1,
                                 weak: 1,
         
-                                #[cfg(not(feature = "no_log_rc"))]
+                                #[cfg(not(any(
+                                    feature = "no_log_rc",
+                                    feature = "use_pspd",
+                                    feature = "use_vspd"
+                                )))]
                                 has_log: 0,
+    
+                                #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
+                                temp: TCell::invalid(None),
+
+                                phantom: PhantomData
                             },
         
                             #[cfg(not(feature = "no_volatile_pointers"))]
@@ -651,12 +691,13 @@ unsafe impl<#[may_dangle] T: PSafe + ?Sized, A: MemPool> Drop for Prc<T, A> {
     fn drop(&mut self) {
         unsafe {
             let journal = Journal::<A>::current(true).unwrap();
-            self.dec_strong(journal.0);
+            let j = &*journal.0;
+            self.dec_strong(j);
             if self.strong() == 0 { // TODO: Add "or it is unreachable from the root"
                 // destroy the contained object
                 std::ptr::drop_in_place(&mut self.ptr.as_mut().value);
 
-                self.dec_weak(journal.0);
+                self.dec_weak(j);
                 if self.weak() == 0 {
                     A::free(self.ptr.as_mut());
 
@@ -924,8 +965,8 @@ impl<T: PSafe + ?Sized, A: MemPool> Weak<T, A> {
 impl<T: PSafe + ?Sized, A: MemPool> Drop for Weak<T, A> {
     fn drop(&mut self) {
         if let Some(inner) = self.inner() {
-            let journal = Journal::<A>::current(true).unwrap();
-            inner.dec_weak(journal.0);
+            let journal = unsafe { &*Journal::<A>::current(true).unwrap().0 };
+            inner.dec_weak(journal);
             if inner.weak() == 0 {
                 unsafe {
                     A::free(self.ptr.as_mut());
@@ -962,7 +1003,7 @@ impl<T: PSafe + ?Sized, A: MemPool> RootObj<A> for Weak<T, A> {
 
 trait PrcBoxPtr<T: PSafe + ?Sized, A: MemPool> {
     #[allow(clippy::mut_from_ref)]
-    fn count(&self) -> &mut Counter;
+    fn count(&self) -> &mut Counter<A>;
 
     #[inline]
     fn strong(&self) -> usize {
@@ -971,18 +1012,25 @@ trait PrcBoxPtr<T: PSafe + ?Sized, A: MemPool> {
 
     #[inline]
     #[cfg(not(feature = "no_log_rc"))]
-    fn log_count(&self, journal: *const Journal<A>) {
+    fn log_count(&self, journal: &Journal<A>) {
         let inner = self.count();
-
-        if inner.has_log == 0 {
-            unsafe {
-                inner.take_log(&*journal, Notifier::NonAtomic(Ptr::from_ref(&inner.has_log)));
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
+            if inner.temp.is_none() {
+                let p = journal.draft(inner);
+                inner.temp.replace(p);
+            }
+        }
+        #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))] {
+            if inner.has_log == 0 {
+                unsafe {
+                    inner.take_log(&*journal, Notifier::NonAtomic(Ptr::from_ref(&inner.has_log)));
+                }
             }
         }
     }
 
     #[inline]
-    fn inc_strong(&self, _journal: *const Journal<A>) {
+    fn inc_strong(&self, _journal: &Journal<A>) {
         let inner = self.count();
         let strong = inner.strong;
 
@@ -996,7 +1044,7 @@ trait PrcBoxPtr<T: PSafe + ?Sized, A: MemPool> {
     }
 
     #[inline]
-    fn dec_strong(&self, _journal: *const Journal<A>) {
+    fn dec_strong(&self, _journal: &Journal<A>) {
         #[cfg(not(feature = "no_log_rc"))]
         self.log_count(_journal);
 
@@ -1009,7 +1057,7 @@ trait PrcBoxPtr<T: PSafe + ?Sized, A: MemPool> {
     }
 
     #[inline]
-    fn inc_weak(&self, _journal: *const Journal<A>) {
+    fn inc_weak(&self, _journal: &Journal<A>) {
         let weak = self.weak();
 
         if weak == 0 || weak == usize::max_value() {
@@ -1023,7 +1071,7 @@ trait PrcBoxPtr<T: PSafe + ?Sized, A: MemPool> {
     }
 
     #[inline]
-    fn dec_weak(&self, _journal: *const Journal<A>) {
+    fn dec_weak(&self, _journal: &Journal<A>) {
         #[cfg(not(feature = "no_log_rc"))]
         self.log_count(_journal);
 
@@ -1033,14 +1081,14 @@ trait PrcBoxPtr<T: PSafe + ?Sized, A: MemPool> {
 
 impl<T: PSafe + ?Sized, A: MemPool> PrcBoxPtr<T, A> for Prc<T, A> {
     #[inline(always)]
-    fn count(&self) -> &mut Counter {
+    fn count(&self) -> &mut Counter<A> {
         &mut self.ptr.get_mut().counter
     }
 }
 
 impl<T: PSafe + ?Sized, A: MemPool> PrcBoxPtr<T, A> for PrcBox<T, A> {
     #[inline(always)]
-    fn count(&self) -> &mut Counter {
+    fn count(&self) -> &mut Counter<A> {
         unsafe {
             let ptr: *const Self = self;
             let ptr: *mut Self = ptr as *mut Self;
