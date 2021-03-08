@@ -26,6 +26,33 @@ function help() {
     echo "    -h, --help            Display this information"
 }
 
+while test $# -gt 0
+do
+    case "$1" in
+        -h|--help)           help && exit 0
+            ;;
+        -s|--scale)          all=false && scale=true
+            ;;
+        -p|--pmdk)           all=false && pmdk=true
+            ;;
+        -a|--atlas)          all=false && atlas=true
+            ;;
+        -g|--go-pmem)        all=false && go=true
+            ;;
+        -c|--corundum)       all=false && crndm=true
+            ;;
+        -m|--mnemosyne)      all=false && mnemosyne=true
+            ;;
+        -M|--micro-bench)    all=false && micro=true
+            ;;
+        --*)                 echo "bad option $1"
+            ;;
+        *)                   echo "argument $1"
+            ;;
+    esac
+    shift
+done
+
 function read_time() {
     echo $(cat $1 | grep -oP '(\d+\.\d+)\s+seconds time elapsed' | grep -oP '(\d+\.\d+)')
 }
