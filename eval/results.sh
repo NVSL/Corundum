@@ -122,6 +122,9 @@ if $all || $crndm; then
 fi
 
 if $all || $scale; then
+    rs=(1)
+    cs=`seq 0 15`
+    
     echo -n "p/c," > $dir_path/outputs/scale.csv
     (for c in ${cs[@]}; do
         echo -n "$c,"
