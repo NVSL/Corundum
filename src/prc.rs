@@ -1029,7 +1029,6 @@ trait PrcBoxPtr<T: PSafe + ?Sized, A: MemPool> {
         #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] unsafe {
             if inner.temp.is_none() {
                 let p = journal.draft(inner);
-                eprintln!("create log {:?}", *p);
                 inner.temp.replace(p);
             }
         }
