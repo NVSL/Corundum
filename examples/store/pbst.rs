@@ -222,7 +222,7 @@ where
                         } else {
                             return false;
                         }
-                    } else if op == "i" {
+                    } else if op == "ins" {
                         if let Some(n) = Self::next(&args, &mut i) {
                             let n: T = n
                                 .parse()
@@ -231,7 +231,7 @@ where
                         } else {
                             return false;
                         }
-                    } else if op == "r" {
+                    } else if op == "del" {
                         if let Some(n) = Self::next(&args, &mut i) {
                             let n: T = n
                                 .parse()

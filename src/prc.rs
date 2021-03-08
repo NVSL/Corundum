@@ -1012,13 +1012,14 @@ trait PrcBoxPtr<T: PSafe + ?Sized, A: MemPool> {
 
     #[inline]
     #[cfg(not(feature = "no_log_rc"))]
-    fn log_count(&self, journal: &Journal<A>) {
+    fn log_count(&self, journal: &Journal<A>) -> &mut Counter<A> {
         let inner = self.count();
-        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] unsafe {
             if inner.temp.is_none() {
-                let p = journal.draft(inner);
+                let p = &mut *journal.draft(inner);
                 inner.temp.replace(p);
             }
+            &mut *inner.temp.unwrap()
         }
         #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))] {
             if inner.has_log == 0 {
@@ -1026,6 +1027,7 @@ trait PrcBoxPtr<T: PSafe + ?Sized, A: MemPool> {
                     inner.take_log(&*journal, Notifier::NonAtomic(Ptr::from_ref(&inner.has_log)));
                 }
             }
+            inner
         }
     }
 
@@ -1037,18 +1039,33 @@ trait PrcBoxPtr<T: PSafe + ?Sized, A: MemPool> {
         if strong == 0 || strong == usize::max_value() {
             std::process::abort();
         }
-        #[cfg(not(feature = "no_log_rc"))]
+        #[cfg(not(feature = "no_log_rc"))] 
         self.log_count(_journal);
 
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] unsafe {
+            if let Some(inner) = *inner.temp {
+                (*inner).strong += 1;
+                return;
+            }
+        }
         inner.strong += 1;
     }
 
     #[inline]
     fn dec_strong(&self, _journal: &Journal<A>) {
+        let inner = self.count();
+
         #[cfg(not(feature = "no_log_rc"))]
         self.log_count(_journal);
 
-        self.count().strong -= 1;
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] unsafe {
+            if let Some(inner) = *inner.temp {
+                (*inner).strong -= 1;
+                return;
+            }
+        }
+
+        inner.strong -= 1;
     }
 
     #[inline]
@@ -1058,6 +1075,7 @@ trait PrcBoxPtr<T: PSafe + ?Sized, A: MemPool> {
 
     #[inline]
     fn inc_weak(&self, _journal: &Journal<A>) {
+        let inner = self.count();
         let weak = self.weak();
 
         if weak == 0 || weak == usize::max_value() {
@@ -1067,15 +1085,31 @@ trait PrcBoxPtr<T: PSafe + ?Sized, A: MemPool> {
         #[cfg(not(feature = "no_log_rc"))]
         self.log_count(_journal);
 
-        self.count().weak += 1;
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] unsafe {
+            if let Some(inner) = *inner.temp {
+                (*inner).weak += 1;
+                return;
+            }
+        }
+
+        inner.weak += 1;
     }
 
     #[inline]
     fn dec_weak(&self, _journal: &Journal<A>) {
+        let inner = self.count();
+
         #[cfg(not(feature = "no_log_rc"))]
         self.log_count(_journal);
 
-        self.count().weak -= 1;
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] unsafe {
+            if let Some(inner) = *inner.temp {
+                (*inner).strong -= 1;
+                return;
+            }
+        }
+
+        inner.weak -= 1;
     }
 }
 
