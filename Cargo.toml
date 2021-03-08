@@ -32,7 +32,7 @@ no_log_rc = []
 no_flush_alloc = []
 no_flush_updates = []
 no_pthread = []
-default = []
+default = ["use_pspd"]
 
 [dependencies]
 memmap = "0.7.0"

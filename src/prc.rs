@@ -8,6 +8,7 @@ use crate::clone::*;
 use crate::ptr::Ptr;
 use crate::stm::*;
 use crate::*;
+use std::fmt::{self,Debug};
 use std::cmp::Ordering;
 use std::hash::Hash;
 use std::hash::Hasher;
@@ -37,6 +38,17 @@ struct Counter<A: MemPool> {
 }
 
 unsafe impl<A: MemPool> PSafe for Counter<A> {}
+
+impl<A: MemPool> Debug for Counter<A> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{{strong: {}, weak: {}}}", self.strong, self.weak)?;
+
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
+        write!(f, "(temp: {:?})", self.temp)?;
+
+        Ok(())
+    }
+}
 
 pub struct PrcBox<T: ?Sized, A: MemPool> {
     counter: Counter<A>,
@@ -1012,14 +1024,14 @@ trait PrcBoxPtr<T: PSafe + ?Sized, A: MemPool> {
 
     #[inline]
     #[cfg(not(feature = "no_log_rc"))]
-    fn log_count(&self, journal: &Journal<A>) -> &mut Counter<A> {
+    fn log_count(&self, journal: &Journal<A>) {
         let inner = self.count();
         #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] unsafe {
             if inner.temp.is_none() {
-                let p = &mut *journal.draft(inner);
+                let p = journal.draft(inner);
+                eprintln!("create log {:?}", *p);
                 inner.temp.replace(p);
             }
-            &mut *inner.temp.unwrap()
         }
         #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))] {
             if inner.has_log == 0 {
@@ -1027,7 +1039,6 @@ trait PrcBoxPtr<T: PSafe + ?Sized, A: MemPool> {
                     inner.take_log(&*journal, Notifier::NonAtomic(Ptr::from_ref(&inner.has_log)));
                 }
             }
-            inner
         }
     }
 

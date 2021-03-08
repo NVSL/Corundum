@@ -6,6 +6,7 @@ use std::cmp::*;
 use std::mem::*;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
+use std::fmt::{self,Debug};
 
 /// A persistent memory location containing a volatile data valid during a
 /// single transaction
@@ -58,6 +59,12 @@ impl<T, A> !Sync for TCell<T, A> {}
 
 /// Safe to be stored in persistent memory
 unsafe impl<T: Default + VSafe + ?Sized, A: MemPool> PSafe for TCell<T, A> {}
+
+impl<T: Default + Debug + VSafe + ?Sized, A: MemPool> Debug for TCell<T, A> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{:?}", self.deref())
+    }
+}
 
 impl<T: Default + VSafe, A: MemPool> TCell<T, A> {
     /// Create a new valid cell
