@@ -299,8 +299,14 @@ impl<A: MemPool> Journal<A> {
     /// Writes a new log to the journal
     #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
     #[inline]
-    pub(crate) fn draft<T: ?Sized>(&self, val: &T) -> *mut T {
-        unsafe { utils::as_mut(self).spd.write(val, A::off(val).unwrap()) }
+    pub(crate) fn draft<T: ?Sized>(&self, val: &T) -> Option<*mut T> {
+        unsafe {
+            if let Ok(off) = A::off(val) {
+                Some(utils::as_mut(self).spd.write(val, off))
+            } else {
+                None
+            }
+        }
     }
 
     /// Returns a string containing the logging information

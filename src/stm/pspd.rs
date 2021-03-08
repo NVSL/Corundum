@@ -163,3 +163,15 @@ impl<A: MemPool> Scratchpad<A> {
         }
     }
 }
+
+impl<A: MemPool> Drop for Scratchpad<A> {
+    fn drop(&mut self) {
+        unsafe {
+            self.clear();
+            if !self.pages.is_dangling() {
+                let next_off = A::off_unchecked(self.pages.off_mut());
+                self.pages.release(next_off);
+            }
+        }
+    }
+}

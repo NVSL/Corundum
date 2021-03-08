@@ -84,13 +84,19 @@ impl<T: Default + VSafe, A: MemPool> TCell<T, A> {
 
     #[inline]
     /// Create a new invalid cell to be used in const functions
-    pub const fn invalid(v: T) -> Self {
+    pub const fn new_invalid(v: T) -> Self {
         Self {
             gen: 0,
             tx_gen: 0,
             value: v,
             phantom: PhantomData,
         }
+    }
+
+    #[inline]
+    /// Invalidates the underlying value
+    pub fn invalidate(this: &mut Self) {
+        this.gen = 0;
     }
 
     fn force(&mut self) -> &mut T {

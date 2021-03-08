@@ -183,7 +183,7 @@ impl<T: PSafe, A: MemPool> Prc<T, A> {
                         has_log: 0,
 
                         #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
-                        temp: TCell::invalid(None),
+                        temp: TCell::new_invalid(None),
 
                         phantom: PhantomData
                     },
@@ -240,7 +240,7 @@ impl<T: PSafe, A: MemPool> Prc<T, A> {
                         has_log: 0,
 
                         #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
-                        temp: TCell::invalid(None),
+                        temp: TCell::new_invalid(None),
 
                         phantom: PhantomData
                     },
@@ -640,7 +640,7 @@ impl<T: PSafe, A: MemPool> Prc<T, A> {
                                 has_log: 0,
     
                                 #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
-                                temp: TCell::invalid(None),
+                                temp: TCell::new_invalid(None),
 
                                 phantom: PhantomData
                             },
@@ -1026,10 +1026,11 @@ trait PrcBoxPtr<T: PSafe + ?Sized, A: MemPool> {
     #[cfg(not(feature = "no_log_rc"))]
     fn log_count(&self, journal: &Journal<A>) {
         let inner = self.count();
-        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] unsafe {
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
             if inner.temp.is_none() {
-                let p = journal.draft(inner);
-                inner.temp.replace(p);
+                if let Some(p) = journal.draft(inner) {
+                    inner.temp.replace(p);
+                }
             }
         }
         #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))] {
@@ -1126,19 +1127,35 @@ trait PrcBoxPtr<T: PSafe + ?Sized, A: MemPool> {
 impl<T: PSafe + ?Sized, A: MemPool> PrcBoxPtr<T, A> for Prc<T, A> {
     #[inline(always)]
     fn count(&self) -> &mut Counter<A> {
-        &mut self.ptr.get_mut().counter
+        let ret = &mut self.ptr.get_mut().counter;
+
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] unsafe {
+            if let Some(inner) = *ret.temp {
+                return &mut *inner;
+            }
+        }
+
+        ret
     }
 }
 
 impl<T: PSafe + ?Sized, A: MemPool> PrcBoxPtr<T, A> for PrcBox<T, A> {
     #[inline(always)]
     fn count(&self) -> &mut Counter<A> {
-        unsafe {
+        let ret = unsafe {
             let ptr: *const Self = self;
             let ptr: *mut Self = ptr as *mut Self;
             let rcbox: &mut Self = &mut *ptr;
             &mut rcbox.counter
+        };
+
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] unsafe {
+            if let Some(inner) = *ret.temp {
+                return &mut *inner;
+            }
         }
+
+        ret
     }
 }
 

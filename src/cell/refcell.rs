@@ -84,7 +84,7 @@ impl<T: PSafe, A: MemPool> PRefCell<T, A> {
             borrow: VCell::new(0),
 
             #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
-            temp: TCell::invalid(None),
+            temp: TCell::new_invalid(None),
 
             #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
             value: UnsafeCell::new(value),
@@ -362,7 +362,11 @@ impl<T: PSafe + ?Sized, A: MemPool> PRefCell<T, A> {
             let inner = &mut *self.value.get();
             #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
                 if self.temp.is_none() {
-                    self.temp.as_mut().replace(journal.draft(&inner));
+                    if self.temp.is_none() {
+                        if let Some(p) = journal.draft(inner) {
+                            self.temp.as_mut().replace(p);
+                        }
+                    }
                 }
             }
             #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))] {

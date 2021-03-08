@@ -88,6 +88,7 @@ impl<A: MemPool> Scratchpad<A> {
                 let p = p.add(8);
                 let len = dist - 16;
                 let org = utils::read_addr::<u8>(org_off + A::start());
+
                 ptr::copy_nonoverlapping(p, org, len);
                 ll::persist(org, len, false);
     
@@ -128,5 +129,17 @@ impl<A: MemPool> Scratchpad<A> {
             A::perform(z);
         }
         self.len = 0;
+    }
+}
+
+impl<A: MemPool> Drop for Scratchpad<A> {
+    fn drop(&mut self) {
+        unsafe {
+            self.clear();
+            if !self.base.0.is_null() {
+                dealloc(self.base.0, Layout::from_size_align_unchecked(self.cap, 2));
+                VCell::invalidate(&mut self.base);
+            }
+        }
     }
 }

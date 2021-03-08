@@ -61,7 +61,7 @@ impl<T: PSafe + Default, A: MemPool> Default for PCell<T, A> {
             heap: PhantomData,
     
             #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
-            temp: TCell::invalid(None),
+            temp: TCell::new_invalid(None),
 
             #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
             value: UnsafeCell::new(T::default()),
@@ -133,7 +133,7 @@ impl<T: PSafe, A: MemPool> PCell<T, A> {
             heap: PhantomData,
 
             #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
-            temp: TCell::invalid(None),
+            temp: TCell::new_invalid(None),
 
             #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
             value: UnsafeCell::new(value),
@@ -470,7 +470,9 @@ impl<T: PSafe + ?Sized, A: MemPool> PCell<T, A> {
             let inner = &mut *self.value.get();
             #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
                 if self.temp.is_none() {
-                    self.temp.as_mut().replace(journal.draft(&inner));
+                    if let Some(p) = journal.draft(inner) {
+                        self.temp.as_mut().replace(p);
+                    }
                 }
             }
             #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))] {
