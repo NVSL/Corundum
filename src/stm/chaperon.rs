@@ -1,5 +1,6 @@
 use crate::result::Result;
-use crate::{TxInSafe, TxOutSafe};
+use crate::cell::LazyCell;
+use crate::{TxInSafe, TxOutSafe, utils};
 use std::collections::hash_map::HashMap;
 use std::fmt::{self, Debug};
 use std::fs::OpenOptions;
@@ -37,9 +38,9 @@ pub struct Chaperon {
 
 struct VData {
     mmap: memmap::MmapMut,
-    delayed_commit: HashMap<ThreadId, Vec<&'static dyn Fn() -> ()>>,
-    delayed_rollback: HashMap<ThreadId, Vec<&'static dyn Fn() -> ()>>,
-    delayed_clear: HashMap<ThreadId, Vec<&'static dyn Fn() -> ()>>,
+    delayed_commit: HashMap<ThreadId, Vec<unsafe fn() -> ()>>,
+    delayed_rollback: HashMap<ThreadId, Vec<unsafe fn() -> ()>>,
+    delayed_clear: HashMap<ThreadId, Vec<unsafe fn() -> ()>>,
     mutex: u8,
 }
 
@@ -79,13 +80,11 @@ impl<T: ?Sized> SyncBox<T> {
 unsafe impl<T:?Sized> Sync for SyncBox<T> {}
 unsafe impl<T:?Sized> Send for SyncBox<T> {}
 
-lazy_static!{
-    static ref CLIST: Mutex<HashMap<ThreadId, SyncBox<Chaperon>>> = 
-        Mutex::new(HashMap::new());
-}
+static mut CLIST: LazyCell<Mutex<HashMap<ThreadId, SyncBox<Chaperon>>>> = 
+    LazyCell::new(|| Mutex::new(HashMap::new()));
 
 fn new_chaperon(filename: &str) -> Result<*mut Chaperon> {
-    let mut clist = match CLIST.lock() {
+    let mut clist = match unsafe { CLIST.lock() } {
         Ok(g) => g,
         Err(p) => p.into_inner()
     };
@@ -100,7 +99,7 @@ fn new_chaperon(filename: &str) -> Result<*mut Chaperon> {
 }
 
 fn drop_chaperon() {
-    let mut clist = match CLIST.lock() {
+    let mut clist = match unsafe { CLIST.lock() } {
         Ok(g) => g,
         Err(p) => p.into_inner()
     };
@@ -109,7 +108,7 @@ fn drop_chaperon() {
 }
 
 fn current_chaperon() -> Option<*mut Chaperon> {
-    let clist = match CLIST.lock() {
+    let clist = match unsafe { CLIST.lock() } {
         Ok(g) => g,
         Err(p) => p.into_inner()
     };
@@ -148,19 +147,15 @@ impl Chaperon {
             vdata: None,
         };
         let bytes = filename.as_bytes();
-        for i in 0..usize::min(4096, filename.len()) {
+        for i in 0..4096.min(filename.len()) {
             a.filename[i] = bytes[i];
         }
         file.write_all(a.as_bytes()).unwrap();
-        unsafe { Self::load(filename) }
+        unsafe { Self::load(&filename) }
     }
 
     fn deref(raw: *mut u8) -> &'static mut Self {
-        union U<'b, K: 'b + ?Sized> {
-            raw: *mut u8,
-            ref_mut: &'b mut K,
-        }
-        unsafe { U { raw }.ref_mut }
+        unsafe { utils::read(raw) }
     }
 
     fn as_bytes(&self) -> &[u8] {
@@ -170,7 +165,7 @@ impl Chaperon {
     }
 
     /// Loads a chaperon file
-    pub unsafe fn load(filename: String) -> io::Result<&'static mut Self> {
+    pub unsafe fn load(filename: &str) -> io::Result<&'static mut Self> {
         if Path::new(&filename).exists() {
             let file = OpenOptions::new().read(true).write(true).open(&filename)?;
             let mut mmap = memmap::MmapOptions::new().map_mut(&file).unwrap();
@@ -187,12 +182,12 @@ impl Chaperon {
     }
 
     pub(crate) fn new_section(&mut self) -> usize {
-        use crate::ll::msync_obj;
+        use crate::ll::persist_obj;
 
         assert!(self.len < MAX_TRANS, "reached max number of attachments");
         self.len += 1;
         self.done[self.len - 1] = false;
-        msync_obj(self);
+        persist_obj(self, true);
         self.len
     }
 
@@ -239,11 +234,11 @@ impl Chaperon {
         }
     }
 
-    pub(crate) fn postpone<F: Fn() -> (), R: Fn() -> (), E: Fn() -> ()>(
+    pub(crate) fn postpone(
         &mut self,
-        commit: &'static F,
-        rollback: &'static R,
-        clear: &'static E,
+        commit: unsafe fn()->(),
+        rollback: unsafe fn()->(),
+        clear: unsafe fn()->(),
     ) {
         if let Some(vdata) = self.vdata.as_mut() {
             let tid = thread::current().id();
@@ -262,11 +257,11 @@ impl Chaperon {
             let commits = vdata.delayed_commit.entry(tid).or_insert(Vec::new());
             let clears = vdata.delayed_clear.entry(tid).or_insert(Vec::new());
             for commit in commits {
-                commit();
+                unsafe { commit(); }
             }
             self.completed = true;
             for clear in clears {
-                clear();
+                unsafe { clear(); }
             }
             vdata.delayed_commit.remove(&tid);
             vdata.delayed_clear.remove(&tid);
@@ -280,11 +275,11 @@ impl Chaperon {
             let rollbacks = vdata.delayed_rollback.entry(tid).or_insert(Vec::new());
             let clears = vdata.delayed_clear.entry(tid).or_insert(Vec::new());
             for rollback in rollbacks {
-                rollback();
+                unsafe { rollback(); }
             }
             self.completed = true;
             for clear in clears {
-                clear();
+                unsafe { clear(); }
             }
             vdata.delayed_rollback.remove(&tid);
             vdata.delayed_clear.remove(&tid);
@@ -310,10 +305,10 @@ impl Chaperon {
     /// # Examples
     ///
     /// ```
-    /// use corundum::alloc::*;
-    /// use corundum::stm::*;
-    /// use corundum::cell::*;
-    /// use corundum::boxed::*;
+    /// use corundum::alloc::heap::*;
+    /// use corundum::stm::{Chaperon, Journal};
+    /// use corundum::cell::{PCell, RootObj};
+    /// use corundum::boxed::Pbox;
     ///
     /// corundum::pool!(pool1);
     /// corundum::pool!(pool2);
@@ -322,12 +317,12 @@ impl Chaperon {
     /// type P2 = pool2::BuddyAlloc;
     ///
     /// struct Root<M: MemPool> {
-    ///     val: Pbox<LogCell<i32, M>, M>
+    ///     val: Pbox<PCell<i32, M>, M>
     /// }
     ///
     /// impl<M: MemPool> RootObj<M> for Root<M> {
     ///     fn init(j: &Journal<M>) -> Self {
-    ///         Root { val: Pbox::new(LogCell::new(0, j), j) }
+    ///         Root { val: Pbox::new(PCell::new(0), j) }
     ///     }
     /// }
     ///

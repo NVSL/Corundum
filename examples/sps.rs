@@ -21,7 +21,7 @@ impl RootObj<P> for Root {
     fn init(j: &Journal) -> Self {
         let mut vec = PVec::with_capacity(ARRAY_SIZE, j);
         for i in 0..ARRAY_SIZE {
-            vec.push(PCell::new(i, j), j);
+            vec.push(PCell::new(i), j);
         }
         Root { vec }
     }
@@ -59,7 +59,7 @@ fn main() {
     }
     let duration = start.elapsed();
     println!("Time elapsed (PM): {:?}", duration);
-    // println!("Memory Footprint: {} bytes", P::footprint());
+    // println!("Memory Footprint: {} bytes", P::stat_footprint());
 
     if root.verify() {
         println!("Verification successful");

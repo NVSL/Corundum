@@ -27,13 +27,13 @@
 //     }
 // }
 
-// type LogRefCell<T> = std::cell::RefCell<T>;
+// type PRefCell<T> = std::cell::RefCell<T>;
 
 // #[derive(Debug)]
 // pub struct Node<V> {
-//     n: LogRefCell<usize>, // Number of occupied slots
-//     items: LogRefCell<[NodeItem<V>; BTREE_ORDER - 1]>,
-//     slots: LogRefCell<[PmemObj<Node<V>>; BTREE_ORDER]>,
+//     n: PRefCell<usize>, // Number of occupied slots
+//     items: PRefCell<[NodeItem<V>; BTREE_ORDER - 1]>,
+//     slots: PRefCell<[PmemObj<Node<V>>; BTREE_ORDER]>,
 // }
 
 // impl<V: Copy> Clone for Node<V> {
@@ -47,13 +47,13 @@
 //         Self {
 //             n: self.n.clone(),
 //             items: self.items.clone(),
-//             slots: LogRefCell::new(slots),
+//             slots: PRefCell::new(slots),
 //         }
 //     }
 // }
 
 // pub struct VBTree<V> {
-//     root: LogRefCell<PmemObj<Node<V>>>,
+//     root: PRefCell<PmemObj<Node<V>>>,
 // }
 
 // impl<V: Default> Default for NodeItem<V> {
@@ -77,7 +77,7 @@
 //     #[inline]
 //     fn new() -> Self {
 //         Self {
-//             n: LogRefCell::new(0),
+//             n: PRefCell::new(0),
 //             items: Default::default(),
 //             slots: Default::default(),
 //         }
@@ -323,9 +323,9 @@
 //                 slots[0] = Some(n.clone());
 //                 slots[1] = Some(right);
 //                 let up = Rc::new(Node {
-//                     n: LogRefCell::new(1),
-//                     items: LogRefCell::new(items),
-//                     slots: LogRefCell::new(slots),
+//                     n: PRefCell::new(1),
+//                     items: PRefCell::new(items),
+//                     slots: PRefCell::new(slots),
 //                 });
 //                 let mut root = self.root.borrow_mut();
 //                 *root = Some(up.clone());
@@ -343,8 +343,8 @@
 //         let mut items: [NodeItem<V>; BTREE_ORDER - 1] = Default::default();
 //         items[0] = item;
 //         *root = Some(Rc::new(Node {
-//             n: LogRefCell::new(1),
-//             items: LogRefCell::new(items),
+//             n: PRefCell::new(1),
+//             items: PRefCell::new(items),
 //             slots: Default::default(),
 //         }));
 //     }
@@ -552,7 +552,7 @@
 // impl<V> Default for VBTree<V> {
 //     fn default() -> Self {
 //         VBTree {
-//             root: LogRefCell::new(None),
+//             root: PRefCell::new(None),
 //         }
 //     }
 // }

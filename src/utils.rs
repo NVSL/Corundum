@@ -12,50 +12,81 @@ pub fn rand() -> i64 {
     i64::from_be_bytes(buf)
 }
 
-static mut CRASH_AT: Option<u32> = None;
-static mut CRASH_ALLOWED: bool = false;
+static mut CRASH_PROB: Option<u64> = None;
 
-pub fn allow_crash(v: bool) {
+#[macro_export]
+macro_rules! may_crash {
+    () => {
+        if $crate::utils::can_crash() {
+            eprintln!("\nCrashed at {}:{}", file!(), line!());
+            std::process::exit(0);
+        }
+    };
+}
+
+#[inline]
+pub fn can_crash() -> bool {
     unsafe {
-        CRASH_ALLOWED = v;
+        if let Some(p) = CRASH_PROB {
+            if p == 0 {
+                return false;
+            } else {
+                let r: u64 = rand::random();
+                return r % 10000 == 0;
+            }
+        } else {
+            let p = std::env::var("CRASH_PROB")
+                .unwrap_or("0".to_string())
+                .parse::<u64>()
+                .expect("CRASH_PROB should be a non-negative integer");
+            CRASH_PROB = Some(p);
+        }
+        can_crash()
     }
 }
 
-pub fn may_crash(ln: u32, cnt: i32) {
+#[inline]
+#[doc(hidden)]
+pub(crate) fn as_mut<'a, T: ?Sized>(v: *const T) -> &'a mut T {
     unsafe {
-        if !CRASH_ALLOWED {
-            return;
-        }
-        if let Some(line) = CRASH_AT {
-            if ln == line {
-                static mut COUNT: i32 = 0;
-                COUNT += 1;
-                // if COUNT == cnt {
-                // if rand() % 3 == 0 {
-                println!("Crashed at line {}", ln);
-                std::process::exit(0);
-                // }
-            }
-        } else {
-            for (key, value) in std::env::vars() {
-                if key == "CRASH_AT" {
-                    let line: u32 = value.parse().unwrap_or(u32::MAX);
-                    CRASH_AT = Some(line);
-                    may_crash(ln, cnt);
-                    return;
-                }
-            }
-            CRASH_AT = Some(u32::MAX);
-        }
+        &mut *(v as *mut T)
     }
 }
 
 pub fn as_slice<T: ?Sized>(x: &T) -> &[u8] {
     let ptr: *const T = x;
-    let ptr: *const u8 = ptr as *const u8;  // cast from ptr-to-SomeStruct to ptr-to-u8
+    let ptr: *const u8 = ptr as *const u8;
     unsafe {
         std::slice::from_raw_parts(ptr, std::mem::size_of_val(x))
     }
+}
+
+pub fn as_slice64<T: ?Sized>(x: &T) -> &[u64] {
+    let len = std::mem::size_of_val(x);
+    assert_eq!(len % 8, 0, "Cannot convert an object of size {} bytes to [u64]", len);
+    let ptr: *const T = x;
+    let ptr: *const u64 = ptr as *const u64;
+    unsafe {
+        std::slice::from_raw_parts(ptr, len/8)
+    }
+}
+
+#[inline(always)]
+pub unsafe fn read<'a, T: ?Sized>(raw: *mut u8) -> &'a mut T {
+    union U<T: ?Sized> {
+        raw: *mut u8,
+        rf: *mut T,
+    }
+    &mut *U { raw }.rf
+}
+
+#[inline(always)]
+pub unsafe fn read_addr<'a, T: ?Sized>(addr: u64) -> &'a mut T {
+    union U<T: ?Sized> {
+        addr: u64,
+        rf: *mut T,
+    }
+    &mut *U { addr }.rf
 }
 
 #[repr(C)]
@@ -80,7 +111,7 @@ impl<T, const N: usize> Ring<T, N> {
     pub fn push(&mut self, x: T) {
         debug_assert!(
             (self.tail+1)%N != self.head,
-            format!("too many slots are used (len = {})", N)
+            "too many slots are used (len = {})", N
         );
 
         self.data[self.tail] = x;
@@ -91,23 +122,24 @@ impl<T, const N: usize> Ring<T, N> {
     pub fn push_sync(&mut self, x: T) {
         debug_assert!(
             (self.tail+1)%N != self.head,
-            format!("too many slots are used (len = {})", N)
+            "too many slots are used (len = {})", N
         );
         self.data[self.tail] = x;
 
         #[cfg(not(feature = "no_flush_alloc"))]
-        msync(&self.data[self.tail], 8);
+        persist(&self.data[self.tail], 8, false);
         
         self.tail = (self.tail + 1) % N;
 
         #[cfg(not(feature = "no_flush_alloc"))]
-        msync(&self.head, 16);
+        persist(&self.head, 16, false);
     }
 
     #[inline]
     pub fn sync_all(&self) {
         if self.head == self.tail {
-            msync(&self.head, 16);
+            #[cfg(not(feature = "no_flush_alloc"))]
+            persist(&self.head, 16, false);
             return;
         }
         #[cfg(not(feature = "no_flush_alloc"))]
@@ -115,13 +147,13 @@ impl<T, const N: usize> Ring<T, N> {
             let h = &self.data[self.head] as *const _ as usize;
             let t = &self.data[self.tail] as *const _ as usize;
             if h < t {
-                msync(&self.data[self.head], t - h);
-                msync(&self.head, 16);
+                persist(&self.data[self.head], t - h, false);
+                persist(&self.head, 16, false);
             } else {
                 let b = self as *const Self as usize;
-                msync(self, h - b);
+                persist(self, h - b, false);
                 let b = b + std::mem::size_of::<Self>();
-                msync(&self.data[self.tail], b - t);
+                persist(&self.data[self.tail], b - t, false);
             }
         }
     }
@@ -144,7 +176,7 @@ impl<T, const N: usize> Ring<T, N> {
     }
 
     #[inline]
-    pub fn empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.head == self.tail
     }
 
@@ -167,7 +199,7 @@ impl<T: Copy, const N: usize> Ring<T, N> {
     }
 
     #[inline]
-    pub fn foreach<F: Fn(T) -> ()>(&mut self, f: F) {
+    pub fn foreach<F: FnMut(T) -> ()>(&self, mut f: F) {
         let mut head = self.head;
         while head != self.tail {
             f(self.data[head]);
@@ -176,7 +208,7 @@ impl<T: Copy, const N: usize> Ring<T, N> {
     }
 
     #[inline]
-    pub fn drain_atomic<F: Fn(T), E: Fn()>(&mut self, f: F, end: E) {
+    pub fn drain_atomic<F: FnMut(T), E: Fn()>(&mut self, mut f: F, end: E) {
         while self.head != self.tail {
             f(self.data[self.head]);
             self.head = (self.head + 1) % N;
@@ -185,7 +217,7 @@ impl<T: Copy, const N: usize> Ring<T, N> {
     }
 
     #[inline]
-    pub fn foreach_reverse<F: Fn(T) -> ()>(&mut self, f: F) {
+    pub fn foreach_reverse<F: FnMut(T) -> ()>(&self, mut f: F) {
         let mut tail = self.tail;
         while tail != self.head {
             let d = self.data[tail];
@@ -240,4 +272,46 @@ mod test {
             println!("{}", x);
         });
     }
+}
+
+pub struct SpinLock {
+    lock: *mut u8
+}
+
+impl SpinLock {
+    pub fn acquire(lock: *mut u8) -> Self {
+        unsafe { while std::intrinsics::atomic_cxchg_acqrel(lock, 0, 1).0 == 1 {} }
+        Self { lock }
+    }
+}
+
+impl Drop for SpinLock {
+    fn drop(&mut self) {
+        unsafe { std::intrinsics::atomic_store_rel(self.lock, 0); }
+    }
+}
+
+#[macro_export]
+macro_rules! log {
+    ($p:tt, $c:tt, $tag:expr, $msg:expr, $($args:tt)*) => {
+        #[cfg(feature = "verbose")] {
+            use term_painter::Color::*;
+            use term_painter::ToStyle;
+
+            println!("{:<8} {}", $p::name().to_owned() + ":",
+                $c.paint(format!("{:>10}  {}", $tag, format!($msg, $($args)*))));
+        }
+    };
+}
+
+pub const fn nearest_pow2(mut v: u64) -> u64 {
+    v -= 1;
+    v |= v >> 1;
+    v |= v >> 2;
+    v |= v >> 4;
+    v |= v >> 8;
+    v |= v >> 16;
+    v |= v >> 32;
+    v += 1;
+    v
 }

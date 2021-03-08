@@ -4,5 +4,4 @@ rust:
 jobs:
   fast_finish: true
 script:
-  - cargo build --verbose
-  - cargo test --tests --verbose --workspace -- --test-threads=1
+  - cargo build

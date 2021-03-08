@@ -1,11 +1,11 @@
 //! Persistent Memory allocation APIs
 
 mod alg;
-mod heap;
 mod pool;
 
+pub mod heap;
+
 pub use alg::buddy::*;
-pub use heap::*;
 pub use pool::*;
 
 /// Determines how much of the `MemPool` is used for the trait object.

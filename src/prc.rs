@@ -8,6 +8,7 @@ use crate::clone::*;
 use crate::ptr::Ptr;
 use crate::stm::*;
 use crate::*;
+use std::fmt::{self,Debug};
 use std::cmp::Ordering;
 use std::hash::Hash;
 use std::hash::Hasher;
@@ -16,17 +17,41 @@ use std::mem::MaybeUninit;
 use std::ops::Deref;
 use std::*;
 
-#[derive(Debug)]
-struct Counter {
+#[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
+use crate::cell::TCell;
+
+struct Counter<A: MemPool> {
     strong: usize,
     weak: usize,
 
-    #[cfg(not(feature = "no_log_rc"))]
+    #[cfg(not(any(
+        feature = "no_log_rc",
+        feature = "use_pspd",
+        feature = "use_vspd"
+    )))]
     has_log: u8,
+
+    #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
+    temp: TCell<Option<*mut Self>, A>,
+
+    phantom: PhantomData<A>
+}
+
+unsafe impl<A: MemPool> PSafe for Counter<A> {}
+
+impl<A: MemPool> Debug for Counter<A> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{{strong: {}, weak: {}}}", self.strong, self.weak)?;
+
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
+        write!(f, "(temp: {:?})", self.temp)?;
+
+        Ok(())
+    }
 }
 
 pub struct PrcBox<T: ?Sized, A: MemPool> {
-    counter: Counter,
+    counter: Counter<A>,
 
     #[cfg(not(feature = "no_volatile_pointers"))]
     vlist: VCell<VWeakList, A>,
@@ -40,6 +65,7 @@ unsafe impl<T: ?Sized, A: MemPool> TxInSafe for PrcBox<T, A> {}
 impl<T: ?Sized, A: MemPool> UnwindSafe for PrcBox<T, A> {}
 impl<T: ?Sized, A: MemPool> RefUnwindSafe for PrcBox<T, A> {}
 impl<T: ?Sized, A: MemPool> !VSafe for PrcBox<T, A> {}
+impl<T: ?Sized, A: MemPool> !PSend for PrcBox<T, A> {}
 
 unsafe fn set_data_ptr<T: ?Sized, U>(mut ptr: *mut T, data: *mut U) -> *mut T {
     std::ptr::write(&mut ptr as *mut _ as *mut *mut u8, data as *mut u8);
@@ -61,14 +87,14 @@ unsafe fn set_data_ptr<T: ?Sized, U>(mut ptr: *mut T, data: *mut U) -> *mut T {
 /// [`Weak`] references for reference cycles.
 /// 
 /// References to data can be strong (using [`pclone`]), weak (using [`downgrade`]),
-/// or volatile weak (using [`volatile`]). The first two generate NV-to-NV
+/// or volatile weak (using [`demote`]). The first two generate NV-to-NV
 /// pointers, while the last on is a V-to-NV pointer. Please see [`Weak`] and
 /// [`VWeak`] for more details on their implementation and safety.
 ///
 /// # Examples
 ///
 /// ```
-/// # use corundum::alloc::*;
+/// # use corundum::alloc::heap::*;
 /// # type P = Heap;
 /// use corundum::prc::Prc;
 /// use corundum::clone::PClone;
@@ -90,7 +116,7 @@ unsafe fn set_data_ptr<T: ?Sized, U>(mut ptr: *mut T, data: *mut U) -> *mut T {
 ///     assert_eq!(1, Prc::weak_count(&p));
 /// 
 ///     // Create a new volatile weak reference
-///     let v = Prc::volatile(&p);
+///     let v = Prc::demote(&p);
 ///     assert_eq!(2, Prc::strong_count(&p));
 ///     assert_eq!(1, Prc::weak_count(&p));
 /// 
@@ -108,8 +134,9 @@ unsafe fn set_data_ptr<T: ?Sized, U>(mut ptr: *mut T, data: *mut U) -> *mut T {
 /// 
 /// [`pclone`]: #method.pclone
 /// [`downgrade`]: #method.downgrade
-/// [`volatile`]: #method.volatile
+/// [`demote`]: #method.demote
 /// [`upgrade`]: ./struct.Weak.html#method.upgrade
+/// [`promote`]: ./struct.Weak.html#method.promote
 /// [`Journal`]: ../stm/journal/struct.Journal.html
 /// [`transaction`]: ../stm/fn.transaction.html
 pub struct Prc<T: PSafe + ?Sized, A: MemPool> {
@@ -121,6 +148,7 @@ impl<T: ?Sized, A: MemPool> !TxOutSafe for Prc<T, A> {}
 impl<T: ?Sized, A: MemPool> !Send for Prc<T, A> {}
 impl<T: ?Sized, A: MemPool> !Sync for Prc<T, A> {}
 impl<T: ?Sized, A: MemPool> !VSafe for Prc<T, A> {}
+impl<T: ?Sized, A: MemPool> !PSend for Prc<T, A> {}
 
 impl<T: PSafe, A: MemPool> Prc<T, A> {
     /// Constructs a new `Prc<T>`.
@@ -131,7 +159,7 @@ impl<T: PSafe, A: MemPool> Prc<T, A> {
     /// # Examples
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # type P = Heap;
     /// use corundum::prc::Prc;
     ///
@@ -147,8 +175,17 @@ impl<T: PSafe, A: MemPool> Prc<T, A> {
                         strong: 1,
                         weak: 1,
 
-                        #[cfg(not(feature = "no_log_rc"))]
+                        #[cfg(not(any(
+                            feature = "no_log_rc",
+                            feature = "use_pspd",
+                            feature = "use_vspd"
+                        )))]
                         has_log: 0,
+
+                        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
+                        temp: TCell::invalid(None),
+
+                        phantom: PhantomData
                     },
 
                     #[cfg(not(feature = "no_volatile_pointers"))]
@@ -170,7 +207,7 @@ impl<T: PSafe, A: MemPool> Prc<T, A> {
     /// # Examples
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # type P = Heap;
     /// use corundum::prc::Prc;
     ///
@@ -195,8 +232,17 @@ impl<T: PSafe, A: MemPool> Prc<T, A> {
                         strong: 1,
                         weak: 1,
 
-                        #[cfg(not(feature = "no_log_rc"))]
+                        #[cfg(not(any(
+                            feature = "no_log_rc",
+                            feature = "use_pspd",
+                            feature = "use_vspd"
+                        )))]
                         has_log: 0,
+
+                        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
+                        temp: TCell::invalid(None),
+
+                        phantom: PhantomData
                     },
 
                     #[cfg(not(feature = "no_volatile_pointers"))]
@@ -219,7 +265,7 @@ impl<T: PSafe, A: MemPool> Prc<T, A> {
     /// # Examples
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # type P = Heap;
     /// use corundum::prc::Prc;
     ///
@@ -286,7 +332,7 @@ impl<T: PSafe, A: MemPool> Prc<mem::MaybeUninit<T>, A> {
     /// # Examples
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # type P = Heap;
     /// use corundum::prc::Prc;
     ///
@@ -322,7 +368,7 @@ impl<T: PSafe, A: MemPool> Prc<MaybeUninit<T>, A> {
     /// # Examples
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # type P = Heap;
     /// use corundum::prc::Prc;
     ///
@@ -364,7 +410,7 @@ impl<T: PSafe, A: MemPool> Prc<MaybeUninit<T>, A> {
     /// # Examples
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # type P = Heap;
     /// use corundum::prc::Prc;
     ///
@@ -387,12 +433,16 @@ impl<T: PSafe, A: MemPool> Prc<MaybeUninit<T>, A> {
 }
 
 impl<T: PSafe + ?Sized, A: MemPool> Prc<T, A> {
-    /// Creates a new `Weak` pointer to this allocation.
+    /// Creates a new `Weak` persistent pointer to this allocation.
+    /// 
+    /// The `Weak` pointer can later be [`upgrade`]d to a `Prc`.
     ///
+    /// [`upgrade`]: ./struct.Weak.html#upgrade
+    /// 
     /// # Examples
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # type P = Heap;
     /// use corundum::prc::Prc;
     ///
@@ -407,10 +457,42 @@ impl<T: PSafe + ?Sized, A: MemPool> Prc<T, A> {
         Weak { ptr: this.ptr }
     }
 
-    /// Creates a new `VWeak` pointer to this allocation.
-    pub fn volatile(this: &Self) -> VWeak<T, A> {
+    /// Creates a new `Weak` volatile to this allocation.
+    /// 
+    /// The `Weak` pointer can later be [`promote`]d to a `Prc`.
+    ///
+    /// [`promote`]: ./struct.VWeak.html#upgrade
+    /// 
+    /// # Examples
+    ///
+    /// ```
+    /// # use corundum::alloc::heap::*;
+    /// # type P = Heap;
+    /// use corundum::prc::Prc;
+    ///
+    /// P::transaction(|j| {
+    ///     let five = Prc::new(5, j);
+    ///     let weak_five = Prc::demote(&five);
+    /// 
+    ///     assert_eq!(Prc::strong_count(&five), 1);
+    /// 
+    ///     if let Some(f) = weak_five.promote(j) {
+    ///         assert_eq!(*f, 5);
+    ///         assert_eq!(Prc::strong_count(&five), 2);
+    ///     }
+    /// 
+    ///     assert_eq!(Prc::strong_count(&five), 1);
+    /// }).unwrap()
+    /// ```
+    pub fn demote(this: &Self) -> VWeak<T, A> {
         debug_assert!(!this.ptr.is_dangling());
         VWeak::new(this)
+    }
+
+    /// Demote without dynamically checking transaction boundaries
+    pub unsafe fn unsafe_demote(&self) -> VWeak<T, A> {
+        debug_assert!(!self.ptr.is_dangling());
+        VWeak::new(self)
     }
 
     #[inline]
@@ -419,7 +501,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Prc<T, A> {
     /// # Examples
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # type P = Heap;
     /// use corundum::prc::Prc;
     ///
@@ -440,7 +522,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Prc<T, A> {
     /// # Examples
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # type P = Heap;
     /// use corundum::prc::Prc;
     /// use corundum::clone::PClone;
@@ -467,7 +549,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Prc<T, A> {
     /// # Examples
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # type P = Heap;
     /// use corundum::prc::Prc;
     /// use corundum::clone::PClone;
@@ -509,6 +591,83 @@ impl<T: PSafe + ?Sized, A: MemPool> Deref for Prc<T, A> {
     }
 }
 
+
+impl<T: PSafe, A: MemPool> Prc<T, A> {
+    /// Initializes boxed data with `value` in-place if it is `None`
+    ///
+    /// This function should not be called from a transaction as it updates
+    /// data without taking high-level logs. If transaction is unsuccessful,
+    /// there is no way to recover data.
+    /// However, it is safe to use it outside a transaction because it uses
+    /// low-level logs to provide safety for a single update without drop.
+    /// A dynamic check at the beginning makes sure of that.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use corundum::default::*;
+    /// 
+    /// type P = BuddyAlloc;
+    ///
+    /// let root = P::open::<Option<Prc<i32>>>("foo.pool", O_CF).unwrap();
+    ///
+    /// Prc::initialize(&*root, 25);
+    /// 
+    /// let value = **root.as_ref().unwrap();
+    /// assert_eq!(value, 25);
+    /// ```
+    ///
+    pub fn initialize(rc: &Option<Prc<T, A>>, value: T) -> crate::result::Result<()> {
+        assert!(
+            !Journal::<A>::is_running(),
+            "Prc::initialize() cannot be used inside a transaction"
+        );
+        match rc {
+            Some(_) => Err("already initialized".to_string()),
+            None => if A::valid(rc) {
+                unsafe {
+                    let new = A::atomic_new(
+                        PrcBox::<T, A> {
+                            counter: Counter {
+                                strong: 1,
+                                weak: 1,
+        
+                                #[cfg(not(any(
+                                    feature = "no_log_rc",
+                                    feature = "use_pspd",
+                                    feature = "use_vspd"
+                                )))]
+                                has_log: 0,
+    
+                                #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
+                                temp: TCell::invalid(None),
+
+                                phantom: PhantomData
+                            },
+        
+                            #[cfg(not(feature = "no_volatile_pointers"))]
+                            vlist: VCell::new(VWeakList::default()),
+        
+                            dummy: [],
+                            value,
+                        });
+                    let pnew = Some(Prc::<T, A>::from_inner(Ptr::from_off_unchecked(new.1)));
+                    let src = crate::utils::as_slice64(&pnew);
+                    let mut base = A::off_unchecked(rc);
+                    for i in src {
+                        A::log64(base, *i, new.3);
+                        base += 8;
+                    }
+                    A::perform(new.3);
+                }
+                Ok(())
+            } else {
+                Err("The object is not in the PM".to_string())
+            }
+        }
+    }
+}
+
 unsafe impl<#[may_dangle] T: PSafe + ?Sized, A: MemPool> Drop for Prc<T, A> {
     /// Drops the `Prc` safely
     ///
@@ -519,7 +678,7 @@ unsafe impl<#[may_dangle] T: PSafe + ?Sized, A: MemPool> Drop for Prc<T, A> {
     /// # Examples
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # type P = Heap;
     /// use corundum::prc::Prc;
     /// use corundum::clone::PClone;
@@ -544,12 +703,13 @@ unsafe impl<#[may_dangle] T: PSafe + ?Sized, A: MemPool> Drop for Prc<T, A> {
     fn drop(&mut self) {
         unsafe {
             let journal = Journal::<A>::current(true).unwrap();
-            self.dec_strong(journal.0);
+            let j = &*journal.0;
+            self.dec_strong(j);
             if self.strong() == 0 { // TODO: Add "or it is unreachable from the root"
                 // destroy the contained object
                 std::ptr::drop_in_place(&mut self.ptr.as_mut().value);
 
-                self.dec_weak(journal.0);
+                self.dec_weak(j);
                 if self.weak() == 0 {
                     A::free(self.ptr.as_mut());
 
@@ -723,6 +883,7 @@ impl<T: ?Sized, A: MemPool> !TxOutSafe for Weak<T, A> {}
 impl<T: ?Sized, A: MemPool> !Send for Weak<T, A> {}
 impl<T: ?Sized, A: MemPool> !Sync for Weak<T, A> {}
 impl<T: ?Sized, A: MemPool> !VSafe for Weak<T, A> {}
+impl<T: ?Sized, A: MemPool> !PSend for Weak<T, A> {}
 
 impl<T: PSafe, A: MemPool> Weak<T, A> {
     pub fn as_raw(&self) -> *const T {
@@ -816,8 +977,8 @@ impl<T: PSafe + ?Sized, A: MemPool> Weak<T, A> {
 impl<T: PSafe + ?Sized, A: MemPool> Drop for Weak<T, A> {
     fn drop(&mut self) {
         if let Some(inner) = self.inner() {
-            let journal = Journal::<A>::current(true).unwrap();
-            inner.dec_weak(journal.0);
+            let journal = unsafe { &*Journal::<A>::current(true).unwrap().0 };
+            inner.dec_weak(journal);
             if inner.weak() == 0 {
                 unsafe {
                     A::free(self.ptr.as_mut());
@@ -854,7 +1015,7 @@ impl<T: PSafe + ?Sized, A: MemPool> RootObj<A> for Weak<T, A> {
 
 trait PrcBoxPtr<T: PSafe + ?Sized, A: MemPool> {
     #[allow(clippy::mut_from_ref)]
-    fn count(&self) -> &mut Counter;
+    fn count(&self) -> &mut Counter<A>;
 
     #[inline]
     fn strong(&self) -> usize {
@@ -863,36 +1024,58 @@ trait PrcBoxPtr<T: PSafe + ?Sized, A: MemPool> {
 
     #[inline]
     #[cfg(not(feature = "no_log_rc"))]
-    fn log_count(&self, journal: *const Journal<A>) {
+    fn log_count(&self, journal: &Journal<A>) {
         let inner = self.count();
-
-        if inner.has_log == 0 {
-            unsafe {
-                inner.take_log(&*journal, Notifier::NonAtomic(Ptr::from_ref(&inner.has_log)));
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] unsafe {
+            if inner.temp.is_none() {
+                let p = journal.draft(inner);
+                inner.temp.replace(p);
+            }
+        }
+        #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))] {
+            if inner.has_log == 0 {
+                unsafe {
+                    inner.take_log(&*journal, Notifier::NonAtomic(Ptr::from_ref(&inner.has_log)));
+                }
             }
         }
     }
 
     #[inline]
-    fn inc_strong(&self, _journal: *const Journal<A>) {
+    fn inc_strong(&self, _journal: &Journal<A>) {
         let inner = self.count();
         let strong = inner.strong;
 
         if strong == 0 || strong == usize::max_value() {
             std::process::abort();
         }
-        #[cfg(not(feature = "no_log_rc"))]
+        #[cfg(not(feature = "no_log_rc"))] 
         self.log_count(_journal);
 
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] unsafe {
+            if let Some(inner) = *inner.temp {
+                (*inner).strong += 1;
+                return;
+            }
+        }
         inner.strong += 1;
     }
 
     #[inline]
-    fn dec_strong(&self, _journal: *const Journal<A>) {
+    fn dec_strong(&self, _journal: &Journal<A>) {
+        let inner = self.count();
+
         #[cfg(not(feature = "no_log_rc"))]
         self.log_count(_journal);
 
-        self.count().strong -= 1;
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] unsafe {
+            if let Some(inner) = *inner.temp {
+                (*inner).strong -= 1;
+                return;
+            }
+        }
+
+        inner.strong -= 1;
     }
 
     #[inline]
@@ -901,7 +1084,8 @@ trait PrcBoxPtr<T: PSafe + ?Sized, A: MemPool> {
     }
 
     #[inline]
-    fn inc_weak(&self, _journal: *const Journal<A>) {
+    fn inc_weak(&self, _journal: &Journal<A>) {
+        let inner = self.count();
         let weak = self.weak();
 
         if weak == 0 || weak == usize::max_value() {
@@ -911,28 +1095,44 @@ trait PrcBoxPtr<T: PSafe + ?Sized, A: MemPool> {
         #[cfg(not(feature = "no_log_rc"))]
         self.log_count(_journal);
 
-        self.count().weak += 1;
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] unsafe {
+            if let Some(inner) = *inner.temp {
+                (*inner).weak += 1;
+                return;
+            }
+        }
+
+        inner.weak += 1;
     }
 
     #[inline]
-    fn dec_weak(&self, _journal: *const Journal<A>) {
+    fn dec_weak(&self, _journal: &Journal<A>) {
+        let inner = self.count();
+
         #[cfg(not(feature = "no_log_rc"))]
         self.log_count(_journal);
 
-        self.count().weak -= 1;
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] unsafe {
+            if let Some(inner) = *inner.temp {
+                (*inner).strong -= 1;
+                return;
+            }
+        }
+
+        inner.weak -= 1;
     }
 }
 
 impl<T: PSafe + ?Sized, A: MemPool> PrcBoxPtr<T, A> for Prc<T, A> {
     #[inline(always)]
-    fn count(&self) -> &mut Counter {
+    fn count(&self) -> &mut Counter<A> {
         &mut self.ptr.get_mut().counter
     }
 }
 
 impl<T: PSafe + ?Sized, A: MemPool> PrcBoxPtr<T, A> for PrcBox<T, A> {
     #[inline(always)]
-    fn count(&self) -> &mut Counter {
+    fn count(&self) -> &mut Counter<A> {
         unsafe {
             let ptr: *const Self = self;
             let ptr: *mut Self = ptr as *mut Self;
@@ -977,13 +1177,13 @@ pub fn ws<T: PSafe, A: MemPool>(ptr: &Prc<T, A>) -> (usize, usize) {
 
 /// `VWeak` is a version of [`Prc`] that holds a non-owning reference to the
 /// managed allocation in the volatile heap. The allocation is accessed by
-/// calling [`upgrade`] on the `VWeak` pointer, which returns an
+/// calling [`promote`] on the `VWeak` pointer, which returns an
 /// [`Option`]`<`[`Prc`]`<T>>`.
 ///
 /// Since a `VWeak` reference does not count towards ownership, it will not
 /// prevent the value stored in the allocation from being dropped, and `VWeak`
 /// itself makes no guarantees about the value still being present. Thus it may
-/// return [`None`] when [`upgrade`]d. Note however that a `VWeak` reference,
+/// return [`None`] when [`promote`]d. Note however that a `VWeak` reference,
 /// unlike [`Weak`], *does NOT* prevent the allocation itself (the backing
 /// store) from being deallocated.
 ///
@@ -995,12 +1195,12 @@ pub fn ws<T: PSafe, A: MemPool>(ptr: &Prc<T, A>) -> (usize, usize) {
 /// have strong [`Prc`] pointers from parent nodes to children, and `Weak`
 /// pointers from children back to their parents.
 ///
-/// The typical way to obtain a `VWeak` pointer is to call [`Prc::volatile`].
+/// The typical way to obtain a `VWeak` pointer is to call [`Prc::demote`].
 ///
 /// [`Prc`]: struct.Prc.html
 /// [`Weak`]: struct.Weak.html
 /// [`Prc::downgrade`]: ./struct.Prc.html#method.downgrade
-/// [`upgrade`]: #method.upgrade
+/// [`promote`]: #method.promote
 /// [`Option`]: std::option::Option
 /// [`None`]: std::option::Option::None
 pub struct VWeak<T: ?Sized, A: MemPool> {
@@ -1011,6 +1211,7 @@ pub struct VWeak<T: ?Sized, A: MemPool> {
 
 impl<T: ?Sized, A: MemPool> !Send for VWeak<T, A> {}
 impl<T: ?Sized, A: MemPool> !Sync for VWeak<T, A> {}
+impl<T: ?Sized, A: MemPool> !PSend for VWeak<T, A> {}
 impl<T: ?Sized, A: MemPool> UnwindSafe for VWeak<T, A> {}
 impl<T: ?Sized, A: MemPool> RefUnwindSafe for VWeak<T, A> {}
 unsafe impl<T: ?Sized, A: MemPool> TxInSafe for VWeak<T, A> {}
@@ -1035,7 +1236,7 @@ impl<T: PSafe + ?Sized, A: MemPool> VWeak<T, A> {
         }
     }
 
-    pub fn upgrade(&self, journal: &Journal<A>) -> Option<Prc<T, A>> {
+    pub fn promote(&self, journal: &Journal<A>) -> Option<Prc<T, A>> {
         let inner = self.inner()?;
         let strong = inner.counter.strong;
         if strong == 0 {

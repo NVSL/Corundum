@@ -11,8 +11,8 @@
 //! | P-to-V Pointers     | A persistent pointer pointing at volatile memory | Persistent pointers accept only [`PSafe`] types and volatile pointers are `!PSafe`. Only, [`VCell`] allows single-execution P-to-V pointers. |
 //! | V-to-P Pointers     | A volatile pointer keeping a zero-referenced object alive | Only [`VWeak`] allows V-to-P pointers which is a weak reference and does not keep data alive. |
 //! | Unlogged Updates    | An unrecoverable update to persistent data | Modifications are enforced to be inside atomic [`transaction`]s. | 
-//! | Data Race           | Updating persistent data simultaneously in two threads | Mutable borrowing is limited to [`Mutex`] which uses a transaction-wide lock to provide both atomicity and isolation. |
-//! | Locked Mutex        | A persistent mutex remains locked on powerfail | [`Mutex`] uses [`VCell`] which resets at restart. |
+//! | Data Race           | Updating persistent data simultaneously in two threads | Mutable borrowing is limited to [`PMutex`] which uses a transaction-wide lock to provide both atomicity and isolation. |
+//! | Locked Mutex        | A persistent mutex remains locked on powerfail | [`PMutex`] uses [`VCell`] which resets at restart. |
 //! | Memory Leaks\*      | An allocated memory becomes unreachable | Persistent objects, except the root object, cannot cross transaction boundaries, and memory allocation is available only inside a transaction. Therefore, the allocation can survive only if there is a reference from the root object (or a decedent of it) to the data. <br>\* Cyclic references are not prevented in this version, which lead to a memory leak. |
 //!
 //! 
@@ -41,11 +41,11 @@
 //! safety. Mutable objects are allowed via interior mutability of any of the
 //! following memory cells:
 //! 
-//! * [`LogCell<T,P>`] (or [`PCell<T>`]): An unborrowable, mutable persistent
+//! * [`PCell<T,P>`] (or [`PCell<T>`]): An unborrowable, mutable persistent
 //! memory location for a value of type `T` in pool `P`.
-//! * [`LogRefCell<T,P>`] (or [`PRefCell<T>`]): A mutable persistent memory location with
-//! dynamically checked borrow rules for a value of type `T` in pool `P`.
-//! * [`Mutex<T,P>`] (or [`PMutex<T>`]): A mutual exclusion primitive useful for
+//! * [`PRefCell<T,P>`] (or [`PRefCell<T>`]): A mutable persistent memory location
+//! with dynamically checked borrow rules for a value of type `T` in pool `P`.
+//! * [`PMutex<T,P>`] (or [`PMutex<T>`]): A mutual exclusion primitive useful for
 //! protecting shared persistent data of type `T` in pool `P`.
 //! 
 //! The following example creates a pool file for a linked-list-based stack,
@@ -80,18 +80,18 @@
 //! [`VCell`]: ./cell/struct.VCell.html
 //! [`VWeak`]: ./prc/struct.VWeak.html
 //! [`transaction`]:  ./alloc/trait.MemPool.html#method.transaction
-//! [`Mutex`]: ./sync/struct.Mutex.html
+//! [`PMutex`]: ./sync/struct.PMutex.html
 //! [`Pbox`]: ./boxed/struct.Pbox.html
 //! [`Prc`]: ./prc/struct.Prc.html
 //! [`Parc`]: ./sync/struct.Parc.html
 //! [`MemPool`]: ./alloc/trait.MemPool.html
 //! [`default`]: ./alloc/default/index.html
 //! [`BuddyAlloc`]: ./alloc/default/struct.BuddyAlloc.html
-//! [`LogCell<T,P>`]: ./cell/struct.LogCell.html
+//! [`PCell<T,P>`]: ./cell/struct.PCell.html
 //! [`PCell<T>`]: ./alloc/default/type.PCell.html
-//! [`LogRefCell<T,P>`]: ./cell/struct.LogRefCell.html 
+//! [`PRefCell<T,P>`]: ./cell/struct.PRefCell.html 
 //! [`PRefCell<T>`]: ./alloc/default/type.PRefCell.html
-//! [`Mutex<T,P>`]: ./sync/struct.Mutex.html
+//! [`PMutex<T,P>`]: ./sync/struct.PMutex.html
 //! [`PMutex<T>`]: ./alloc/default/type.PMutex.html
 //! [`open<T>()`]: ./alloc/struct.MemPool.html#method.open
 
@@ -122,13 +122,17 @@
 #![feature(toowned_clone_into)]
 #![feature(fn_traits)]
 #![feature(unboxed_closures)]
+#![feature(let_chains)]
+#![feature(c_variadic)]
+#![feature(rustc_attrs)]
+#![feature(allocator_api)]
 
 #![allow(dead_code)]
 #![allow(incomplete_features)]
 #![allow(type_alias_bounds)]
 
-#[macro_use]
-extern crate lazy_static;
+pub(crate) const PAGE_LOG_SLOTS: usize = 128;
+
 extern crate crndm_derive;
 extern crate impl_trait_for_tuples;
 
@@ -144,27 +148,23 @@ pub mod stm;
 pub mod str;
 pub mod vec;
 pub mod convert;
+pub mod stat;
+pub mod utils;
 
-mod utils;
 mod marker;
 mod tests;
 
 pub use cell::RootObj;
 pub use marker::*;
 
-pub use alloc::default;
 pub use crndm_derive::*;
 pub use stm::transaction;
+
+// This is an example of defining a new buddy allocator type
+// `BuddyAlloc` is the default allocator with Buddy Allocation
+crate::pool!(default);
 
 /// A `Result` type with string error messages
 pub mod result {
     pub type Result<T: ?Sized> = std::result::Result<T, String>;
-}
-
-#[inline]
-#[doc(hidden)]
-pub(crate) fn as_mut<T>(v: *const T) -> &'static mut T {
-    unsafe {
-        &mut *(v as *mut T)
-    }
 }

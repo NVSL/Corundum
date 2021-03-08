@@ -1,5 +1,4 @@
 #![allow(dead_code)]
-#![feature(min_const_generics)]
 //! # Word Count example with MapReduce model
 
 mod consumer;
@@ -17,6 +16,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::thread;
 
+pub static mut PRINT: bool = true;
 type P = BuddyAlloc;
 
 fn help() {
@@ -27,8 +27,11 @@ fn help() {
     println!("  -r num        Number of reader threads (Default 1)");
     println!("  -c num        Number of consumer threads (Default 1)");
     println!("  -f file       Pool filename (Default ./wc.pool)");
-    println!("  -C            Continue from the previous run");
-    println!("  -P            Prepare only (do not run threads)");
+    println!("  -N            Do not print output (perf test)");
+    println!("  -D            Distribute text partitions to consumers (used with -I)");
+    println!("  -I            Continue counting in isolation (used with -D)");
+    println!("  -C            Continue from the previous run (used with -)P");
+    println!("  -P            Prepare only (do not run threads, used with -C)");
     println!("  -h            Display help");
     println!();
     println!("The input list-file should contain a list files to read and count words.");
@@ -49,6 +52,8 @@ fn main() {
     let mut i = 1;
     let mut cont = false;
     let mut prep = false;
+    let mut dist = false;
+    let mut isld = false;
     let mut pattern = "(\\w+)".to_string();
     while i < args.len() {
         let s = &args[i];
@@ -76,8 +81,8 @@ fn main() {
             }
             i += 1;
             c = args[i].parse().expect("An integer expected");
-            if c < 1 {
-                panic!("Number of consumer threads cannot be less than 1");
+            if c < 0 {
+                panic!("Number of consumer threads cannot be less than 0");
             }
         } else if s == "-f" {
             if i == args.len() - 1 {
@@ -87,12 +92,18 @@ fn main() {
             pool = args[i].clone();
         } else if s == "-C" {
             cont = true;
+        } else if s == "-N" {
+            unsafe {PRINT = false;}
+        } else if s == "-D" {
+            dist = true;
+        } else if s == "-I" {
+            isld = true; cont = true;
         } else if s == "-P" {
             prep = true;
         } else if filename.is_empty() {
             filename = s.clone();
         } else {
-            panic!(format!("Unknown option `{}'", s));
+            panic!("Unknown option `{}'", s);
         }
         i += 1;
     }
@@ -107,14 +118,14 @@ fn main() {
     impl RootObj<P> for Root {
         fn init(j: &Journal) -> Self {
             Root {
-                lines: Parc::new(PMutex::new(Stack::new(), j), j),
-                words: Parc::new(PMutex::new(HashMap::new(j), j), j),
-                producers: PRefCell::new(PVec::new(j), j),
-                consumers: PRefCell::new(PVec::new(j), j),
+                lines: Parc::new(PMutex::new(Stack::new()), j),
+                words: Parc::new(PMutex::new(HashMap::new(j)), j),
+                producers: PRefCell::new(PVec::new()),
+                consumers: PRefCell::new(PVec::new()),
             }
         }
     }
-
+    
     let root = P::open::<Root>(&pool, O_CFNE | O_8GB).unwrap();
 
     P::transaction(|j| {
@@ -136,14 +147,14 @@ fn main() {
             for line in f.lines() {
                 files.push(line.unwrap());
             }
-            let p = usize::min(r, files.len());
+            let p = r.min(files.len());
             let b = files.len() / p;
             for i in 0..p + 1 {
                 if i * b < files.len() {
                     producers.push(
                         Parc::new(
                             Producer::new(
-                                files[i * b..usize::min(files.len(), (i + 1) * b)].to_vec(),
+                                files[i * b..files.len().min((i + 1) * b)].to_vec(),
                                 root.lines.pclone(j),
                                 j,
                             ),
@@ -153,18 +164,17 @@ fn main() {
                     );
                 }
             }
-            for _ in 0..c {
+            for _ in 0..c.max(1) {
                 consumers.push(
                     Parc::new(
-                        Consumer::new(&pattern, root.lines.pclone(j), root.words.pclone(j), j),
+                        Consumer::new(&pattern, root.lines.pclone(j), j),
                         j,
                     ),
                     j,
                 );
             }
         }
-    })
-    .unwrap();
+    }).unwrap();
 
     eprintln!(
         "Total remaining from previous run: {} ",
@@ -178,43 +188,84 @@ fn main() {
         let mut p_threads = vec![];
         let mut c_threads = vec![];
 
-        for i in 0..producers.len() {
-            let producer = producers[i].volatile();
-            p_threads.push(thread::spawn(move || Producer::start(producer)))
+        for p in &*producers {
+            let p = p.demote();
+            p_threads.push(thread::spawn(move || Producer::start(p)))
         }
 
-        for i in 0..consumers.len() {
-            let consumer = consumers[i].volatile();
-            c_threads.push(thread::spawn(move || Consumer::start(consumer)))
+        if c == 0 {
+            for thread in p_threads {
+                thread.join().unwrap()
+            }
+
+            for consumer in &*consumers {
+                consumer.activate();
+            }
+
+            if !dist {
+                for c in &*consumers {
+                    let c = c.demote();
+                    c_threads.push(thread::spawn(move || Consumer::start(c, isld)))
+                }
+            }
+        } else {
+            for consumer in &*consumers {
+                consumer.activate();
+            }
+
+            if !dist {
+                for c in &*consumers {
+                    let c = c.demote();
+                    c_threads.push(thread::spawn(move || Consumer::start(c, isld)))
+                }
+            }
+
+            for thread in p_threads {
+                thread.join().unwrap()
+            }
         }
 
-        for thread in p_threads {
-            thread.join().unwrap()
-        }
-
-        // Notifying consumers that there is no more feeds
-        let consumers = root.consumers.borrow();
-        for consumer in &*consumers {
-            consumer.stop_when_finished();
+        if !dist {
+            // Notifying consumers that there is no more feeds
+            for consumer in &*consumers {
+                consumer.stop_when_finished();
+            }
+        } else {
+            P::transaction(|j| {
+                let mut lines = root.lines.lock(j);
+                let mut work = true;
+                while work {
+                    for consumer in &*consumers {
+                        work = consumer.take_one(&mut lines, j);
+                    }
+                }
+            }).unwrap();
         }
 
         for thread in c_threads {
             thread.join().unwrap()
         }
 
-        // Display results
-        P::transaction(|j| {
-            let words = root.words.lock(j);
-            let mut vec = vec![];
-            words.foreach(|word, freq| {
-                vec.push((word.to_string(), freq.clone()));
-            });
-            vec.sort_by(|x, y| x.0.cmp(&y.0));
-            for (word, freq) in vec {
-                println!("{:>32}: {}", word, freq);
+        eprintln!();
+        
+        if dist {
+            let mut i=0;
+            for c in &*consumers {
+                i += 1;
+                eprintln!("c#{}.private_buf_size = {}", i, c.private_buf_size());
             }
-        })
-        .unwrap();
+        }
+
+        // Display results
+        if unsafe {PRINT} {
+            P::transaction(|j| {
+                for c in &*consumers {
+                    c.collect(root.words.pclone(j), j);
+                }
+                let words = root.words.lock(j);
+                println!("{}", words);
+            }).unwrap();
+        }
     }
     println!("Memory usage = {} bytes", P::used());
 }

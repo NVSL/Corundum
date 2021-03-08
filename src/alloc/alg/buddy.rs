@@ -5,12 +5,6 @@ use std::ops::{Index,IndexMut};
 use std::marker::PhantomData;
 use std::mem;
 
-#[cfg(feature = "verbose")]
-use term_painter::Color::*;
-
-#[cfg(feature = "verbose")]
-use term_painter::ToStyle;
-
 #[repr(transparent)]
 #[derive(Clone, Debug)]
 /// Buddy memory block
@@ -98,17 +92,17 @@ pub struct BuddyAlg<A: MemPool> {
     /// Log of available space
     available_log: usize,
 
-    #[cfg(feature = "capture_footprint")]
-    /// The footprint of memory usage in bytes
+    #[cfg(feature = "stat_footprint")]
+    /// The stat_footprint of memory usage in bytes
     foot_print: usize,
 
-    #[cfg(feature = "pthread")]
+    #[cfg(not(any(feature = "no_pthread", windows)))]
     /// A mutex for atomic operations
     mutex: (libc::pthread_mutex_t, libc::pthread_mutexattr_t),
 
-    #[cfg(not(feature = "pthread"))]
+    #[cfg(any(feature = "no_pthread", windows))]
     /// A mutex for atomic operations
-    mutex: u8,
+    mutex: u64,
 
     // Marker
     phantom: PhantomData<A>,
@@ -124,14 +118,14 @@ pub fn get_idx(x: usize) -> usize {
     if x == 0 {
         usize::MAX
     } else {
-        let x = usize::max(x, mem::size_of::<Buddy>());
+        let x = x.max(mem::size_of::<Buddy>());
         (num_bits::<usize>() - (x - 1).leading_zeros()) as usize
     }
 }
 
 impl<A: MemPool> BuddyAlg<A> {
     /// Pool Initialization with a given device size
-    pub fn init(&mut self, base: usize, size: usize) {
+    pub fn init(&mut self, base: u64, size: usize) {
         let mut idx = get_idx(size);
         if 1 << idx > size {
             idx -= 1;
@@ -139,47 +133,33 @@ impl<A: MemPool> BuddyAlg<A> {
         self.buddies = [u64::MAX; 64];
         self.size = 1 << idx;
         self.available = self.size;
-        self.buddies[idx] = base as u64;
+        self.buddies[idx] = base;
         self.last_idx = idx;
         self.log64.clear();
         self.drop_log.clear();
         self.aux.clear();
 
-        #[cfg(feature = "pthread")] unsafe {
+        Self::buddy(base).next = u64::MAX;
+
+        #[cfg(not(any(feature = "no_pthread", windows)))] unsafe {
         crate::sync::init_lock(&mut self.mutex.0, &mut self.mutex.1);
         }
 
-        #[cfg(not(feature = "pthread"))] {
+        #[cfg(any(feature = "no_pthread", windows))] {
         self.mutex = 0; }
     }
 
     #[inline]
     #[track_caller]
     fn buddy<'a>(off: u64) -> &'a mut Buddy {
-        debug_assert!(off < u64::MAX - A::start(), "off({}) out of range", off);
-        debug_assert!(off + A::start() < A::end(), "off({}) out of range", off);
-        union U<'a> {
-            off: u64,
-            raw: &'a mut Buddy,
-        }
-        unsafe {
-            U {
-                off: A::start() + off,
-            }.raw
-        }
+        debug_assert!(off < u64::MAX - A::start(), "off(0x{:x}) out of range", off);
+        debug_assert!(off + A::start() < A::end(), "off(0x{:x}) out of range", off);
+        unsafe { read_addr(A::start() + off) }
     }
 
     #[inline]
     fn byte<'a>(off: u64) -> &'a mut u8 {
-        union U<'a> {
-            off: u64,
-            raw: &'a mut u8,
-        }
-        unsafe {
-            U {
-                off: A::start() + off,
-            }.raw
-        }
+        unsafe { read_addr(A::start() + off) }
     }
 
     #[inline]
@@ -187,11 +167,11 @@ impl<A: MemPool> BuddyAlg<A> {
         unsafe { 
             // debug_assert!(self.aux.empty(), "locked before: aux is not empty");
 
-            #[cfg(feature = "pthread")]
+            #[cfg(not(any(feature = "no_pthread", windows)))]
             libc::pthread_mutex_lock(&mut self.mutex.0); 
 
-            #[cfg(not(feature = "pthread"))] {
-                let tid = thread::current().id().get().unwrap();
+            #[cfg(any(feature = "no_pthread", windows))] {
+                let tid = std::thread::current().id().as_u64().get();
                 while std::intrinsics::atomic_cxchg_acqrel(&mut self.mutex, 0, tid).0 != tid {}
             }
         }
@@ -200,10 +180,10 @@ impl<A: MemPool> BuddyAlg<A> {
     #[inline]
     fn unlock(&mut self) {
         unsafe { 
-            #[cfg(feature = "pthread")]
+            #[cfg(not(any(feature = "no_pthread", windows)))]
             libc::pthread_mutex_unlock(&mut self.mutex.0); 
 
-            #[cfg(not(feature = "pthread"))]
+            #[cfg(any(feature = "no_pthread", windows))]
             std::intrinsics::atomic_store_rel(&mut self.mutex, 0);
         }
     }
@@ -238,22 +218,28 @@ impl<A: MemPool> BuddyAlg<A> {
     /// [`alloc_impl`]: #method.alloc_impl
     /// [`dealloc_impl`]: #method.dealloc_impl
     pub fn drain_aux(&mut self) {
-        self.aux.sync_all();
-        self.log64.sync_all();
+        sfence();
+
         self.aux_valid = true;
         self.aux.foreach(|(off, next)| {
             let n = Self::buddy(off);
             n.next = next;
         });
         self.aux.clear();
-        self.log64.foreach(|(off, data)| {
+        self.log64.foreach(|(off, data)| unsafe {
             let n = Self::buddy(off);
-            n.next = data;
+            std::intrinsics::atomic_store_rel(&mut n.next, data);
         });
         self.log64.clear();
         self.available = self.available_log;
-        sfence();
-        self.aux_valid = false;
+    }
+
+    #[inline(always)]
+    /// Begins a failure-atomic section
+    pub unsafe fn prepare(&mut self) {
+        self.lock();
+        self.log64.clear();
+        self.aux_valid = true;
     }
 
     #[inline]
@@ -262,6 +248,7 @@ impl<A: MemPool> BuddyAlg<A> {
     pub unsafe fn perform(&mut self) {
         self.drain_aux();
         self.drop_log.clear();
+        self.aux_valid = false;
         self.unlock();
     }
 
@@ -333,28 +320,22 @@ impl<A: MemPool> BuddyAlg<A> {
         let len = 1 << idx;
 
         if len > self.available {
-            eprintln!(
-                "No space left (requested = {}, avilable= {})",
-                len,
-                self.available()
-            );
             self.discard();
             u64::MAX
         } else {
             match self.find_free_memory(idx, false) {
                 Some(off) => {
                     #[cfg(feature = "verbose")]
-                    debug_alloc(off, len, self.used(), self.used() + (1 << idx));
+                    debug_alloc::<A>(off, len, self.used(), self.used() + (1 << idx));
 
                     self.available_log = self.available - len;
 
+                    self.aux.sync_all();
                     if perform {
                         self.perform();
-                    } else {
-                        self.aux.sync_all();
                     }
 
-                    #[cfg(feature = "capture_footprint")]
+                    #[cfg(feature = "stat_footprint")]
                     {
                         let usage = self.size - self.available_log;
                         if usage > self.foot_print {
@@ -388,15 +369,14 @@ impl<A: MemPool> BuddyAlg<A> {
         let len = 1 << idx;
 
         #[cfg(feature = "verbose")]
-        debug_dealloc(off, len, self.used(), self.used() - len);
+        debug_dealloc::<A>(off, len, self.used(), self.used() - len);
 
         self.available_log = self.available;
         self.free_impl(off, len);
 
+        self.aux.sync_all();
         if perform {
             self.perform();
-        } else {
-            self.aux.sync_all();
         }
     }
 
@@ -411,7 +391,7 @@ impl<A: MemPool> BuddyAlg<A> {
                 let e = Self::buddy(b);
                 let on_left = off & (1 << idx) == 0;
                 if (b == end && on_left) || (b + len as u64 == off && !on_left) {
-                    let off = u64::min(off, b);
+                    let off = off.min(b);
                     if let Some(p) = prev {
                         self.aux_push(p, e.next);
                     } else {
@@ -449,7 +429,7 @@ impl<A: MemPool> BuddyAlg<A> {
     pub fn is_allocated(&mut self, off: u64, _len: usize) -> bool {
         self.lock();
 
-        if !self.aux.empty() {
+        if !self.aux.is_empty() {
             self.discard();
             return true;
         }
@@ -460,11 +440,11 @@ impl<A: MemPool> BuddyAlg<A> {
             let len = 1 << idx;
             let mut curr = self.buddies[idx];
 
-            #[cfg(feature = "cyclic_link_check")]
+            #[cfg(feature = "check_allocator_cyclic_links")]
             let mut links = vec![];
 
             while let Some(b) = off_to_option(curr) {
-                #[cfg(feature = "cyclic_link_check")]
+                #[cfg(feature = "check_allocator_cyclic_links")]
                 {
                     if links.contains(&b) {
                         self.discard();
@@ -500,11 +480,11 @@ impl<A: MemPool> BuddyAlg<A> {
     /// 
     /// [`DropOnFailure`]: ../alloc/trait.MemPool.html#method.drop_on_failure
     pub fn recover(&mut self) {
-        #[cfg(feature = "pthread")] unsafe {
+        #[cfg(not(any(feature = "no_pthread", windows)))] unsafe {
         crate::sync::init_lock(&mut self.mutex.0, &mut self.mutex.1);
         }
 
-        #[cfg(not(feature = "pthread"))] {
+        #[cfg(any(feature = "no_pthread", windows))] {
         self.mutex = 0; }
 
         if self.aux_valid {
@@ -530,24 +510,63 @@ impl<A: MemPool> BuddyAlg<A> {
             // continue draining
             self.drain_aux();
 
+            // drop unnecessary allocations
+            if !self.drop_log.is_empty() {
+                eprintln!("Dropping unnecessary allocations");
+                unsafe {
+                    let self_mut = self as *mut Self;
+                    self.drop_log.drain_atomic(|(off, len)| {
+                        (*self_mut).dealloc_impl(off, len, false);
+                    }, || {
+                        (*self_mut).drain_aux();
+                        (*self_mut).discard();
+                    });
+                }
+                self.drop_log.clear();
+            }
+
             #[cfg(debug_assertions)]
             self.check(module_path!());
         } else {
             self.aux.clear();
             self.log64.clear();
+            self.drop_log.clear();
         }
+    }
 
-        // drop unnecessary allocations
-        unsafe {
-            let self_mut = self as *mut Self;
-            self.drop_log.drain_atomic(|(off, len)| {
-                (*self_mut).dealloc_impl(off, len, false);
-            }, || {
-                (*self_mut).drain_aux();
-                (*self_mut).discard();
-            });
+    pub fn recovery_info(&self, info_level: u32) -> String {
+        let mut res = format!("Crashed while operating: {}\n",
+            if self.aux_valid { "Yes" } else { "No" });
+        if info_level > 1 {
+            res += &format!("Redo Operation Logs (aux): {}\n", self.aux.len());
+            res += &format!("Redo Logs (log64):         {}\n", self.log64.len());
+            res += &format!("Drop Logs:                 {}\n", self.drop_log.len());
         }
-        self.drop_log.clear();
+        if info_level > 2 {
+            if !self.aux.is_empty() {
+                res += &format!("\nOperation Logs:\n");
+                self.aux.foreach(|(off, next)| {
+                    let n = Self::buddy(off);
+                    res += &format!("  aux @({:x}) {:x} -> {:x}\n", off, n.next, next);
+                });
+            }
+    
+            if !self.log64.is_empty() {
+                res += &format!("\nRedo Logs:\n");
+                self.log64.foreach(|(off, next)| {
+                    let n = Self::buddy(off);
+                    res += &format!("  log @({:x}) {:x} -> {:x}\n", off, n.next, next);
+                });
+            }
+    
+            if !self.drop_log.is_empty() {
+                res += &format!("\nDrop Logss:\n");
+                self.drop_log.foreach(|(off, len)| {
+                    res += &format!("  drop ({:x}; {})\n", off, len);
+                });
+            }
+        }
+        res
     }
 
     #[inline]
@@ -568,10 +587,10 @@ impl<A: MemPool> BuddyAlg<A> {
         self.size - self.available
     }
 
-    #[cfg(feature = "capture_footprint")]
+    #[cfg(feature = "stat_footprint")]
     /// Returns the total number of bytes written to the pool. It may exceed the
     /// pool size as it does not subtract the reclaimed space after being used.
-    pub fn footprint(&self) -> usize {
+    pub fn stat_footprint(&self) -> usize {
         self.foot_print
     }
 
@@ -590,11 +609,16 @@ impl<A: MemPool> BuddyAlg<A> {
     pub fn print(&self) {
         println!();
         for idx in 3..self.last_idx + 1 {
-            print!("{:>8} [{:>2}] ", 1 << idx, idx);
+            print!("{:>12} [{:>2}] ", 1 << idx, idx);
             let mut curr = self.buddies[idx];
             while let Some(b) = off_to_option(curr) {
-                print!("({}..{})", b, b + (1 << idx) - 1);
                 let e = Self::buddy(b);
+                if A::contains(b+A::start()) {
+                    print!("({}:{})", b, b + (1 << idx) - 1);
+                } else {
+                    print!("(ERR)");
+                    break;
+                }
                 curr = e.next;
             }
             println!();
@@ -665,11 +689,7 @@ impl<T, A: MemPool> Zones<T, A> {
 
     #[inline]
     fn read<'a>(off: u64) -> &'a mut T {
-        union U<'b, K: 'b + ?Sized> {
-            off: u64,
-            raw: &'b mut K,
-        }
-        unsafe { U { off: A::start() + off }.raw }
+        unsafe { read_addr(A::start() + off) }
     }
 }
 
@@ -685,19 +705,83 @@ impl<T, A: MemPool> IndexMut<usize> for Zones<T, A> {
 #[cfg(test)]
 mod test {
     use crate::default::*;
-    use crate::boxed::Pbox;
+    // use crate::boxed::Pbox;
     type P = BuddyAlloc;
 
     #[test]
     fn buddy_alg_test() {
-        let _pool = P::open_no_root("buddy.pool", O_CFNE).unwrap();
-        crate::utils::allow_crash(true);
+        use rand::distributions::Alphanumeric;
+        use rand::Rng;
+
+        struct Root {
+            vec: PRefCell<PVec<Parc<(i32, PMutex<PString>)>>>
+        }
+        impl Default for Root {
+            fn default() -> Self {
+                Root {
+                    vec: PRefCell::new(PVec::new())
+                }
+            }
+        }
+        let root = P::open::<Root>("buddy.pool", O_CFNE).unwrap();
+        let u = P::used();
         P::transaction(|j| {
             let _b = Pbox::new(1, j);
-            println!("done");
-        })
-        .unwrap();
-        println!("{}", P::used());
+            let _b = Pbox::new([0;8], j);
+            let _b = Pbox::new([0;64], j);
+            let _b = Pbox::new([0;1024], j);
+            let _b = Pbox::new([0;4096], j);
+            let _b = Pbox::new([0;10000], j);
+        }).unwrap();
+
+        P::transaction(|j| {
+            let _b = Pbox::new([0;10000], j);
+            let _b = Pbox::new([0;8], j);
+            let _b = Pbox::new([0;1024], j);
+            let _b = Pbox::new([0;64], j);
+            let _b = Pbox::new(1, j);
+            let _b = Pbox::new([0;4096], j);
+        }).unwrap();
+
+        P::transaction(|j| {
+            let mut b = root.vec.borrow_mut(j);
+            for i in 0..2 {
+                b.push(Parc::new((i, PMutex::new(format!("item {}", i).to_pstring(j))), j), j);
+            }
+        }).unwrap();
+
+        let mut ts = vec![];
+        for i in 0..2 {
+            let m = root.vec.borrow()[i].demote();
+            ts.push(std::thread::spawn(move || {
+                P::transaction(|j| {
+                    if let Some(m) = m.promote(j) {
+                        let mut m = m.1.lock(j);
+                        let l = (rand::random::<usize>() % 100) + 1;
+                        let s: String = //String::from_utf8(
+                            rand::thread_rng()
+                                .sample_iter(&Alphanumeric)
+                                .take(l)
+                                .collect();
+                            //).unwrap();
+                        *m = s.to_pstring(j);
+                    }
+                }).unwrap();
+            }));
+        }
+
+        for t in ts {
+            t.join().unwrap();
+        }
+
+        P::transaction(|j| {
+            let mut vec = root.vec.borrow_mut(j);
+            if vec.len() > 10 {
+                vec.clear();
+            }
+        }).unwrap();
+
+        println!("{} -> {}", u, P::used());
     }
 }
 
@@ -711,10 +795,11 @@ mod test {
 /// * `Pbox<T>` = [`corundum::boxed::Pbox`]`<T, `[`BuddyAlloc`]`>`
 /// * `Prc<T>` = [`corundum::prc::Prc`]`<T, `[`BuddyAlloc`]`>`
 /// * `Parc<T>` = [`corundum::sync::Parc`]`<T, `[`BuddyAlloc`]`>`
-/// * `PMutex<T>` = [`corundum::sync::Mutex`]`<T, `[`BuddyAlloc`]`>`
-/// * `PCell<T>` = [`corundum::cell::LogCell`]`<T, `[`BuddyAlloc`]`>`
-/// * `PRefCell<T>` = [`corundum::cell::LogRefCell`]`<T, `[`BuddyAlloc`]`>`
+/// * `PMutex<T>` = [`corundum::sync::PMutex`]`<T, `[`BuddyAlloc`]`>`
+/// * `PCell<T>` = [`corundum::cell::PCell`]`<T, `[`BuddyAlloc`]`>`
+/// * `PRefCell<T>` = [`corundum::cell::PRefCell`]`<T, `[`BuddyAlloc`]`>`
 /// * `VCell<T>` = [`corundum::cell::VCell`]`<T, `[`BuddyAlloc`]`>`
+/// * `TCell<T>` = [`corundum::cell::TCell`]`<T, `[`BuddyAlloc`]`>`
 /// * `PVec<T>` = [`corundum::vec::Vec`]`<T, `[`BuddyAlloc`]`>`
 /// * `PString` = [`corundum::str::String`]`<`[`BuddyAlloc`]`>`
 ///
@@ -730,7 +815,7 @@ mod test {
 /// 
 /// type P = BuddyAlloc;
 /// 
-/// let _ = P::open_no_root("p.pool", O_CF).unwrap();
+/// let _pool = P::open_no_root("p.pool", O_CF).unwrap();
 /// 
 /// P::transaction(|j| {
 ///     let temp = Pbox::new(10, j);
@@ -741,7 +826,7 @@ mod test {
 /// If multiple pools are needed, multiple pool modules can be defined and used.
 /// 
 /// ```
-/// use corundum::alloc::*;
+/// use corundum::alloc::heap::*;
 /// 
 /// corundum::pool!(pool1);
 /// corundum::pool!(pool2);
@@ -749,8 +834,8 @@ mod test {
 /// type P1 = pool1::BuddyAlloc;
 /// type P2 = pool2::BuddyAlloc;
 /// 
-/// let _ = P1::open_no_root("p1.pool", O_CF).unwrap();
-/// let _ = P2::open_no_root("p2.pool", O_CF).unwrap();
+/// let _p1 = P1::open_no_root("p1.pool", O_CF).unwrap();
+/// let _p2 = P2::open_no_root("p2.pool", O_CF).unwrap();
 /// 
 /// P1::transaction(|j1| {
 ///     let temp = pool1::Pbox::new(10, j1);
@@ -764,10 +849,11 @@ mod test {
 /// [`corundum::boxed::Pbox`]: ./boxed/struct.Pbox.html
 /// [`corundum::prc::Prc`]: ./prc/struct.Prc.html
 /// [`corundum::sync::Parc`]: ./sync/struct.Parc.html
-/// [`corundum::sync::Mutex`]: ./sync/struct.Mutex.html
-/// [`corundum::cell::LogCell`]: ./cell/struct.LogCell.html
-/// [`corundum::cell::LogRefCell`]: ./cell/struct.LogRefCell.html
+/// [`corundum::sync::PMutex`]: ./sync/struct.PMutex.html
+/// [`corundum::cell::PCell`]: ./cell/struct.PCell.html
+/// [`corundum::cell::PRefCell`]: ./cell/struct.PRefCell.html
 /// [`corundum::cell::VCell`]: ./cell/struct.VCell.html
+/// [`corundum::cell::TCell`]: ./cell/struct.TCell.html
 /// [`corundum::vec::Vec`]: ./vec/struct.Vec.html
 /// [`corundum::str::String`]: ./str/struct.String.html
 macro_rules! pool {
@@ -785,15 +871,16 @@ macro_rules! pool {
             use std::sync::atomic::{AtomicBool, Ordering};
             use std::sync::{Arc, Mutex};
             use std::thread::ThreadId;
-            use lazy_static::lazy_static;
             use $crate::ll::*;
+            use $crate::cell::LazyCell;
             use $crate::result::Result;
+            use $crate::utils::read;
             pub use $crate::*;
             pub use $crate::alloc::*;
             pub use $crate::cell::{RootCell, RootObj};
             pub use $crate::clone::PClone;
             pub use $crate::convert::PFrom;
-            pub use $crate::str::ToString;
+            pub use $crate::str::ToPString;
             pub use $crate::stm::transaction;
             pub use $crate::ptr::Ptr;
 
@@ -806,9 +893,10 @@ macro_rules! pool {
                 magic_number: u64,
                 flags: u64,
                 gen: u32,
+                tx_gen: u32,
                 root_obj: u64,
                 root_type_id: u64,
-                logs: u64,
+                journals: u64,
                 size: usize,
                 zone: Zones<BuddyAlg<BuddyAlloc>, BuddyAlloc>
             }
@@ -817,17 +905,6 @@ macro_rules! pool {
                 filename: String,
                 journals: HashMap<ThreadId, (u64, i32)>,
                 mmap: MmapMut,
-            }
-
-            union U<T> {
-                raw: *mut u8,
-                rf: *mut T,
-            }
-
-            impl<T> U<T> {
-                pub fn read<'a>(raw: *mut u8) -> &'a mut T {
-                    unsafe { &mut *U { raw }.rf }
-                }
             }
 
             impl VData {
@@ -847,9 +924,10 @@ macro_rules! pool {
                     id.hash(&mut s);
                     self.flags = 0;
                     self.gen = 1;
+                    self.tx_gen = 0;
                     self.root_obj = u64::MAX;
                     self.root_type_id = 0;
-                    self.logs = u64::MAX;
+                    self.journals = u64::MAX;
                     self.size = size;
 
                     type T = BuddyAlg<BuddyAlloc>;
@@ -862,7 +940,7 @@ macro_rules! pool {
                     let quota = size / cpus;
                     self.zone = Zones::new(cpus, mem::size_of::<Self>(), quota);
                     for i in 0..cpus {
-                        self.zone[i].init(quota * i, quota);
+                        self.zone[i].init((quota * i) as u64, quota);
                     }
                     self.magic_number = u64::MAX;
                     unsafe {
@@ -890,20 +968,18 @@ macro_rules! pool {
             /// To define a new buddy allocator type as a memory pool, you may
             /// use [`pool!()`] macro. 
             /// 
-            /// [`pool!()`]: ../../macro.pool.html
+            /// [`pool!()`]: ../macro.pool.html
             pub struct BuddyAlloc {}
 
             static mut BUDDY_INNER: Option<&'static mut BuddyAllocInner> = None;
             static mut OPEN: AtomicBool = AtomicBool::new(false);
             static mut MAX_GEN: u32 = 0;
-
-            lazy_static! {
-                static ref VDATA: Arc<Mutex<Option<VData>>> = Arc::new(Mutex::new(None));
-            }
+            static mut VDATA: LazyCell<Arc<Mutex<Option<VData>>>> = 
+                LazyCell::new(|| Arc::new(Mutex::new(None)));
 
             impl BuddyAlloc {
                 fn running_transaction() -> bool {
-                    let vdata = match VDATA.lock() {
+                    let vdata = match unsafe { VDATA.lock() } {
                         Ok(g) => g,
                         Err(p) => p.into_inner()
                     };
@@ -946,7 +1022,9 @@ macro_rules! pool {
                             id.hash(&mut s);
                             let id = s.finish();
 
-                            let inner = U::<BuddyAllocInner>::read(raw_offset);
+                            let inner = unsafe {
+                                read::<BuddyAllocInner>(raw_offset)
+                            };
                             assert_eq!(
                                 inner.magic_number, id,
                                 "Invalid magic number for the pool image file"
@@ -954,7 +1032,8 @@ macro_rules! pool {
 
                             let base = raw_offset as *mut _ as u64;
                             unsafe {
-                                inner.gen = u32::max(MAX_GEN, inner.gen) + 1;
+                                inner.gen = MAX_GEN.max(inner.gen + 1);
+                                inner.tx_gen = 0;
                                 MAX_GEN = inner.gen;
                                 BUDDY_START = base;
                                 BUDDY_VALID_START = base
@@ -976,6 +1055,11 @@ macro_rules! pool {
             }
 
             unsafe impl MemPool for BuddyAlloc {
+                #[inline]
+                fn name() -> &'static str {
+                    stringify!($name)
+                }
+
                 /// Formats the image file
                 unsafe fn format(filename: &str) -> Result<()> {
                     if Path::new(filename).exists() {
@@ -1000,7 +1084,7 @@ macro_rules! pool {
                             BUDDY_START = begin as *const _ as u64;
                             BUDDY_END = u64::MAX;
 
-                            let inner = U::<BuddyAllocInner>::read(begin);
+                            let inner = read::<BuddyAllocInner>(begin);
                             inner.init(len);
                             mmap.flush().unwrap();
                             Ok(())
@@ -1014,6 +1098,15 @@ macro_rules! pool {
                 #[track_caller]
                 fn gen() -> u32 {
                     static_inner!(BUDDY_INNER, inner, { inner.gen })
+                }
+
+                #[inline]
+                #[track_caller]
+                fn tx_gen() -> u32 {
+                    static_inner!(BUDDY_INNER, inner, {
+                        inner.tx_gen += 1;
+                        inner.tx_gen
+                    })
                 }
 
                 #[track_caller]
@@ -1062,6 +1155,9 @@ macro_rules! pool {
                 #[allow(unused_unsafe)]
                 #[track_caller]
                 unsafe fn pre_alloc(size: usize) -> (*mut u8, u64, usize, usize) {
+                    #[cfg(feature = "stat_perf")]
+                    let _perf = $crate::stat::Measure::<Self>::Alloc(std::time::Instant::now());
+
                     static_inner!(BUDDY_INNER, inner, {
                         let cpu = cpu();
                         let cnt = inner.zone.count();
@@ -1072,6 +1168,10 @@ macro_rules! pool {
                                 return (Self::get_mut_unchecked(a), a, size, z);
                             }
                         }
+                        eprintln!(
+                            "No space left (requested = {}, available= {})",
+                            size, Self::available()
+                        );
                         (std::ptr::null_mut(), u64::MAX, 0, 0)
                     })
                 }
@@ -1079,10 +1179,13 @@ macro_rules! pool {
                 #[allow(unused_unsafe)]
                 #[track_caller]
                 unsafe fn pre_dealloc(ptr: *mut u8, size: usize) -> usize {
+                    #[cfg(feature = "stat_perf")]
+                    let _perf = $crate::stat::Measure::<Self>::Dealloc(std::time::Instant::now());
+
                     static_inner!(BUDDY_INNER, inner, {
                         let off = Self::off(ptr).expect("invalid pointer");
                         let (zone,zidx) = inner.zone.from_off(off);
-                        if cfg!(feature = "access_violation_check") {
+                        if cfg!(feature = "check_access_violation") {
                             if zone.is_allocated(off, size) {
                                 zone.dealloc_impl(off, size, false);
                             } else {
@@ -1124,6 +1227,15 @@ macro_rules! pool {
                 #[inline]
                 #[allow(unused_unsafe)]
                 #[track_caller]
+                unsafe fn prepare(z: usize) {
+                    static_inner!(BUDDY_INNER, inner, {
+                        inner.zone[z].prepare();
+                    })
+                }
+
+                #[inline]
+                #[allow(unused_unsafe)]
+                #[track_caller]
                 unsafe fn perform(z: usize) {
                     static_inner!(BUDDY_INNER, inner, {
                         inner.zone[z].perform();
@@ -1147,7 +1259,7 @@ macro_rules! pool {
                         if off >= Self::end() {
                             false
                         } else if Self::contains(off + Self::start()) {
-                            if cfg!(feature = "access_violation_check") {
+                            if cfg!(feature = "check_access_violation") {
                                 inner.zone.from_off(off).0.is_allocated(off, len)
                             } else {
                                 true
@@ -1163,27 +1275,39 @@ macro_rules! pool {
                 #[track_caller]
                 unsafe fn journals_head() -> &'static u64 {
                     static_inner!(BUDDY_INNER, inner, {
-                        &inner.logs
+                        &inner.journals
                     })
                 }
 
                 #[allow(unused_unsafe)]
                 #[track_caller]
                 unsafe fn drop_journal(journal: &mut Journal) {
+                    let _vdata = match VDATA.lock() {
+                        Ok(g) => g,
+                        Err(p) => p.into_inner()
+                    };
                     static_inner!(BUDDY_INNER, inner, {
                         let off = Self::off(journal).unwrap();
-                        if inner.logs == off {
-                            inner.logs = journal.next_off();
-                        }
-
+                    
                         #[cfg(feature = "pin_journals")]
                         journal.drop_pages();
 
-                        Self::free_nolog(journal);
-                    })
+                        let z = Self::pre_dealloc(journal as *mut _ as *mut u8, mem::size_of::<Journal>());
+                        if inner.journals == off {
+                            Self::log64(Self::off_unchecked(&inner.journals), journal.next_off(), z);
+                        }
+                        if let Ok(prev) = Self::deref_mut::<Journal>(journal.prev_off()) {
+                            Self::log64(Self::off_unchecked(prev.next_off_ref()), journal.next_off(), z);
+                        }
+                        if let Ok(next) = Self::deref_mut::<Journal>(journal.next_off()) {
+                            Self::log64(Self::off_unchecked(next.prev_off_ref()), journal.prev_off(), z);
+                        }
+                        Self::perform(z);
+                    });
                 }
 
                 #[allow(unused_unsafe)]
+                #[track_caller]
                 unsafe fn journals<T, F: Fn(&mut HashMap<ThreadId, (u64, i32)>)->T>(f: F)->T{
                     let mut vdata = match VDATA.lock() {
                         Ok(g) => g,
@@ -1192,17 +1316,35 @@ macro_rules! pool {
                     if let Some(vdata) = &mut *vdata {
                         f(&mut vdata.journals)
                     } else {
-                        panic!("No memory pool is open");
+                        panic!("No memory pool is open or the root object is moved to a transaction. Try cloning the root object instead of moving it to a transaction.");
                     }
                 }
 
                 #[allow(unused_unsafe)]
                 unsafe fn recover() {
                     static_inner!(BUDDY_INNER, inner, {
+                        let info_level = std::env::var("RECOVERY_INFO")
+                            .unwrap_or("0".to_string())
+                            .parse::<u32>()
+                            .expect("RECOVERY_INFO should be an unsigned integer");
+                        
+                        if info_level > 0 {
+                            for i in 0..inner.zone.count() {
+                                eprintln!("{:=^60}", format!(" Restore Allocator (Zone {}) ", i));
+                                eprintln!("{}", inner.zone[i].recovery_info(info_level));
+                            }
+
+                            let mut curr = inner.journals;
+                            while let Ok(j) = Self::deref_mut::<Journal>(curr) {
+                                eprintln!("{:-^60}\n{}", format!(" Journal @({}) ", curr), j.recovery_info(info_level));
+                                curr = j.next_off();
+                            }
+                        }
+
                         for i in 0..inner.zone.count() {
                             inner.zone[i].recover();
                         }
-                        while let Ok(logs) = Self::deref_mut::<Journal>(inner.logs) {
+                        while let Ok(logs) = Self::deref_mut::<Journal>(inner.journals) {
 
                             #[cfg(feature = "verbose")]
                             println!("{:?}", logs);
@@ -1225,8 +1367,9 @@ macro_rules! pool {
                     let slf = Self::open_no_root(path, flags)?;
                     static_inner!(BUDDY_INNER, inner, {
                         // Replace it with std::any::TypeId::of::<U>() when it
-                        // is available in the future
-                        let id = std::any::type_name::<U>();
+                        // is available in the future for non-'static types
+                        let id = format!("{} ({})", std::any::type_name::<U>(),
+                            mem::size_of::<U>());
                         let mut s = DefaultHasher::new();
                         id.hash(&mut s);
                         let id = s.finish();
@@ -1243,7 +1386,7 @@ macro_rules! pool {
                                 inner.flags |= FLAG_HAS_ROOT;
                                 inner.root_obj = root_off;
                                 inner.root_type_id = id;
-                                msync_obj(inner);
+                                persist_obj(inner, true);
                                 Ok((RootCell::new(ptr, Arc::new(slf))))
                             }
                         } else {
@@ -1264,12 +1407,11 @@ macro_rules! pool {
                     unsafe { BUDDY_INNER.is_some() }
                 }
 
-                #[cfg(any(feature = "concurrent_pools", test))]
                 #[allow(unused_unsafe)]
                 #[track_caller]
                 fn open_no_root(path: &str, flags: u32) -> Result<Self> {
                     unsafe {
-                        while OPEN.compare_and_swap(false, true, Ordering::AcqRel) {}
+                        while OPEN.compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed).is_err() {}
                         if !Self::running_transaction() {
                             if let Ok(_) = Self::apply_flags(path, flags) {
                                 let res = Self::open_impl(path);
@@ -1289,57 +1431,9 @@ macro_rules! pool {
                     }
                 }
 
-                #[cfg(not(any(feature = "concurrent_pools", test)))]
-                #[allow(unused_unsafe)]
-                #[track_caller]
-                fn open_no_root(path: &str, flags: u32) -> Result<Self> {
-                    unsafe {
-                        if !OPEN.compare_and_swap(false, true, Ordering::AcqRel) {
-                            if !Self::running_transaction() {
-                                if let Ok(_) = Self::apply_flags(path, flags) {
-                                    let res = mem::ManuallyDrop::new(Self::open_impl(path));
-                                    if res.is_ok() {
-                                        Self::recover();
-                                    }
-                                    mem::ManuallyDrop::into_inner(res)
-                                } else {
-                                    OPEN.store(false, Ordering::Release);
-                                    Err("Could not open file".to_string())
-                                }
-                            } else {
-                                OPEN.store(false, Ordering::Release);
-                                Err("Could not open a pool inside a transaction of its own kind"
-                                    .to_string())
-                            }
-                        } else {
-                            let vdata = match VDATA.lock() {
-                                Ok(g) => g,
-                                Err(p) => p.into_inner()
-                            };
-                            if let Some(vdata) = &*vdata {
-                                Err(format!(
-                                    "The pool was already opened (`{}')",
-                                    vdata.filename
-                                ))
-                            } else {
-                                Err("The pool was already opened".to_string())
-                            }
-                        }
-                    }
-                }
-
                 #[allow(unused_unsafe)]
                 unsafe fn close() -> Result<()> {
                     if OPEN.load(Ordering::Acquire) {
-                        static_inner!(BUDDY_INNER, inner, {
-                            while let Ok(logs) =Self::deref_mut::<Journal>(inner.logs) {
-                                logs.commit();
-                                logs.clear();
-
-                                #[cfg(feature = "pin_journals")]
-                                Self::drop_journal(logs);
-                            }
-                        });
                         let mut vdata = match VDATA.lock() {
                             Ok(g) => g,
                             Err(p) => p.into_inner()
@@ -1353,19 +1447,23 @@ macro_rules! pool {
                     }
                 }
 
-                #[cfg(feature = "capture_footprint")]
-                fn footprint() -> usize {
-                    static_inner!(BUDDY_INNER, inner, { inner.zone.footprint() })
+                #[cfg(feature = "stat_footprint")]
+                fn stat_footprint() -> usize {
+                    static_inner!(BUDDY_INNER, inner, { inner.zone.stat_footprint() })
                 }
 
                 fn print_info() {
+                    println!("{:=^80}", " All Zones ");
                     println!("      Total: {} bytes", Self::size());
                     println!("       Used: {} bytes", Self::used());
                     println!("  Available: {} bytes", Self::available());
 
                     static_inner!(BUDDY_INNER, inner, { 
                         for i in 0..inner.zone.count() {
-                            print!("Free Blocks Zone #{}:", i);
+                            println!("{:=^80}", format!(" Persistent Memory Zone #{} ", i));
+                            println!("       Total      {}", inner.zone[i].size());
+                            println!("        Used      {}", inner.zone[i].used());
+                            println!("   Available      {}", inner.zone[i].available());
                             inner.zone[i].print();
                         }
                     })
@@ -1377,94 +1475,100 @@ macro_rules! pool {
                     unsafe {
                         Self::close().unwrap();
                     }
+
+                    #[cfg(feature = "stat_perf")] {
+                        eprintln!("{}", $crate::stat::report());
+                    }
                 }
             }
 
-            /// Compact form of [`Pbox`](../boxed/struct.Pbox.html)
+            /// Compact form of [`Pbox`](../../boxed/struct.Pbox.html)
             /// `<T,`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
             pub type Pbox<T> = $crate::boxed::Pbox<T, BuddyAlloc>;
 
-            /// Compact form of [`Prc`](../prc/struct.Prc.html)
+            /// Compact form of [`Prc`](../../prc/struct.Prc.html)
             /// `<T,`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
             pub type Prc<T> = $crate::prc::Prc<T, BuddyAlloc>;
 
-            /// Compact form of [`Parc`](../sync/struct.Parc.html)
+            /// Compact form of [`Parc`](../../sync/struct.Parc.html)
             /// `<T,`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
             pub type Parc<T> = $crate::sync::Parc<T, BuddyAlloc>;
 
-            /// Compact form of [`Mutex`](../sync/struct.Mutex.html)
+            /// Compact form of [`PMutex`](../../sync/struct.PMutex.html)
             /// `<T,`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
-            pub type PMutex<T> = $crate::sync::Mutex<T, BuddyAlloc>;
+            pub type PMutex<T> = $crate::sync::PMutex<T, BuddyAlloc>;
 
-            /// Compact form of [`LogCell`](../cell/struct.LogCell.html)
+            /// Compact form of [`PCell`](../../cell/struct.PCell.html)
             /// `<T,`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
-            pub type PCell<T> = $crate::cell::LogCell<T, BuddyAlloc>;
+            pub type PCell<T> = $crate::cell::PCell<T, BuddyAlloc>;
 
-            /// Compact form of [`LogNonNull`](../ptr/struct.LogNonNull.html)
+            /// Compact form of [`LogNonNull`](../../ptr/struct.LogNonNull.html)
             /// `<T,`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
             pub type PNonNull<T> = $crate::ptr::LogNonNull<T, BuddyAlloc>;
 
-            /// Compact form of [`LogRefCell`](../cell/struct.LogRefCell.html)
+            /// Compact form of [`PRefCell`](../../cell/struct.PRefCell.html)
             /// `<T,`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
-            pub type PRefCell<T> = $crate::cell::LogRefCell<T, BuddyAlloc>;
+            pub type PRefCell<T> = $crate::cell::PRefCell<T, BuddyAlloc>;
 
-            /// Compact form of [`Ref`](../cell/struct.Ref.html)
+            /// Compact form of [`Ref`](../../cell/struct.Ref.html)
             /// `<'b, T, `[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
             pub type PRef<'b, T> = $crate::cell::Ref<'b, T, BuddyAlloc>;
 
-            /// Compact form of [`RefMut`](../cell/struct.Mut.html)
+            /// Compact form of [`RefMut`](../../cell/struct.Mut.html)
             /// `<'b, T, `[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
             pub type PRefMut<'b, T> = $crate::cell::RefMut<'b, T, BuddyAlloc>;
 
-            /// Compact form of `[VCell](../cell/struct.VCell.html)
+            /// Compact form of [`VCell`](../../cell/struct.VCell.html)
             /// `<T,`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
             pub type VCell<T> = $crate::cell::VCell<T, BuddyAlloc>;
 
-            /// Compact form of [`Vec`](../vec/struct.Vec.html)
+            /// Compact form of [`TCell`](../../cell/struct.TCell.html)
+            /// `<T,`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
+            pub type TCell<T> = $crate::cell::TCell<T, BuddyAlloc>;
+
+            /// Compact form of [`Vec`](../../vec/struct.Vec.html)
             /// `<T,`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
             pub type PVec<T> = $crate::vec::Vec<T, BuddyAlloc>;
 
-            /// Compact form of [`String`](../str/struct.String.html)
+            /// Compact form of [`String`](../../str/struct.String.html)
             /// `<`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
             pub type PString = $crate::str::String<BuddyAlloc>;
 
-            /// Compact form of [`Journal`](../stm/struct.Journal.html)
+            /// Compact form of [`Journal`](../../stm/struct.Journal.html)
             /// `<`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
             pub type Journal = $crate::stm::Journal<BuddyAlloc>;
+
+            pub mod prc {
+                /// Compact form of [`prc::Weak`](../../../prc/struct.Weak.html)
+                /// `<`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
+                pub type PWeak<T> = $crate::prc::Weak<T, super::BuddyAlloc>;
+
+                /// Compact form of [`prc::VWeak`](../../../prc/struct.VWeak.html)
+                /// `<`[`BuddyAlloc`](../struct.BuddyAlloc.html)`>`.
+                pub type VWeak<T> = $crate::prc::VWeak<T, super::BuddyAlloc>;
+            }
+
+            pub mod parc {
+                /// Compact form of [`sync::Weak`](../../../sync/struct.Weak.html)
+                /// `<`[`BuddyAlloc`](../struct.BuddyAlloc.html)`>`.
+                pub type PWeak<T> = $crate::sync::Weak<T, super::BuddyAlloc>;
+
+                /// Compact form of [`sync::VWeak`](../../../sync/struct.VWeak.html)
+                /// `<`[`BuddyAlloc`](../struct.BuddyAlloc.html)`>`.
+                pub type VWeak<T> = $crate::sync::VWeak<T, super::BuddyAlloc>;
+            }
         }
     };
 }
 
-// This is an example of defining a new buddy allocator type
-// `BuddyAlloc` is the default allocator with Buddy Allocation
-crate::pool!(default);
-
 #[cfg(feature = "verbose")]
-pub fn debug_alloc(addr: u64, len: usize, pre: usize, post: usize) {
-    println!(
-        "{}",
-        Green.paint(format!(
-            "                     PRE: {:<6}  ({:>4}..{:<4}) = {:<4}  POST = {:<6}",
-            pre,
-            addr,
-            addr + len as u64 - 1,
-            len,
-            post
-        ))
-    );
+pub fn debug_alloc<A: MemPool>(addr: u64, len: usize, pre: usize, post: usize) {
+    crate::log!(A, Green, "", "PRE: {:<6}  ({:>6x}:{:<6x}) = {:<6} POST = {:<6}",
+        pre, addr, addr + len as u64 - 1, len, post);
 }
 
 #[cfg(feature = "verbose")]
-pub fn debug_dealloc(addr: u64, len: usize, pre: usize, post: usize) {
-    println!(
-        "{}",
-        Red.paint(format!(
-            "          DEALLOC    PRE: {:<6}  ({:>4}..{:<4}) = {:<4}  POST = {:<6}",
-            pre,
-            addr,
-            addr + len as u64 - 1,
-            len,
-            post
-        ))
-    );
+pub fn debug_dealloc<A: MemPool>(addr: u64, len: usize, pre: usize, post: usize) {
+    crate::log!(A, Red, "DEALLOC", "PRE: {:<6}  ({:>6x}:{:<6x}) = {:<6} POST = {:<6}",
+        pre, addr, addr + len as u64 - 1, len, post);
 }

@@ -1,3 +1,4 @@
+use std::fmt::Display;
 use corundum::default::*;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -13,6 +14,19 @@ pub struct HashMap<K: PSafe, V: PSafe> {
     values: PVec<PCell<V>>,
 }
 
+
+
+impl<K: PSafe, V: PSafe + Copy> HashMap<K, V> {
+    pub fn foreach<F: FnMut(&K, V) -> ()>(&self, mut f: F) {
+        for i in 0..BUCKETS_MAX {
+            for e in &*self.buckets[i].borrow() {
+                let e = e.borrow();
+                f(&e.0, self.values[e.1].get());
+            }
+        }
+    }
+}
+
 impl<K: PSafe, V: PSafe + PClone<P>> HashMap<K, V>
 where
     K: PartialEq + Hash,
@@ -21,11 +35,11 @@ where
     pub fn new(j: &Journal) -> Self {
         let mut buckets = PVec::with_capacity(BUCKETS_MAX, j);
         for _ in 0..BUCKETS_MAX {
-            buckets.push(PRefCell::new(PVec::new(j), j), j)
+            buckets.push(PRefCell::new(PVec::new()), j)
         }
         Self {
             buckets,
-            values: PVec::new(j),
+            values: PVec::new(),
         }
     }
 
@@ -57,8 +71,8 @@ where
             }
         }
 
-        self.values.push(PCell::new(val, j), j);
-        bucket.push(PRefCell::new((key, self.values.len() - 1), j), j);
+        self.values.push(PCell::new(val), j);
+        bucket.push(PRefCell::new((key, self.values.len() - 1)), j);
     }
 
     pub fn update_with<F: FnOnce(V) -> V>(&mut self, key: &K, j: &Journal, f: F)
@@ -79,25 +93,16 @@ where
             }
         }
 
-        self.values.push(PCell::new(f(V::default()), j), j);
+        self.values.push(PCell::new(f(V::default())), j);
         bucket.push(
-            PRefCell::new((key.pclone(j), self.values.len() - 1), j),
+            PRefCell::new((key.pclone(j), self.values.len() - 1)),
             j,
         );
     }
 
-    pub fn foreach<F: FnMut(&K, &V) -> ()>(&self, mut f: F) {
-        for i in 0..BUCKETS_MAX {
-            for e in &*self.buckets[i].borrow() {
-                let e = e.borrow();
-                f(&e.0, &self.values[e.1].get());
-            }
-        }
-    }
-
     pub fn clear(&mut self, j: &Journal) {
         for i in 0..BUCKETS_MAX {
-            *self.buckets[i].borrow_mut(j) = PVec::new(j);
+            self.buckets[i].borrow_mut(j).clear();
         }
         self.values.clear();
     }
@@ -109,5 +114,19 @@ where
             }
         }
         true
+    }
+}
+
+impl<K: PSafe + Display, V: PSafe + Display + Copy> Display for HashMap<K, V> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        let mut vec = vec![];
+        self.foreach(|word, freq| {
+            vec.push((word.to_string(), freq.clone()));
+        });
+        vec.sort_by(|x, y| x.0.cmp(&y.0));
+        for (word, freq) in vec {
+            writeln!(f, "{:>32}: {}", word, freq)?;
+        }
+        Ok(())
     }
 }

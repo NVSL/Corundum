@@ -1,3 +1,4 @@
+use crate::utils::SpinLock;
 use std::panic::RefUnwindSafe;
 use std::panic::UnwindSafe;
 use crate::alloc::{MemPool, PmemUsage};
@@ -13,21 +14,18 @@ use std::hash::Hasher;
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 use std::ops::Deref;
-use std::sync::atomic::{self, AtomicBool, AtomicUsize, Ordering::*};
+use std::sync::atomic::{self, AtomicBool, Ordering::*};
 use std::*;
 
 const MAX_REFCOUNT: usize = (isize::MAX) as usize;
 
-#[derive(Debug)]
-struct Counter {
-    strong: AtomicUsize,
-    weak: AtomicUsize,
-
-    #[cfg(not(feature = "no_log_rc"))]
-    has_log: u8,
+struct Counter<A: MemPool> {
+    strong: usize,
+    weak: usize,
+    lock: VCell<u8, A>,
 }
 
-unsafe impl PSafe for Counter {}
+unsafe impl<A: MemPool> PSafe for Counter<A> {}
 
 /// The [`Parc`]'s inner data type
 /// 
@@ -36,7 +34,7 @@ unsafe impl PSafe for Counter {}
 /// 
 /// [`Parc`]: #
 pub struct ParcInner<T: ?Sized, A: MemPool> {
-    counter: Counter,
+    counter: Counter<A>,
 
     #[cfg(not(feature = "no_volatile_pointers"))]
     vlist: VCell<VWeakList, A>,
@@ -72,11 +70,11 @@ unsafe fn set_data_ptr<T, U>(mut ptr: *mut T, data: *mut U) -> *mut T {
 /// 
 /// To allow sharing, `Parc` provides a safe mechanism to cross the thread
 /// boundaries. When you need to share it, you can obtain a [`VWeak`]
-/// object by calling [`volatile()`] function. The [`VWeak`] object is both
+/// object by calling [`demote()`] function. The [`VWeak`] object is both
 /// [`Sync`] and [`Send`] and acts like a volatile reference. Calling
-/// [`VWeak`]`::`[`upgrade()`] gives access to data by creating a new reference
+/// [`VWeak`]`::`[`promote()`] gives access to data by creating a new reference
 /// of type `Parc` inside the other thread, if the referent is still available.
-/// Calling [`volatile()`] is dynamically prohibited to be inside a transaction.
+/// Calling [`demote()`] is dynamically prohibited to be inside a transaction.
 /// Therefore, the `Parc` should be already reachable from the root object and
 /// packed outside a transaction.
 ///
@@ -89,14 +87,14 @@ unsafe fn set_data_ptr<T, U>(mut ptr: *mut T, data: *mut U) -> *mut T {
 /// type P = BuddyAlloc;
 /// 
 /// let p = P::open::<Parc<i32>>("foo.pool", O_CF).unwrap();
-/// let v = p.volatile();
+/// let v = p.demote();
 /// let mut threads = vec![];
 /// 
 /// for i in 0..10 {
 ///     let p = v.clone();
 ///     threads.push(thread::spawn(move || {
 ///         transaction(|j| {
-///             if let Some(p) = p.upgrade(j) {
+///             if let Some(p) = p.promote(j) {
 ///                 println!("access {} from thread {}", *p, i);
 ///             }
 ///         }).unwrap();
@@ -111,7 +109,7 @@ unsafe fn set_data_ptr<T, U>(mut ptr: *mut T, data: *mut U) -> *mut T {
 /// # Mutability
 ///
 /// `Parc` doesn't provide mutable reference to the inner value. To allow
-/// interior mutability, you may use `Parc<`[`Mutex`]`<T,P>,P>` (or in short, 
+/// interior mutability, you may use `Parc<`[`PMutex`]`<T,P>,P>` (or in short, 
 /// `Parc<`[`PMutex`]`<T>>` using aliased types).
 ///
 /// ```
@@ -121,14 +119,14 @@ unsafe fn set_data_ptr<T, U>(mut ptr: *mut T, data: *mut U) -> *mut T {
 /// type P = BuddyAlloc;
 /// 
 /// let p = P::open::<Parc<PMutex<i32>>>("foo.pool", O_CF).unwrap();
-/// let v = p.volatile();
+/// let v = p.demote();
 /// let mut threads = vec![];
 /// 
 /// for i in 0..10 {
 ///     let p = v.clone();
 ///     threads.push(thread::spawn(move || {
 ///         transaction(|j| {
-///             if let Some(p) = p.upgrade(j) {
+///             if let Some(p) = p.promote(j) {
 ///                 let mut p = p.lock(j);
 ///                 *p += 1;
 ///                 println!("thread {} makes it {}", i, *p);
@@ -153,11 +151,11 @@ unsafe fn set_data_ptr<T, U>(mut ptr: *mut T, data: *mut U) -> *mut T {
 /// [`Journal`]: ../stm/journal/struct.Journal.html
 /// [`transaction`]: ../stm/fn.transaction.html
 /// [`Arc`]: std::sync::Arc
-/// [`Mutex`]: ./struct.Mutex.html
+/// [`PMutex`]: ./struct.PMutex.html
 /// [`PMutex`]: ../alloc/default/type.PMutex.html
 /// [`pclone`]: #impl-PClone
-/// [`volatile()`]: #method.volatile
-/// [`upgrade()`]: ./struct.VWeak.html#method.upgrade
+/// [`demote()`]: #method.demote
+/// [`promote()`]: ./struct.VWeak.html#method.promote
 pub struct Parc<T: PSafe + ?Sized, A: MemPool> {
     ptr: Ptr<ParcInner<T, A>, A>,
     phantom: PhantomData<T>,
@@ -177,7 +175,7 @@ impl<T: PSafe, A: MemPool> Parc<T, A> {
     /// # Examples
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// use corundum::sync::Parc;
     ///
     /// Heap::transaction(|j| {
@@ -189,11 +187,9 @@ impl<T: PSafe, A: MemPool> Parc<T, A> {
             let ptr = Ptr::new_unchecked(A::new(
                 ParcInner::<T, A> {
                     counter: Counter {
-                        strong: AtomicUsize::new(1),
-                        weak: AtomicUsize::new(1),
-
-                        #[cfg(not(feature = "no_log_rc"))]
-                        has_log: 0,
+                        strong: 1,
+                        weak: 1,
+                        lock: VCell::new(0),
                     },
 
                     #[cfg(not(feature = "no_volatile_pointers"))]
@@ -213,7 +209,7 @@ impl<T: PSafe, A: MemPool> Parc<T, A> {
     /// # Examples
     ///
     /// ```
-    /// use corundum::alloc::*;
+    /// use corundum::alloc::heap::*;
     /// use corundum::sync::Parc;
     ///
     /// corundum::transaction(|j| {
@@ -234,11 +230,9 @@ impl<T: PSafe, A: MemPool> Parc<T, A> {
             Parc::from_inner(Ptr::from_mut(A::new(
                 ParcInner {
                     counter: Counter {
-                        strong: AtomicUsize::new(1),
-                        weak: AtomicUsize::new(1),
-
-                        #[cfg(not(feature = "no_log_rc"))]
-                        has_log: 0,
+                        strong: 1,
+                        weak: 1,
+                        lock: VCell::new(0),
                     },
 
                     #[cfg(not(feature = "no_volatile_pointers"))]
@@ -261,7 +255,7 @@ impl<T: PSafe, A: MemPool> Parc<T, A> {
     /// # Examples
     ///
     /// ```
-    /// use corundum::alloc::*;
+    /// use corundum::alloc::heap::*;
     /// use corundum::sync::Parc;
     ///
     /// Heap::transaction(|j| {
@@ -291,8 +285,8 @@ impl<T: PSafe + ?Sized, A: MemPool> Parc<T, A> {
     }
 
     #[inline(always)]
-    fn inner(&self) -> &ParcInner<T, A> {
-        self.ptr.as_ref()
+    fn inner(&self) -> &mut ParcInner<T, A> {
+        self.ptr.get_mut()
     }
 
     #[allow(clippy::missing_safety_doc)]
@@ -300,21 +294,19 @@ impl<T: PSafe + ?Sized, A: MemPool> Parc<T, A> {
         let off = A::off_unchecked(ptr);
         let res = Self::from_inner(Ptr::from_off_unchecked(off));
 
-        #[cfg(not(feature = "no_log_rc"))]
-        res.log_count(j);
-
-        res.inner().counter.strong.fetch_add(1, Relaxed);
+        fetch_inc((*ptr).counter.lock.as_mut(), &mut (*ptr).counter.strong, j);
 
         res
     }
 
     #[inline(never)]
-    unsafe fn drop_slow(&mut self) {
+    unsafe fn drop_slow(&mut self, j: &Journal<A>) {
         // Destroy the data at this time, even though we may not free the box
         // allocation itself (there may still be weak pointers lying around).
         std::ptr::drop_in_place(&mut self.ptr.as_mut().value);
 
-        if self.inner().counter.weak.fetch_sub(1, Release) == 1 {
+        let inner = self.inner();
+        if fetch_dec(inner.counter.lock.as_mut(), &mut inner.counter.weak, j) == 1 {
             atomic::fence(Acquire);
             A::free(self.ptr.as_mut());
 
@@ -340,7 +332,7 @@ impl<T: PSafe, A: MemPool> Parc<mem::MaybeUninit<T>, A> {
     /// # Examples
     ///
     /// ```
-    /// use corundum::alloc::*;
+    /// use corundum::alloc::heap::*;
     /// use corundum::sync::Parc;
     ///
     /// corundum::transaction(|j| {
@@ -375,7 +367,7 @@ impl<T: PSafe, A: MemPool> Parc<MaybeUninit<T>, A> {
     /// # Examples
     ///
     /// ```
-    /// use corundum::alloc::*;
+    /// use corundum::alloc::heap::*;
     /// use corundum::sync::Parc;
     ///
     /// corundum::transaction(|j| {
@@ -415,7 +407,7 @@ impl<T: PSafe, A: MemPool> Parc<MaybeUninit<T>, A> {
     /// # Examples
     ///
     /// ```
-    /// use corundum::alloc::*;
+    /// use corundum::alloc::heap::*;
     /// use corundum::sync::Parc;
     ///
     /// corundum::transaction(|j| {
@@ -444,7 +436,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Parc<T, A> {
     /// # Examples
     ///
     /// ```
-    /// use corundum::alloc::*;
+    /// use corundum::alloc::heap::*;
     /// use corundum::sync::Parc;
     ///
     /// Heap::transaction(|j| {
@@ -454,43 +446,13 @@ impl<T: PSafe + ?Sized, A: MemPool> Parc<T, A> {
     /// ```
     /// 
     /// [`upgrade`]: ./struct.Weak.html#method.upgrade
-    pub fn downgrade(this: &Self, _journal: &Journal<A>) -> Weak<T, A> {
-        // This Relaxed is OK because we're checking the value in the CAS
-        // below.
-        let mut cur = this.inner().counter.weak.load(Relaxed);
+    pub fn downgrade(this: &Self, j: &Journal<A>) -> Weak<T, A> {
+        let inner = this.inner();
+        let _lock = SpinLock::acquire(inner.counter.lock.as_mut());
 
-        loop {
-            // check if the weak counter is currently "locked"; if so, spin.
-            if cur == usize::MAX {
-                cur = this.inner().counter.weak.load(Relaxed);
-                continue;
-            }
-
-            #[cfg(not(feature = "no_log_rc"))]
-            this.log_count(_journal);
-
-            // NOTE: this code currently ignores the possibility of overflow
-            // into usize::MAX; in general both Rc and Arc need to be adjusted
-            // to deal with overflow.
-
-            // Unlike with Clone(), we need this to be an Acquire read to
-            // synchronize with the write coming from `is_unique`, so that the
-            // events prior to that write happen before this read.
-            match this
-                .inner()
-                .counter
-                .weak
-                .compare_exchange_weak(cur, cur + 1, Acquire, Relaxed)
-            {
-                Ok(_) => {
-                    // Make sure we do not create a dangling Weak
-                    debug_assert!(!this.ptr.is_dangling());
-                    return Weak {
-                        ptr: this.ptr.clone(),
-                    };
-                }
-                Err(old) => cur = old,
-            }
+        lock_free_fetch_inc(&mut inner.counter.weak, j);
+        Weak {
+            ptr: this.ptr.clone(),
         }
     }
 
@@ -512,23 +474,29 @@ impl<T: PSafe + ?Sized, A: MemPool> Parc<T, A> {
     /// 
     /// let obj = P::open::<Parc<i32>>("foo.pool", O_CF).unwrap();
     /// 
-    /// let v = obj.volatile();
+    /// let v = obj.demote();
     /// assert_eq!(Parc::strong_count(&obj), 1);
     /// 
     /// P::transaction(|j| {
-    ///     if let Some(obj) = v.upgrade(j) {
+    ///     if let Some(obj) = v.promote(j) {
     ///         assert_eq!(Parc::strong_count(&obj), 2);
     ///     }
     /// }).unwrap();
     /// 
     /// assert_eq!(Parc::strong_count(&obj), 1);
     /// ```
-    pub fn volatile(&self) -> VWeak<T, A> {
+    pub fn demote(&self) -> VWeak<T, A> {
         debug_assert!(!self.ptr.is_dangling());
         assert!(
             !Journal::<A>::is_running(),
-            "Parc::volatile() cannot be used inside a transaction"
+            "Parc::demote() cannot be called from a transaction"
         );
+        VWeak::new(self)
+    }
+
+    /// Demote without dynamically checking transaction boundaries
+    pub unsafe fn unsafe_demote(&self) -> VWeak<T, A> {
+        debug_assert!(!self.ptr.is_dangling());
         VWeak::new(self)
     }
 
@@ -538,7 +506,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Parc<T, A> {
     /// # Examples
     ///
     /// ```
-    /// use corundum::alloc::*;
+    /// use corundum::alloc::heap::*;
     /// use corundum::sync::Parc;
     ///
     /// Heap::transaction(|j| {
@@ -549,7 +517,8 @@ impl<T: PSafe + ?Sized, A: MemPool> Parc<T, A> {
     /// }).unwrap()
     /// ```
     pub fn weak_count(this: &Self) -> usize {
-        let cnt = this.inner().counter.weak.load(SeqCst);
+        let inner = this.inner();
+        let cnt = load(inner.counter.lock.as_mut(), &this.inner().counter.weak);
         // If the weak count is currently locked, the value of the
         // count was 0 just before taking the lock.
         if cnt == usize::MAX {
@@ -565,7 +534,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Parc<T, A> {
     /// # Examples
     ///
     /// ```
-    /// use corundum::alloc::*;
+    /// use corundum::alloc::heap::*;
     /// use corundum::sync::Parc;
     /// use corundum::clone::PClone;
     ///
@@ -576,7 +545,8 @@ impl<T: PSafe + ?Sized, A: MemPool> Parc<T, A> {
     /// }).unwrap();
     /// ```
     pub fn strong_count(this: &Self) -> usize {
-        this.inner().counter.strong.load(SeqCst)
+        let inner = this.inner();
+        load(inner.counter.lock.as_mut(), &inner.counter.strong)
     }
 
     #[inline]
@@ -591,7 +561,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Parc<T, A> {
     /// # Examples
     ///
     /// ```
-    /// use corundum::alloc::*;
+    /// use corundum::alloc::heap::*;
     /// use corundum::sync::Parc;
     /// use corundum::clone::PClone;
     ///
@@ -630,6 +600,71 @@ impl<T: PSafe + ?Sized, A: MemPool> Deref for Parc<T, A> {
     }
 }
 
+impl<T: PSafe, A: MemPool> Parc<T, A> {
+    /// Initializes boxed data with `value` in-place if it is `None`
+    ///
+    /// This function should not be called from a transaction as it updates
+    /// data without taking high-level logs. If transaction is unsuccessful,
+    /// there is no way to recover data.
+    /// However, it is safe to use it outside a transaction because it uses
+    /// low-level logs to provide safety for a single update without drop.
+    /// A dynamic check at the beginning makes sure of that.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use corundum::default::*;
+    /// 
+    /// type P = BuddyAlloc;
+    ///
+    /// let root = P::open::<Option<Parc<i32>>>("foo.pool", O_CF).unwrap();
+    ///
+    /// Parc::initialize(&*root, 25);
+    /// 
+    /// let value = **root.as_ref().unwrap();
+    /// assert_eq!(value, 25);
+    /// ```
+    ///
+    pub fn initialize(arc: &Option<Parc<T, A>>, value: T) -> crate::result::Result<()> {
+        assert!(
+            !Journal::<A>::is_running(),
+            "Parc::initialize() cannot be used inside a transaction"
+        );
+        match arc {
+            Some(_) => Err("already initialized".to_string()),
+            None => if A::valid(arc) {
+                unsafe {
+                    let new = A::atomic_new(
+                        ParcInner::<T, A> {
+                            counter: Counter {
+                                strong: 1,
+                                weak: 1,
+                                lock: VCell::new(0),
+                            },
+        
+                            #[cfg(not(feature = "no_volatile_pointers"))]
+                            vlist: VCell::new(VWeakList::default()),
+        
+                            marker: PhantomData,
+                            value,
+                        });
+                    let pnew = Some(Parc::<T, A>::from_inner(Ptr::from_off_unchecked(new.1)));
+                    let src = crate::utils::as_slice64(&pnew);
+                    let mut base = A::off_unchecked(arc);
+                    for i in src {
+                        A::log64(base, *i, new.3);
+                        base += 8;
+                    }
+                    A::perform(new.3);
+                }
+                Ok(())
+            } else {
+                Err("The object is not in the PM".to_string())
+            }
+        }
+    }
+}
+
 unsafe impl<#[may_dangle] T: PSafe + ?Sized, A: MemPool> Drop for Parc<T, A> {
     /// Drops the `Parc` safely
     ///
@@ -640,7 +675,7 @@ unsafe impl<#[may_dangle] T: PSafe + ?Sized, A: MemPool> Drop for Parc<T, A> {
     /// # Examples
     ///
     /// ```
-    /// use corundum::alloc::*;
+    /// use corundum::alloc::heap::*;
     /// use corundum::sync::Parc;
     /// use corundum::clone::PClone;
     ///
@@ -663,33 +698,29 @@ unsafe impl<#[may_dangle] T: PSafe + ?Sized, A: MemPool> Drop for Parc<T, A> {
     ///
     fn drop(&mut self) {
         unsafe {
-            #[cfg(not(feature = "no_log_rc"))]
-            {
-                let journal = Journal::<A>::current(true).unwrap();
-                self.log_count(journal.0);
-            }
+            let journal = &*Journal::<A>::current(true).unwrap().0;
+            let inner = self.inner();
 
             // Because `fetch_sub` is already atomic, we do not need to synchronize
             // with other threads unless we are going to delete the object. This
             // same logic applies to the below `fetch_sub` to the `weak` count.
-            if self.inner().counter.strong.fetch_sub(1, Release) != 1 {
+            if fetch_dec(inner.counter.lock.as_mut(),
+                &mut inner.counter.strong, journal) != 1
+            {
                 return;
             }
 
-            atomic::fence(Acquire);
-
-            self.drop_slow();
+            self.drop_slow(journal);
         }
     }
 }
 
 impl<T: PSafe + ?Sized, A: MemPool> PClone<A> for Parc<T, A> {
     #[inline]
-    fn pclone(&self, _journal: &Journal<A>) -> Parc<T, A> {
-        #[cfg(not(feature = "no_log_rc"))]
-        self.log_count(_journal);
-
-        let old_size = self.inner().counter.strong.fetch_add(1, Relaxed);
+    fn pclone(&self, j: &Journal<A>) -> Parc<T, A> {
+        let inner = self.inner();
+        let old_size = fetch_inc(inner.counter.lock.as_mut(),
+                        &mut inner.counter.strong, j);
 
         // However we need to guard against massive ref counts in case someone
         // is `mem::forget`ing Arcs. If we don't do this the count can overflow
@@ -896,7 +927,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Weak<T, A> {
     /// # Examples
     ///
     /// ```
-    /// use corundum::alloc::*;
+    /// use corundum::alloc::heap::*;
     /// use corundum::sync::Parc;
     ///
     /// Heap::transaction(|j| {
@@ -912,40 +943,23 @@ impl<T: PSafe + ?Sized, A: MemPool> Weak<T, A> {
     ///     assert!(weak_five.upgrade(j).is_none());
     /// }).unwrap()
     /// ```
-    pub fn upgrade(&self, _journal: &Journal<A>) -> Option<Parc<T, A>> {
-        // We use a CAS loop to increment the strong count instead of a
-        // fetch_add because once the count hits 0 it must never be above 0.
+    pub fn upgrade(&self, j: &Journal<A>) -> Option<Parc<T, A>> {
         let inner = self.inner()?;
 
-        // Relaxed load because any write of 0 that we can observe
-        // leaves the field in a permanently zero state (so a
-        // "stale" read of 0 is fine), and any other value is
-        // confirmed via the CAS below.
-        let mut n = inner.counter.strong.load(Relaxed);
+        let _lock = SpinLock::acquire(inner.counter.lock.as_mut());
+        let n = inner.counter.strong;
 
-        loop {
-            if n == 0 {
-                return None;
-            }
-
-            // See comments in `Arc::clone` for why we do this (for `mem::forget`).
-            if n > MAX_REFCOUNT {
-                std::process::abort();
-            }
-
-            #[cfg(not(feature = "no_log_rc"))]
-            inner.log_count(_journal);
-
-            // Relaxed is valid for the same reason it is on Arc's Clone impl
-            match inner
-                .counter
-                .strong
-                .compare_exchange_weak(n, n + 1, Relaxed, Relaxed)
-            {
-                Ok(_) => return Some(Parc::from_inner(self.ptr)), // null checked above
-                Err(old) => n = old,
-            }
+        if n == 0 {
+            return None;
         }
+
+        // See comments in `Arc::clone` for why we do this (for `mem::forget`).
+        if n > MAX_REFCOUNT {
+            std::process::abort();
+        }
+
+        lock_free_fetch_inc(&mut inner.counter.strong, j);
+        Some(Parc::from_inner(self.ptr))
     }
 
     /// Gets the number of strong (`Parc`) pointers pointing to this allocation.
@@ -953,7 +967,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Weak<T, A> {
     /// If `self` was created using [`Weak::new`], this will return 0.
     pub fn strong_count(&self) -> usize {
         if let Some(inner) = self.inner() {
-            inner.counter.strong.load(SeqCst)
+            load(inner.counter.lock.as_mut(), &inner.counter.strong)
         } else {
             0
         }
@@ -973,8 +987,8 @@ impl<T: PSafe + ?Sized, A: MemPool> Weak<T, A> {
     pub fn weak_count(&self) -> usize {
         self.inner()
             .map(|inner| {
-                let weak = inner.counter.weak.load(SeqCst);
-                let strong = inner.counter.strong.load(SeqCst);
+                let weak = load(inner.counter.lock.as_mut(), &inner.counter.weak);
+                let strong = load(inner.counter.lock.as_mut(), &inner.counter.strong);
                 if strong == 0 {
                     0
                 } else {
@@ -990,7 +1004,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Weak<T, A> {
     }
 
     #[inline]
-    fn inner(&self) -> Option<&ParcInner<T, A>> {
+    fn inner(&self) -> Option<&mut ParcInner<T, A>> {
         if self.ptr.is_dangling() {
             None
         } else {
@@ -1016,11 +1030,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Weak<T, A> {
 impl<T: PSafe + ?Sized, A: MemPool> Drop for Weak<T, A> {
     fn drop(&mut self) {
         if let Some(_inner) = self.inner() {
-            #[cfg(not(feature = "no_log_rc"))]
-            {
-                let journal = Journal::<A>::current(true).unwrap();
-                _inner.log_count(journal.0);
-            }
+            let j = unsafe { &*Journal::<A>::current(true).unwrap().0 };
 
             // If we find out that we were the last weak pointer, then its time to
             // deallocate the data entirely. See the discussion in Arc::drop() about
@@ -1036,8 +1046,9 @@ impl<T: PSafe + ?Sized, A: MemPool> Drop for Weak<T, A> {
                 return;
             };
 
-            if inner.counter.weak.fetch_sub(1, Release) == 1 {
-                atomic::fence(Acquire);
+            if fetch_dec(inner.counter.lock.as_mut(),
+                &mut inner.counter.weak, j) == 1 
+            {
                 unsafe {
                     A::free(self.ptr.as_mut());
                 }
@@ -1048,21 +1059,19 @@ impl<T: PSafe + ?Sized, A: MemPool> Drop for Weak<T, A> {
 
 impl<T: PSafe + ?Sized, A: MemPool> PClone<A> for Weak<T, A> {
     #[inline]
-    fn pclone(&self, _journal: &Journal<A>) -> Weak<T, A> {
+    fn pclone(&self, j: &Journal<A>) -> Weak<T, A> {
         let inner = if let Some(inner) = self.inner() {
             inner
         } else {
             return Weak { ptr: self.ptr };
         };
 
-        #[cfg(not(feature = "no_log_rc"))]
-        inner.log_count(_journal);
-
         // See comments in Arc::clone() for why this is relaxed.  This can use a
         // fetch_add (ignoring the lock) because the weak count is only locked
         // where are *no other* weak pointers in existence. (So we can't be
         // running this code in that case).
-        let old_size = inner.counter.weak.fetch_add(1, Relaxed);
+        let old_size = fetch_inc(inner.counter.lock.as_mut(),
+                        &mut inner.counter.weak, j);
 
         // See comments in Arc::clone() for why we do this (for mem::forget).
         if old_size > MAX_REFCOUNT {
@@ -1086,34 +1095,115 @@ impl<T: PSafe + ?Sized, A: MemPool> Default for Weak<T, A> {
 }
 
 trait ParcBoxPtr<T: PSafe + ?Sized, A: MemPool> {
-    fn count(&self) -> &Counter;
+    fn count(&self) -> &Counter<A>;
+}
 
-    #[inline]
-    #[cfg(not(feature = "no_log_rc"))]
-    fn log_count(&self, journal: *const Journal<A>) {
-        let inner = self.count();
+#[inline]
+fn load(lock: *mut u8, cnt: &usize) -> usize {
+    let _lock = SpinLock::acquire(lock);
+    *cnt
+}
 
-        unsafe {
-            if A::contains(inner as *const _ as *const u8 as u64) {
-                let flag = &inner.has_log as *const u8 as *mut u8;
-                if std::intrinsics::atomic_cxchg_acqrel(flag, 0, 1).0 == 0 {
-                    inner.take_log(&*journal, Notifier::Atomic(Ptr::from_ref(&inner.has_log)));
-                }
+
+#[inline]
+fn lock_free_fetch_inc<A: MemPool>(cnt: &mut usize, journal: &Journal<A>) -> usize {
+    unsafe {
+        let mut log = if cfg!(not(feature = "no_log_rc")) {
+            if A::valid(cnt) {
+                Log::recount_on_failure(u64::MAX, false, journal)
+            } else {
+                Ptr::dangling()
             }
+        } else {
+            Ptr::dangling()
+        };
+        
+        let res = *cnt;
+        if log.is_dangling() {
+            *cnt += 1;
+        } else {
+            let off = A::off_unchecked(cnt);
+            let z = A::zone(off);
+            A::prepare(z);
+            A::log64(off, res as u64 + 1, z);
+            log.set(off, 1, z);
+            A::perform(z);
         }
+        res
+    }
+}
+
+#[inline]
+fn fetch_inc<A: MemPool>(lock: *mut u8, cnt: &mut usize, journal: &Journal<A>) -> usize {
+    unsafe {
+        let _lock = SpinLock::acquire(lock);
+
+        let mut log = if cfg!(not(feature = "no_log_rc")) {
+            if A::valid(cnt) {
+                Log::recount_on_failure(u64::MAX, false, journal)
+            } else {
+                Ptr::dangling()
+            }
+        } else {
+            Ptr::dangling()
+        };
+        
+        let res = *cnt;
+        if log.is_dangling() {
+            *cnt += 1;
+        } else {
+            let off = A::off_unchecked(cnt);
+            let z = A::zone(off);
+            A::prepare(z);
+            A::log64(off, res as u64 + 1, z);
+            log.set(off, 1, z);
+            A::perform(z);
+        }
+
+        res
+    }
+}
+
+#[inline]
+fn fetch_dec<A: MemPool>(lock: *mut u8, cnt: &mut usize, journal: &Journal<A>) -> usize {
+    unsafe {
+        let _lock = SpinLock::acquire(lock);
+
+        let mut log = if cfg!(not(feature = "no_log_rc")) {
+            if A::valid(cnt) {
+                Log::recount_on_failure(u64::MAX, true, journal)
+            } else {
+                Ptr::dangling()
+            }
+        } else {
+            Ptr::dangling()
+        };
+        
+        let res = *cnt;
+        if log.is_dangling() {
+            *cnt -= 1;
+        } else {
+            let off = A::off_unchecked(cnt);
+            let z = A::zone(off);
+            A::prepare(z);
+            A::log64(off, res as u64 - 1, z);
+            log.set(off, 1, z);
+            A::perform(z);
+        }
+        res
     }
 }
 
 impl<T: PSafe + ?Sized, A: MemPool> ParcBoxPtr<T, A> for Parc<T, A> {
     #[inline(always)]
-    fn count(&self) -> &Counter {
+    fn count(&self) -> &Counter<A> {
         &self.ptr.counter
     }
 }
 
 impl<T: PSafe + ?Sized, A: MemPool> ParcBoxPtr<T, A> for ParcInner<T, A> {
     #[inline(always)]
-    fn count(&self) -> &Counter {
+    fn count(&self) -> &Counter<A> {
         &self.counter
     }
 }
@@ -1162,20 +1252,20 @@ fn data_offset_align<A: MemPool>(align: usize) -> isize {
 /// the persistent allocation managed by [`Parc`] without preventing its inner
 /// value from being dropped.
 ///
-/// The typical way to obtain a `VWeak` pointer is to call [`Parc::volatile`].
+/// The typical way to obtain a `VWeak` pointer is to call [`Parc::demote`].
 ///
-/// [`Parc::volatile`]: ./struct.Parc.html#method.volatile
+/// [`Parc::demote`]: ./struct.Parc.html#method.demote
 /// [`upgrade`]: #method.upgrade
 pub struct VWeak<T: ?Sized, A: MemPool> {
-    ptr: *const ParcInner<T, A>,
+    ptr: *mut ParcInner<T, A>,
     valid: *mut VWeakValid,
     gen: u32,
 }
 
 impl<T: ?Sized, A: MemPool> UnwindSafe for VWeak<T, A> {}
 impl<T: ?Sized, A: MemPool> RefUnwindSafe for VWeak<T, A> {}
-unsafe impl<T: ?Sized, A: MemPool> Send for VWeak<T, A> {}
-unsafe impl<T: ?Sized, A: MemPool> Sync for VWeak<T, A> {}
+unsafe impl<T: PSend + ?Sized, A: MemPool> Send for VWeak<T, A> {}
+unsafe impl<T: PSend + ?Sized, A: MemPool> Sync for VWeak<T, A> {}
 unsafe impl<T: ?Sized, A: MemPool> TxInSafe for VWeak<T, A> {}
 unsafe impl<T: ?Sized, A: MemPool> TxOutSafe for VWeak<T, A> {}
 unsafe impl<T: ?Sized, A: MemPool> PSafe for VWeak<T, A> {}
@@ -1184,13 +1274,13 @@ impl<T: PSafe + ?Sized, A: MemPool> VWeak<T, A> {
     fn new(parc: &Parc<T, A>) -> VWeak<T, A> {
         let list = parc.ptr.vlist.as_mut();
         VWeak {
-            ptr: parc.ptr.as_ptr(),
+            ptr: parc.ptr.get_mut_ptr(),
             valid: list.append(),
             gen: A::gen(),
         }
     }
 
-    /// Attempts to upgrade the `VWeak` pointer to an [`Parc`], delaying
+    /// Attempts to promote the `VWeak` pointer to an [`Parc`], delaying
     /// dropping of the inner value if successful.
     ///
     /// Returns [`None`] if the inner value has since been dropped.
@@ -1207,66 +1297,49 @@ impl<T: PSafe + ?Sized, A: MemPool> VWeak<T, A> {
     /// struct Root(PRefCell<Option<Parc<i32>>>);
     /// impl RootObj<P> for Root {
     ///     fn init(j: &Journal) -> Self {
-    ///         Root(PRefCell::new(Some(Parc::new(10, j)),j))
+    ///         Root(PRefCell::new(Some(Parc::new(10, j))))
     ///     }
     /// }
     ///
-    /// let vweak_obj = obj.0.borrow().as_ref().unwrap().volatile();
+    /// let vweak_obj = obj.0.borrow().as_ref().unwrap().demote();
     /// 
     /// P::transaction(|j| {
-    ///     let strong_obj = vweak_obj.upgrade(j);
+    ///     let strong_obj = vweak_obj.promote(j);
     ///     assert!(strong_obj.is_some());
     ///     
     ///     // Destroy all strong pointers.
     ///     drop(strong_obj);
     ///     *obj.0.borrow_mut(j) = None; // RootCell does not drop, so make it None
     /// 
-    ///     assert!(vweak_obj.upgrade(j).is_none());
+    ///     assert!(vweak_obj.promote(j).is_none());
     /// }).unwrap();
     /// ```
-    pub fn upgrade(&self, _journal: &Journal<A>) -> Option<Parc<T, A>> {
-        // We use a CAS loop to increment the strong count instead of a
-        // fetch_add as this function should never take the reference count
-        // from zero to one.
+    pub fn promote(&self, j: &Journal<A>) -> Option<Parc<T, A>> {
         let inner = self.inner()?;
 
-        // Relaxed load because any write of 0 that we can observe
-        // leaves the field in a permanently zero state (so a
-        // "stale" read of 0 is fine), and any other value is
-        // confirmed via the CAS below.
-        let mut n = inner.counter.strong.load(Relaxed);
+        let _lock = SpinLock::acquire(inner.counter.lock.as_mut());
+        let n = inner.counter.strong;
 
-        loop {
-            if n == 0 {
-                return None;
-            }
-
-            // See comments in `Arc::clone` for why we do this (for `mem::forget`).
-            if n > MAX_REFCOUNT {
-                std::process::abort();
-            }
-
-            #[cfg(not(feature = "no_log_rc"))]
-            inner.log_count(_journal);
-
-            // Relaxed is fine for the failure case because we don't have any expectations about the new state.
-            // Acquire is necessary for the success case to synchronise with `Arc::new_cyclic`, when the inner
-            // value can be initialized after `Weak` references have already been created. In that case, we
-            // expect to observe the fully initialized value.
-            match inner.counter.strong.compare_exchange_weak(n, n + 1, Acquire, Relaxed) {
-                Ok(_) => return Some(Parc::from_inner(Ptr::from_raw(self.ptr))), // null checked above
-                Err(old) => n = old,
-            }
+        if n == 0 {
+            return None;
         }
+
+        // See comments in `Arc::clone` for why we do this (for `mem::forget`).
+        if n > MAX_REFCOUNT {
+            std::process::abort();
+        }
+
+        lock_free_fetch_inc(&mut inner.counter.strong, j);
+        Some(Parc::from_inner(Ptr::from_raw(self.ptr)))
     }
 
     #[inline]
-    fn inner(&self) -> Option<&ParcInner<T, A>> {
+    fn inner(&self) -> Option<&mut ParcInner<T, A>> {
         unsafe {
             if !(*self.valid).valid.load(Acquire) || self.gen != A::gen() {
                 None
             } else {
-                Some(&*self.ptr)
+                Some(&mut *self.ptr)
             }
         }
     }

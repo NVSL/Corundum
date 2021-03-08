@@ -21,7 +21,7 @@ use std::ptr::NonNull;
 /// [`Vec<T,P>`]: ../vec/struct.Vec.html
 /// [`String<P>`]: ../str/struct.String.html
 /// 
-pub struct Ptr<T: PSafe + ?Sized, A: MemPool> {
+pub struct Ptr<T: ?Sized, A: MemPool> {
     off: u64,
     marker: PhantomData<(A, T)>,
 }
@@ -38,14 +38,14 @@ impl<A: MemPool, T> !TxOutSafe for Ptr<T, A> {}
 /// The allocator does not need to implement `PSafe`
 unsafe impl<A: MemPool, T: PSafe + ?Sized> PSafe for Ptr<T, A> {}
 
-impl<A: MemPool, T: PSafe> Ptr<T, A> {
+impl<A: MemPool, T: ?Sized> Ptr<T, A> {
     #[inline]
     /// Gives a reference to the inner value if it is not dangling, otherwise, None.
     pub(crate) fn try_deref(&self) -> Option<&T> {
         if self.is_dangling() {
             None
         } else {
-            Some(&*self)
+            Some(self.as_ref())
         }
     }
 
@@ -55,12 +55,12 @@ impl<A: MemPool, T: PSafe> Ptr<T, A> {
         if self.is_dangling() {
             None
         } else {
-            Some(&mut *self)
+            Some(self.as_mut())
         }
     }
 }
 
-impl<A: MemPool, T: PSafe + ?Sized> Ptr<T, A> {
+impl<A: MemPool, T: ?Sized> Ptr<T, A> {
     #[inline]
     /// Creates new `Ptr` if `p` is valid
     pub(crate) fn new(p: &T) -> Option<Ptr<T, A>> {
@@ -89,6 +89,12 @@ impl<A: MemPool, T: PSafe + ?Sized> Ptr<T, A> {
     #[inline]
     /// Returns the mutable raw pointer of the value
     pub(crate) fn as_mut_ptr(&mut self) -> *mut T {
+        unsafe { A::get_mut_unchecked(self.off) }
+    }
+
+    #[inline]
+    /// Returns the mutable raw pointer of the value
+    pub(crate) fn get_mut_ptr(&self) -> *mut T {
         unsafe { A::get_mut_unchecked(self.off) }
     }
 
@@ -165,7 +171,6 @@ impl<A: MemPool, T: PSafe + ?Sized> Ptr<T, A> {
     pub(crate) unsafe fn new_unchecked(ptr: *const T) -> Self {
         Self {
             off: A::off_unchecked(ptr),
-
             marker: PhantomData,
         }
     }
@@ -193,6 +198,7 @@ impl<A: MemPool, T: PSafe + ?Sized> Ptr<T, A> {
     }
 
     #[inline]
+    #[track_caller]
     /// Consumes self as converts in to `Option<Self>` considering it whether
     /// points to a valid address or not.
     pub(crate) fn as_option(&mut self) -> Option<&mut Self> {
@@ -262,7 +268,7 @@ impl<A: MemPool, T: PSafe> PmemUsage for Ptr<T, A> {
     }
 }
 
-impl<A: MemPool, T: PSafe + ?Sized> Ptr<T, A> {    
+impl<A: MemPool, T: ?Sized> Ptr<T, A> {    
     #[inline]
     #[track_caller]
     pub(crate) fn from_raw(other: *const T) -> Self {
@@ -319,7 +325,7 @@ impl<A: MemPool, T: PSafe + ?Sized> Ptr<T, A> {
 //     }
 // }
 
-impl<A: MemPool, T: PSafe + ?Sized> PartialEq for Ptr<T, A> {
+impl<A: MemPool, T: ?Sized> PartialEq for Ptr<T, A> {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
         self.off == other.off

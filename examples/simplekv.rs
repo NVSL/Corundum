@@ -7,7 +7,6 @@
 #![allow(dead_code)]
 #![allow(incomplete_features)]
 #![feature(type_name_of_val)]
-#![feature(const_in_array_repeat_expressions)]
 #![feature(const_generics)]
 
 use corundum::default::*;
@@ -33,11 +32,11 @@ impl<V: PSafe> RootObj<P> for KvStore<V> {
     fn init(j: &Journal) -> Self {
         let mut buckets = PVec::with_capacity(BUCKETS_MAX, j);
         for _ in 0..BUCKETS_MAX {
-            buckets.push(PRefCell::new(PVec::new(j), j), j)
+            buckets.push(PRefCell::new(PVec::new()), j)
         }
         Self {
             buckets,
-            values: PRefCell::new(PVec::new(j), j),
+            values: PRefCell::new(PVec::new()),
         }
     }
 }
@@ -70,8 +69,7 @@ where
                 P::transaction(|j| {
                     let values = self.values.borrow();
                     values[e.1].set(val, j);
-                })
-                .unwrap();
+                }).unwrap();
                 return;
             }
         }
@@ -79,11 +77,10 @@ where
         P::transaction(|j| {
             let key = PString::from_str(key, j);
             let mut values = self.values.borrow_mut(j);
-            values.push(PCell::new(val, j), j);
+            values.push(PCell::new(val), j);
             let mut bucket = self.buckets[index].borrow_mut(j);
             bucket.push((key, values.len() - 1), j);
-        })
-        .unwrap();
+        }).unwrap();
     }
 }
 

@@ -247,7 +247,7 @@ where
             let right = n.split(&mut m);
 
             if let Some(mut parent) = parent {
-                let right = Prc::new(PRefCell::new(right, j), j);
+                let right = Prc::new(PRefCell::new(right), j);
                 let right = parent.insert_node(p, m, nn.pclone(j), right, j);
                 if key > m.key {
                     /* select node to continue search */
@@ -260,8 +260,8 @@ where
                 let mut items: [NodeItem<V>; BTREE_ORDER - 1] = Default::default();
                 let mut slots: [Option<PmemObj<Node<V>>>; BTREE_ORDER] = Default::default();
                 items[0] = m;
-                slots[0] = Some(Prc::new(PRefCell::new(n.pclone(j), j), j));
-                slots[1] = Some(Prc::new(PRefCell::new(right, j), j));
+                slots[0] = Some(Prc::new(PRefCell::new(n.pclone(j)), j));
+                slots[1] = Some(Prc::new(PRefCell::new(right), j));
                 let up = Node {
                         n: 1,
                         items,
@@ -490,7 +490,7 @@ where
 impl<V: PSafe + Default> RootObj<P> for BTree<V> {
     fn init(j: &Journal) -> Self {
         BTree {
-            root: Prc::new(PRefCell::new(Default::default(), j), j),
+            root: Prc::new(PRefCell::new(Default::default()), j),
         }
     }
 }

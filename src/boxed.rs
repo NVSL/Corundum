@@ -20,7 +20,7 @@ use std::ptr::{self, NonNull};
 ///
 /// If `Pbox` is mutable, the underlying data can mutate after taking a log.
 /// It is necessary because compound types containing a `Pbox` may provide
-/// interior mutability (via [`LogCell`] or [`LogRefCell`]) though which the
+/// interior mutability (via [`PCell`] or [`PRefCell`]) though which the
 /// `Pbox` become mutably available. The log taken for interior mutability works
 /// only on the pointer value and does not include the referent object. Therefore,
 /// `Pbox` provides a logging mechanism to provide mutable dereferencing.
@@ -34,7 +34,7 @@ use std::ptr::{self, NonNull};
 ///
 /// type P = BuddyAlloc;
 ///
-/// let _ = P::open_no_root("foo.pool", O_CF).unwrap();
+/// let _p = P::open_no_root("foo.pool", O_CF).unwrap();
 /// 
 /// transaction(|j| {
 ///     let five = Pbox::new(5, j);
@@ -49,7 +49,7 @@ use std::ptr::{self, NonNull};
 /// ```
 /// # use corundum::default::*;
 /// # type P = BuddyAlloc;
-/// # let _ = P::open_no_root("foo.pool", O_CF).unwrap();
+/// # let _p = P::open_no_root("foo.pool", O_CF).unwrap();
 /// transaction(|j| {
 ///     let val: u8 = 5;
 ///     let boxed: Pbox<u8> = Pbox::new(val, j);
@@ -61,7 +61,7 @@ use std::ptr::{self, NonNull};
 /// ```
 /// # use corundum::default::*;
 /// # type P = BuddyAlloc;
-/// # let _ = P::open_no_root("foo.pool", O_CF).unwrap();
+/// # let _p = P::open_no_root("foo.pool", O_CF).unwrap();
 /// transaction(|j| {
 ///     let boxed: Pbox<u8> = Pbox::new(5, j);
 ///     let val: u8 = *boxed;
@@ -79,7 +79,7 @@ use std::ptr::{self, NonNull};
 ///     Nil,
 /// }
 ///
-/// # let _ = P::open_no_root("foo.pool", O_CF).unwrap();
+/// # let _p = P::open_no_root("foo.pool", O_CF).unwrap();
 /// transaction(|j| {
 ///     let list: List<i32> = List::Cons(1, Pbox::new(List::Cons(2, Pbox::new(List::Nil, j)), j));
 ///     println!("{:?}", list);
@@ -102,8 +102,8 @@ use std::ptr::{self, NonNull};
 /// for a `Cons`. By introducing a `Pbox<T>`, which has a defined size, we know
 /// how big `Cons` needs to be.
 /// 
-/// [`LogCell`]: ../cell/struct.LogCell.html
-/// [`LogRefCell`]: ../cell/struct.LogRefCell.html
+/// [`PCell`]: ../cell/struct.PCell.html
+/// [`PRefCell`]: ../cell/struct.PRefCell.html
 /// [`Logger`]: ../stm/trait.Logger.html
 pub struct Pbox<T: PSafe + ?Sized, A: MemPool>(Ptr<T, A>, u8);
 
@@ -121,7 +121,7 @@ impl<T: PSafe, A: MemPool> Pbox<T, A> {
     /// # Examples
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # use corundum::boxed::Pbox;
     /// Heap::transaction(|j| {
     ///     let five = Pbox::new(5, j);
@@ -149,7 +149,7 @@ impl<T: PSafe, A: MemPool> Pbox<T, A> {
     /// ```
     /// # use corundum::default::*;
     /// # type P = BuddyAlloc;
-    /// # let _ = P::open_no_root("foo.pool", O_CF).unwrap();
+    /// # let _p = P::open_no_root("foo.pool", O_CF).unwrap();
     /// P::transaction(|j| {
     ///     let mut five = Pbox::<u32>::new_uninit(j);
     ///     
@@ -179,7 +179,7 @@ impl<T: PSafe, A: MemPool> Pbox<T, A> {
     /// ```
     /// # use corundum::default::*;
     /// # type P = BuddyAlloc;
-    /// # let _ = P::open_no_root("foo.pool", O_CF).unwrap();
+    /// # let _p = P::open_no_root("foo.pool", O_CF).unwrap();
     /// P::transaction(|j| {
     ///     let zero = Pbox::<u32>::new_zeroed(j);
     ///     let zero = unsafe { zero.assume_init() };
@@ -192,7 +192,7 @@ impl<T: PSafe, A: MemPool> Pbox<T, A> {
     pub fn new_zeroed(journal: &Journal<A>) -> Pbox<mem::MaybeUninit<T>, A> {
         unsafe {
             let mut uninit = Self::new_uninit(journal);
-            ptr::write_bytes::<T>(uninit.get_mut().as_mut_ptr(), 0, 1);
+            ptr::write_bytes::<T>(uninit.as_mut().as_mut_ptr(), 0, 1);
             uninit
         }
     }
@@ -225,7 +225,7 @@ impl<T: PSafe, A: MemPool> Pbox<mem::MaybeUninit<T>, A> {
 }
 
 impl<T: PSafe, A: MemPool> Pbox<T, A> {
-    /// Initializes boxed data with `value` inplace if it is `Null`
+    /// Initializes boxed data with `value` in-place if it is `None`
     ///
     /// This function should not be called from a transaction as it updates
     /// data without taking high-level logs. If transaction is unsuccessful,
@@ -256,15 +256,21 @@ impl<T: PSafe, A: MemPool> Pbox<T, A> {
         );
         match boxed {
             Some(_) => Err("already initialized".to_string()),
-            None => {
+            None => if A::valid(boxed) {
                 unsafe {
-                    let this = boxed as *const _ as *mut Option<Pbox<T, A>>;
                     let new = A::atomic_new(value);
-                    let bx = Pbox::from_raw(new.0);
-                    let _ = mem::replace(&mut *this, Some(bx));
+                    let bnew = Some(Pbox::<T, A>::from_raw(new.0));
+                    let src = crate::utils::as_slice64(&bnew);
+                    let mut base = A::off_unchecked(boxed);
+                    for i in src {
+                        A::log64(base, *i, new.3);
+                        base += 8;
+                    }
                     A::perform(new.3);
                 }
                 Ok(())
+            } else {
+                Err("The object is not in the PM".to_string())
             }
         }
     }
@@ -375,7 +381,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Pbox<T, A> {
     /// Simple usage:
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # use corundum::boxed::Pbox;
     /// Heap::transaction(|j| unsafe {
     ///     let x = Pbox::new(41, j);
@@ -408,7 +414,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Pbox<T, A> {
         unsafe { Pin::new_unchecked(boxed) }
     }
 
-    fn get_mut(&mut self) -> &mut T {
+    pub unsafe fn as_mut(&mut self) -> &mut T {
         self.0.as_mut()
     }
 
@@ -420,9 +426,11 @@ impl<T: PSafe + ?Sized, A: MemPool> Pbox<T, A> {
 unsafe impl<#[may_dangle] T: PSafe + ?Sized, A: MemPool> Drop for Pbox<T, A> {
     fn drop(&mut self) {
         unsafe {
-            let p = self.0.as_mut();
-            std::ptr::drop_in_place(p);
-            A::free(p);
+            if !self.0.is_dangling() {
+                let p = self.0.as_mut();
+                std::ptr::drop_in_place(p);
+                A::free(p);
+            }
         }
     }
 }
@@ -447,7 +455,7 @@ impl<T: PSafe + PClone<A> + ?Sized, A: MemPool> PClone<A> for Pbox<T, A> {
     /// # Examples
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # use corundum::boxed::Pbox;
     /// use corundum::clone::PClone;
     ///
@@ -522,43 +530,43 @@ impl<T: PSafe + Hasher + ?Sized, A: MemPool> Hasher for Pbox<T, A> {
         (**self).finish()
     }
     fn write(&mut self, bytes: &[u8]) {
-        self.get_mut().write(bytes)
+        unsafe { self.as_mut().write(bytes) }
     }
     fn write_u8(&mut self, i: u8) {
-        self.get_mut().write_u8(i)
+        unsafe { self.as_mut().write_u8(i) }
     }
     fn write_u16(&mut self, i: u16) {
-        self.get_mut().write_u16(i)
+        unsafe { self.as_mut().write_u16(i) }
     }
     fn write_u32(&mut self, i: u32) {
-        self.get_mut().write_u32(i)
+        unsafe { self.as_mut().write_u32(i) }
     }
     fn write_u64(&mut self, i: u64) {
-        self.get_mut().write_u64(i)
+        unsafe { self.as_mut().write_u64(i) }
     }
     fn write_u128(&mut self, i: u128) {
-        self.get_mut().write_u128(i)
+        unsafe { self.as_mut().write_u128(i) }
     }
     fn write_usize(&mut self, i: usize) {
-        self.get_mut().write_usize(i)
+        unsafe { self.as_mut().write_usize(i) }
     }
     fn write_i8(&mut self, i: i8) {
-        self.get_mut().write_i8(i)
+        unsafe { self.as_mut().write_i8(i) }
     }
     fn write_i16(&mut self, i: i16) {
-        self.get_mut().write_i16(i)
+        unsafe { self.as_mut().write_i16(i) }
     }
     fn write_i32(&mut self, i: i32) {
-        self.get_mut().write_i32(i)
+        unsafe { self.as_mut().write_i32(i) }
     }
     fn write_i64(&mut self, i: i64) {
-        self.get_mut().write_i64(i)
+        unsafe { self.as_mut().write_i64(i) }
     }
     fn write_i128(&mut self, i: i128) {
-        self.get_mut().write_i128(i)
+        unsafe { self.as_mut().write_i128(i) }
     }
     fn write_isize(&mut self, i: isize) {
-        self.get_mut().write_isize(i)
+        unsafe { self.as_mut().write_isize(i) }
     }
 }
 
@@ -617,11 +625,12 @@ impl<T: PSafe + ?Sized, A: MemPool> Deref for Pbox<T, A> {
 }
 
 impl<T: PSafe, A: MemPool> DerefMut for Pbox<T, A> {
+    #[track_caller]
     fn deref_mut(&mut self) -> &mut T {
         let d = self.0.as_mut();
         if self.1 == 0 && A::valid(&self.1) {
             let journal = Journal::<A>::try_current()
-                .expect("Unloggable data modification").0;
+                .expect("Unrecoverable data modification").0;
             unsafe {
                 d.take_log(&*journal, Notifier::NonAtomic(Ptr::from_ref(&self.1)));
             }

@@ -147,9 +147,9 @@ impl<T: PartialOrd + NVData> BST<T> {
         let mut loc = loc.borrow_mut(j);
         if loc.is_none() {
             *loc = Some(Node {
-                data: PRefCell::new(data, j),
-                left: Prc::new(PRefCell::new(None, j), j),
-                right: Prc::new(PRefCell::new(None, j), j),
+                data: PRefCell::new(data),
+                left: Prc::new(PRefCell::new(None), j),
+                right: Prc::new(PRefCell::new(None), j),
             });
         }
     }
@@ -190,7 +190,7 @@ impl<T: Display + PartialEq + NVData> Display for BST<T> {
 impl<T: NVData> RootObj<P> for BST<T> {
     fn init(j: &Journal) -> Self {
         Self {
-            root: Prc::new(PRefCell::new(None, j), j),
+            root: Prc::new(PRefCell::new(None), j),
         }
     }
 }
@@ -222,7 +222,7 @@ where
                         } else {
                             return false;
                         }
-                    } else if op == "i" {
+                    } else if op == "ins" {
                         if let Some(n) = Self::next(&args, &mut i) {
                             let n: T = n
                                 .parse()
@@ -231,7 +231,7 @@ where
                         } else {
                             return false;
                         }
-                    } else if op == "r" {
+                    } else if op == "del" {
                         if let Some(n) = Self::next(&args, &mut i) {
                             let n: T = n
                                 .parse()

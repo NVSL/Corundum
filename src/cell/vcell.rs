@@ -1,6 +1,7 @@
 use crate::alloc::MemPool;
-use crate::{PSafe, VSafe};
+use crate::{PSafe, VSafe, utils};
 use std::cmp::*;
+use std::mem::*;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 
@@ -25,11 +26,10 @@ use std::ops::{Deref, DerefMut};
 ///
 /// let root = P::open::<Root>("foo.pool", O_CF).unwrap();
 ///     
-/// P::transaction(|j| {
-///     let mut v = root.v.borrow_mut();
-///     assert_eq!(*v, i32::default());
-///     *v = 20; // This value is volatile and resets on restart
-/// }).unwrap();
+/// let mut v = root.v.borrow_mut();
+/// assert_eq!(*v, i32::default());
+/// *v = 20; // This value is volatile and resets on restart
+/// assert_eq!(*v, 20);
 /// ```
 /// 
 /// [`Default`]: std::default::Default
@@ -37,7 +37,7 @@ use std::ops::{Deref, DerefMut};
 pub struct VCell<T: Default + VSafe + ?Sized, A: MemPool> {
     gen: u32,
     phantom: PhantomData<(A, T)>,
-    value: *mut T,
+    value: T,
 }
 
 /// Safe to transfer between thread boundaries
@@ -48,10 +48,11 @@ unsafe impl<T: Default + VSafe + ?Sized, A: MemPool> PSafe for VCell<T, A> {}
 impl<T, A: MemPool> !Sync for VCell<T, A> {}
 
 impl<T: Default + VSafe, A: MemPool> VCell<T, A> {
+    /// Create a new valid cell
     pub fn new(v: T) -> Self {
         Self {
             gen: A::gen(),
-            value: Box::into_raw(Box::new(v)),
+            value: v,
             phantom: PhantomData,
         }
     }
@@ -60,13 +61,40 @@ impl<T: Default + VSafe, A: MemPool> VCell<T, A> {
     pub(crate) fn as_mut(&self) -> &mut T {
         unsafe { &mut *(self.deref() as *const T as *mut T) }
     }
+
+    #[inline]
+    /// Create a new invalid cell to be used in const functions
+    pub const fn invalid(v: T) -> Self {
+        Self {
+            gen: 0,
+            value: v,
+            phantom: PhantomData,
+        }
+    }
+
+    fn force(&mut self) -> &mut T {
+        unsafe {
+            let gen = A::gen();
+            if self.gen != gen {
+                let off = A::off_unchecked(&self.gen);
+                let z = A::zone(off);
+                A::prepare(z); // Used as a global lock
+                if self.gen != gen {
+                    forget(replace(&mut self.value, T::default()));
+                    self.gen = gen;
+                }
+                A::perform(z);
+            }
+            &mut self.value
+        }
+    }
 }
 
 impl<T: Default + VSafe, A: MemPool> Default for VCell<T, A> {
     fn default() -> Self {
         Self {
             gen: A::gen(),
-            value: Box::into_raw(Box::new(T::default())),
+            value: T::default(),
             phantom: PhantomData,
         }
     }
@@ -77,31 +105,14 @@ impl<T: Default + VSafe, A: MemPool> Deref for VCell<T, A> {
 
     #[inline]
     fn deref(&self) -> &T {
-        use std::intrinsics::*;
-        unsafe {
-            let self_mut = self as *const Self as *mut Self;
-            let gen = &mut (*self_mut).gen;
-            while atomic_load_acq(gen) == u32::MAX {}
-
-            let curr = A::gen();
-            let old = atomic_load_acq(&self.gen);
-            if old != curr {
-                if atomic_cxchg_acqrel(gen, old, u32::MAX).0 != curr {
-                    std::mem::forget(std::ptr::replace(&mut (*self_mut).value, 
-                    Box::into_raw(Box::new(T::default()))));
-                    atomic_store_rel(gen, curr);
-                }
-                while atomic_load_acq(gen) == u32::MAX {}
-            }
-            &*self.value
-        }
+        utils::as_mut(self).force()
     }
 }
 
 impl<T: Default + VSafe, A: MemPool> DerefMut for VCell<T, A> {
     #[inline]
     fn deref_mut(&mut self) -> &mut T {
-        unsafe { &mut *self.value }
+        self.force()
     }
 }
 
@@ -151,45 +162,33 @@ impl<T: Default + VSafe + Ord + Copy, A: MemPool> Ord for VCell<T, A> {
 impl<T: Default + VSafe + PartialEq + Copy, A: MemPool> PartialEq<T> for VCell<T, A> {
     #[inline]
     fn eq(&self, other: &T) -> bool {
-        unsafe { *self.value == *other }
+        self.value == *other
     }
 }
 
 impl<T: Default + VSafe + PartialOrd + Copy, A: MemPool> PartialOrd<T> for VCell<T, A> {
     #[inline]
     fn partial_cmp(&self, other: &T) -> Option<Ordering> {
-        unsafe { (*self.value).partial_cmp(&other) }
+        self.value.partial_cmp(&other)
     }
 
     #[inline]
     fn lt(&self, other: &T) -> bool {
-        unsafe { *self.value < *other }
+        self.value < *other
     }
 
     #[inline]
     fn le(&self, other: &T) -> bool {
-        unsafe { *self.value <= *other }
+        self.value <= *other
     }
 
     #[inline]
     fn gt(&self, other: &T) -> bool {
-        unsafe { *self.value > *other }
+        self.value > *other
     }
 
     #[inline]
     fn ge(&self, other: &T) -> bool {
-        unsafe { *self.value >= *other }
-    }
-}
-
-impl<T: Default + VSafe + ?Sized, A: MemPool> Drop for VCell<T, A> { 
-    fn drop(&mut self) {
-        use std::alloc::Layout;
-        std::mem::drop(self.value);
-        if self.gen == A::gen() {
-            unsafe {
-                std::alloc::dealloc(self.value as *mut _ as *mut u8, Layout::new::<T>());
-            }
-        }
+        self.value >= *other
     }
 }

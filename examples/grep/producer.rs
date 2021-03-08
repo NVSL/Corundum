@@ -31,7 +31,7 @@ impl Producer {
         Self {
             filenames,
             lines,
-            pos: PMutex::new((0, 0), j),
+            pos: PMutex::new((0, 0)),
         }
     }
 
@@ -39,7 +39,7 @@ impl Producer {
     pub fn start(this: VWeak<Self, P>) {
         loop {
             if !P::transaction(|j| {
-                if let Some(this) = this.upgrade(j) {
+                if let Some(this) = this.promote(j) {
                     let mut pos = this.pos.lock(j);
                     if pos.0 < this.filenames.len() {
                         let filename = &this.filenames[pos.0];

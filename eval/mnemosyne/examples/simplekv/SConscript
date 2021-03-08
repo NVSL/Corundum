@@ -1,0 +1,10 @@
+Import('examplesEnv')
+  
+myEnv = examplesEnv.Clone()
+
+if myEnv['BUILD_PVAR'] == True:
+        pvarLibrary = myEnv.SharedLibrary('pvar', 'pvar.cpp')
+        Return('pvarLibrary')
+else:
+        sources = Split("""simplekv.cpp""")
+        myEnv.Program('simplekv', sources)

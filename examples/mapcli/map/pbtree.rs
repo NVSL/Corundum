@@ -8,7 +8,7 @@
 // use corundum::stm::Journal;
 // use corundum::*;
 // use corundum::cell::*;
-// use corundum::alloc::*;
+// use corundum::alloc::heap::*;
 // use corundum::sync::{Parc,Mutex};
 // use corundum::clone::Clone;
 // use std::clone::Clone as StdClone;

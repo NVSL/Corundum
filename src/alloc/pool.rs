@@ -1,7 +1,8 @@
 use crate::cell::{RootCell, RootObj};
 use crate::result::Result;
-use crate::stm::{journal::*, Chaperon, Log};
-use crate::{as_mut, PSafe, TxInSafe, TxOutSafe};
+use crate::stm::*;
+use crate::utils::*;
+use crate::*;
 use std::collections::HashMap;
 use std::fs::OpenOptions;
 use std::ops::Range;
@@ -89,14 +90,13 @@ pub const FLAG_HAS_ROOT: u64 = 0x0000_0001;
 
 /// This macro can be used to access static data of an arbitrary allocator
 #[macro_export]
-#[track_caller]
 macro_rules! static_inner {
     ($id:ident, $inner:ident, $body:block) => {
         unsafe {
             if let Some($inner) = &mut $id {
                 $body
             } else {
-                panic!("No memory pool is open");
+                panic!("No memory pool is open or the root object is moved to a transaction. Try cloning the root object instead of moving it to a transaction.");
             }
         }
     };
@@ -170,6 +170,11 @@ pub unsafe trait MemPool
 where
     Self: 'static + Sized,
 {
+    /// Returns the name of the pool type
+    fn name() -> &'static str {
+        std::any::type_name::<Self>()
+    }
+
     /// Opens a new pool without any root object. This function is for testing 
     /// and is not useful in real applications as none of the allocated
     /// objects in persistent region is durable. The reason is that they are not
@@ -271,10 +276,10 @@ where
     /// let mut threads = vec!();
     ///
     /// for _ in 0..10 {
-    ///     let root = Parc::volatile(&root);
+    ///     let root = Parc::demote(&root);
     ///     threads.push(thread::spawn(move || {
     ///         transaction(|j| {
-    ///             if let Some(root) = root.upgrade(j) {
+    ///             if let Some(root) = root.promote(j) {
     ///                 let mut root = root.lock(j);
     ///                 *root += 10;
     ///             }
@@ -368,15 +373,13 @@ where
     /// The offset should be in the valid address range
     #[inline]
     unsafe fn get_unchecked<'a, T: 'a + ?Sized>(off: u64) -> &'a T {
-        union U<'b, K: 'b + ?Sized> {
-            off: u64,
-            raw: &'b K,
-        }
+        #[cfg(feature = "stat_perf")]
+        let _perf = crate::stat::Measure::<Self>::Deref(std::time::Instant::now());
 
-        #[cfg(any(feature = "access_violation_check", debug_assertions))]
+        #[cfg(any(feature = "check_access_violation", debug_assertions))]
         assert!( Self::allocated(off, 1), "Bad address (0x{:x})", off );
 
-        U { off: Self::start() + off }.raw
+        utils::read_addr(Self::start() + off)
     }
 
     /// Acquires a mutable reference to the object
@@ -387,15 +390,13 @@ where
     #[inline]
     #[track_caller]
     unsafe fn get_mut_unchecked<'a, T: 'a + ?Sized>(off: u64) -> &'a mut T {
-        union U<'b, K: 'b + ?Sized> {
-            off: u64,
-            raw: &'b mut K,
-        }
+        #[cfg(feature = "stat_perf")]
+        let _perf = crate::stat::Measure::<Self>::Deref(std::time::Instant::now());
 
-        #[cfg(any(feature = "access_violation_check", debug_assertions))]
+        #[cfg(any(feature = "check_access_violation", debug_assertions))]
         assert!( Self::allocated(off, 1), "Bad address (0x{:x})", off );
 
-        U { off: Self::start() + off }.raw
+        utils::read_addr(Self::start() + off)
     }
 
     /// Acquires a reference to the slice
@@ -405,27 +406,21 @@ where
     /// The offset should be in the valid address range
     #[inline]
     unsafe fn deref_slice_unchecked<'a, T: 'a>(off: u64, len: usize) -> &'a [T] {
+        #[cfg(feature = "stat_perf")]
+        let _perf = crate::stat::Measure::<Self>::Deref(std::time::Instant::now());
+
         if len == 0 {
             &[]
         } else {
-            union U<'b, K: 'b> {
-                off: u64,
-                raw: &'b K,
-            }
-            let ptr = U {
-                off: Self::start() + off,
-            }
-            .raw;
+            let ptr = utils::read_addr(Self::start() + off);
             let res = std::slice::from_raw_parts(ptr, len);
 
-            #[cfg(any(feature = "access_violation_check", debug_assertions))]
+            #[cfg(any(feature = "check_access_violation", debug_assertions))]
             assert!(
                 Self::allocated(off, mem::size_of::<T>() * len),
-                format!(
-                    "Bad address (0x{:x}..0x{:x})",
-                    off,
-                    off + (mem::size_of::<T>() * len) as u64 - 1
-                )
+                "Bad address (0x{:x}..0x{:x})",
+                off,
+                off + (mem::size_of::<T>() * len) as u64 - 1
             );
 
             res
@@ -439,27 +434,21 @@ where
     /// The offset should be in the valid address range
     #[inline]
     unsafe fn deref_slice_unchecked_mut<'a, T: 'a>(off: u64, len: usize) -> &'a mut [T] {
+        #[cfg(feature = "stat_perf")]
+        let _perf = crate::stat::Measure::<Self>::Deref(std::time::Instant::now());
+
         if len == 0 {
             &mut []
         } else {
-            union U<'b, K: 'b> {
-                off: u64,
-                raw: &'b mut K,
-            }
-            let ptr = U {
-                off: Self::start() + off,
-            }
-            .raw;
+            let ptr = utils::read_addr(Self::start() + off);
             let res = std::slice::from_raw_parts_mut(ptr, len);
 
-            #[cfg(any(feature = "access_violation_check", debug_assertions))]
+            #[cfg(any(feature = "check_access_violation", debug_assertions))]
             assert!(
                 Self::allocated(off, mem::size_of::<T>() * len),
-                format!(
-                    "Bad address (0x{:x}..0x{:x})",
-                    off,
-                    off + (mem::size_of::<T>() * len) as u64 - 1
-                )
+                "Bad address (0x{:x}..0x{:x})",
+                off,
+                off + (mem::size_of::<T>() * len) as u64 - 1
             );
 
             res
@@ -489,10 +478,10 @@ where
     /// Translates raw pointers to memory offsets
     #[inline]
     fn off<T: ?Sized>(x: *const T) -> Result<u64> {
-        if Self::valid(unsafe { &*x }) {
+        if Self::valid(x) {
             Ok(x as *const u8 as u64 - Self::start())
         } else {
-            Err("out of valid range".to_string())
+            Err(format!("out of valid range ({:p})", x).to_string())
         }
     }
 
@@ -530,9 +519,9 @@ where
 
     /// Checks if the reference `p` belongs to this pool
     #[inline]
-    fn valid<T: ?Sized>(p: &T) -> bool {
+    fn valid<T: ?Sized>(p: *const T) -> bool {
         let rng = Self::rng();
-        let start = p as *const T as *const u8 as u64;
+        let start = p as *const u8 as u64;
         // let end = start + std::mem::size_of_val(p) as u64;
         start >= rng.start && start < rng.end
         // && end >= rng.start && end < rng.end
@@ -565,6 +554,14 @@ where
     /// This function is unsafe because undefined behavior can result
     /// if the caller does not ensure that `size` has non-zero.
     /// The allocated block of memory may or may not be initialized.
+    /// Using `alloc` may lead to memory leak if the transaction fails
+    /// after this function successfully returns. To allocate memory in
+    /// a failure-atomic manner, use [`pre_alloc`], [`Log::drop_on_failure`],
+    /// and [`perform`] functions respectively.
+    /// 
+    /// [`pre_alloc`]: #method.pre_alloc
+    /// [`Log::drop_on_failure`]: ../stm/struct.Log.html#method.drop_on_failure
+    /// [`perform`]: #method.pre_alloc
     #[inline]
     #[track_caller]
     unsafe fn alloc(size: usize) -> (*mut u8, u64, usize) {
@@ -609,7 +606,7 @@ where
     /// ```
     /// # use corundum::default::*;
     /// # type P = BuddyAlloc;
-    /// # let _=P::open_no_root("foo.pool", O_CF).unwrap();
+    /// # let _p = P::open_no_root("foo.pool", O_CF).unwrap();
     /// unsafe {
     ///     let (ptr, _, _, z) = P::pre_alloc(8);
     ///     *ptr = 10;
@@ -633,7 +630,7 @@ where
     /// ```
     /// # use corundum::default::*;
     /// # type P = BuddyAlloc;
-    /// # let _=P::open_no_root("foo.pool", O_CF).unwrap();
+    /// # let _p = P::open_no_root("foo.pool", O_CF).unwrap();
     /// unsafe {
     ///     let (ptr, _, _) = P::alloc(8);
     ///     *ptr = 10;
@@ -667,7 +664,7 @@ where
     /// ```
     /// # use corundum::default::*;
     /// # type P = BuddyAlloc;
-    /// # let _ = P::open_no_root("foo.pool", O_CF).unwrap();
+    /// # let _p = P::open_no_root("foo.pool", O_CF).unwrap();
     /// unsafe {
     ///     // Prepare an allocation. The allocation is not durable yet. In case
     ///     // of a crash, the prepared allocated space is gone. It is fine
@@ -702,6 +699,15 @@ where
     /// [`Journal`]: ../stm/journal/struct.Journal.html
     /// 
     unsafe fn drop_on_failure(_off: u64, _len: usize, _zone: usize) {}
+
+
+    /// In case of not using [`pre_alloc`] or [`pre_dealloc`], starts a low-level
+    /// atomic section on a given zone.
+    /// 
+    /// [`pre_alloc`]: #method.pre_alloc
+    /// [`pre_dealloc`]: #method.pre_dealloc
+    /// 
+    unsafe fn prepare(_zone: usize) { }
 
     /// Performs the prepared operations
     /// 
@@ -763,11 +769,11 @@ where
     }
 
     /// Allocates a new slice and then places `x` into it with `DropOnAbort` log
-    unsafe fn new_slice<'a, T: PSafe + 'a>(x: &'a [T], _journal: &Journal<Self>) -> &'a mut [T] {
+    unsafe fn new_slice<'a, T: PSafe + 'a>(x: &'a [T], journal: &Journal<Self>) -> &'a mut [T] {
         debug_assert!(mem::size_of::<T>() != 0, "Cannot allocate ZST");
         debug_assert!(!x.is_empty(), "Cannot allocate empty slice");
 
-        let mut log = Log::drop_on_abort(u64::MAX, 1, _journal);
+        let mut log = Log::drop_on_abort(u64::MAX, 1, journal);
         let (p, off, size, z) = Self::atomic_new_slice(x);
         log.set(off, size, z);
         Self::perform(z);
@@ -776,13 +782,7 @@ where
 
     /// Allocates new memory and then places `x` into it without realizing the allocation
     unsafe fn atomic_new<'a, T: 'a>(x: T) -> (&'a mut T, u64, usize, usize) {
-        union U<'b, K: 'b + ?Sized> {
-            raw: *mut u8,
-            rf: &'b mut K,
-        }
-
-        #[cfg(feature = "verbose")]
-        println!("          ALLOC      TYPE: {}", std::any::type_name::<T>());
+        log!(Self, White, "ALLOC", "TYPE: {}", std::any::type_name::<T>());
 
         let size = mem::size_of::<T>();
         let (raw, off, len, z) = Self::pre_alloc(size);
@@ -790,19 +790,14 @@ where
             panic!("Memory exhausted");
         }
         Self::drop_on_failure(off, len, z);
-        let p = U { raw }.rf;
+        let p = utils::read(raw);
         mem::forget(ptr::replace(p, x));
         (p, off, size, z)
     }
 
     /// Allocates new memory and then places `x` into it without realizing the allocation
     unsafe fn atomic_new_slice<'a, T: 'a + PSafe>(x: &'a [T]) -> (&'a mut [T], u64, usize, usize) {
-        #[cfg(feature = "verbose")]
-        println!(
-            "          ALLOC      TYPE: [{}; {}]",
-            std::any::type_name::<T>(),
-            x.len()
-        );
+        log!(Self, White, "ALLOC", "TYPE: [{}; {}]", std::any::type_name::<T>(), x.len());
 
         let (ptr, off, size, z) = Self::pre_alloc(Layout::for_value(x).size());
         if ptr.is_null() {
@@ -833,8 +828,7 @@ where
 
     /// Allocates new memory without copying data
     unsafe fn new_uninit_for_layout(size: usize, journal: &Journal<Self>) -> *mut u8 {
-        #[cfg(feature = "verbose")]
-        println!("          ALLOC      {:?}", size);
+        log!(Self, White, "ALLOC", "{:?}", size);
 
         let mut log = Log::drop_on_abort(u64::MAX, 1, journal);
         let (p, off, len, z) = Self::pre_alloc(size);
@@ -849,30 +843,21 @@ where
 
     /// Allocates new memory without copying data and realizing the allocation
     unsafe fn atomic_new_uninit<'a, T: 'a>() -> (&'a mut T, u64, usize, usize) {
-        union U<'b, K: 'b + ?Sized> {
-            ptr: *mut u8,
-            rf: &'b mut K,
-        }
-
         let (ptr, off, len, z) = Self::pre_alloc(mem::size_of::<T>());
         if ptr.is_null() {
             panic!("Memory exhausted");
         }
         Self::drop_on_failure(off, len, z);
-        (U { ptr }.rf, off, len, z)
+        (utils::read(ptr), off, len, z)
     }
 
     /// Allocates new memory for value `x`
     unsafe fn alloc_for_value<'a, T: ?Sized>(x: &T) -> &'a mut T {
-        union U<'b, K: 'b + ?Sized> {
-            raw: *mut u8,
-            rf: &'b mut K,
-        }
         let raw = Self::alloc(mem::size_of_val(x));
         if raw.0.is_null() {
             panic!("Memory exhausted");
         }
-        U { raw: raw.0 }.rf
+        utils::read(raw.0)
     }
 
     /// Creates a `DropOnCommit` log for the value `x`
@@ -933,14 +918,14 @@ where
     /// This function is for internal use and should not be called elsewhere.
     ///
     #[inline]
+    #[track_caller]
     unsafe fn commit() {
         // Self::discard(crate::ll::cpu());
         if let Some(journal) = Journal::<Self>::current(false) {
             *journal.1 -= 1;
 
             if *journal.1 == 0 {
-                #[cfg(feature = "verbose")]
-                println!("{:?}", journal.0);
+                log!(Self, White, "COMMIT", "JRNL: {:?}", journal.0);
 
                 let journal = as_mut(journal.0);
                 journal.commit();
@@ -962,9 +947,10 @@ where
     unsafe fn commit_no_clear() {
         // Self::discard(crate::ll::cpu());
         if let Some(journal) = Journal::<Self>::current(false) {
-            if *journal.1 == 1 {
-                #[cfg(feature = "verbose")]
-                println!("{:?}", journal.0);
+            *journal.1 -= 1;
+
+            if *journal.1 == 0 {
+                log!(Self, White, "COMMIT_NC", "JRNL: {:?}", journal.0);
 
                 as_mut(journal.0).commit();
             }
@@ -985,9 +971,8 @@ where
         if let Some(journal) = Journal::<Self>::current(false) {
             *journal.1 -= 1;
 
-            if *journal.1 == 0 {
-                #[cfg(feature = "verbose")]
-                println!("{:?}", journal.0);
+            if *journal.1 == -1 {
+                log!(Self, White, "CLEAR", "JRNL: {:?}", journal.0);
 
                 as_mut(journal.0).clear();
             }
@@ -1010,8 +995,7 @@ where
             *journal.1 -= 1;
 
             if *journal.1 == 0 {
-                #[cfg(feature = "verbose")]
-                println!("{:?}", journal.0);
+                log!(Self, White, "ROLLBACK", "JRNL: {:?}", journal.0);
 
                 let journal = as_mut(journal.0);
                 journal.rollback();
@@ -1035,19 +1019,17 @@ where
     ///
     unsafe fn rollback_no_clear() {
         if let Some(journal) = Journal::<Self>::current(false) {
-            if *journal.1 == 1 {
-                #[cfg(feature = "verbose")]
-                println!("{:?}", journal.0);
+            *journal.1 -= 1;
+
+            if *journal.1 == 0 {
+                log!(Self, White, "ROLLBACK_NC", "JRNL: {:?}", journal.0);
 
                 as_mut(journal.0).rollback();
-            } else {
-                // Propagate the panic to the upper transactions
-                panic!("Unsuccessful nested transaction");
             }
         }
     }
 
-    /// Executes commands atomically
+    /// Executes commands atomically with respect to system crashes
     /// 
     /// The `transaction` function takes a closure with one argument of type
     /// `&Journal<Self>`. Before running the closure, it atomically creates a
@@ -1089,11 +1071,15 @@ where
     /// [`AssertTxInSafe`]: ../struct.AssertTxInSafe.html
     /// 
     #[inline]
+    #[track_caller]
     fn transaction<T, F: FnOnce(&Journal<Self>) -> T>(body: F) -> Result<T>
     where
         F: TxInSafe + UnwindSafe,
         T: TxOutSafe,
     {
+        #[cfg(feature = "stat_perf")]
+        let _perf = crate::stat::Measure::<Self>::Transaction;
+        
         let mut chaperoned = false;
         let cptr = &mut chaperoned as *mut bool;
         let res = std::panic::catch_unwind(|| {
@@ -1104,31 +1090,43 @@ where
                     *cptr = true;
                     let mut chaperon = &mut *ptr;
                     chaperon.postpone(
-                        &|| Self::commit_no_clear(),
-                        &|| Self::rollback_no_clear(),
-                        &|| Self::clear(),
+                        Self::commit_no_clear,
+                        Self::rollback_no_clear,
+                        Self::clear,
                     );
                     body({
+                        #[cfg(feature = "stat_perf")]
+                        let _perf = crate::stat::Measure::<Self>::Logging(std::time::Instant::now());
+                        
                         let j = Journal::<Self>::current(true).unwrap();
                         *j.1 += 1;
                         let journal = as_mut(j.0);
                         journal.start_session(&mut chaperon);
-                        journal.reset(JOURNAL_COMMITTED);
+                        journal.unset(JOURNAL_COMMITTED);
                         journal
                     })
                 }
             } else {
                 body({
+                    #[cfg(feature = "stat_perf")]
+                    let _perf = crate::stat::Measure::<Self>::Logging(std::time::Instant::now());
+
                     let j = Journal::<Self>::current(true).unwrap();
                     unsafe {
                         *j.1 += 1;
-                        as_mut(j.0).reset(JOURNAL_COMMITTED);
+                        utils::as_mut(j.0).unset(JOURNAL_COMMITTED);
                         &*j.0
                     }
                 })
             }
         });
+
+        #[cfg(feature = "stat_perf")]
+        let _perf = crate::stat::Measure::<Self>::Logging(std::time::Instant::now());
+
         unsafe {
+            crate::ll::sfence();
+
             if let Ok(res) = res {
                 if !chaperoned {
                     Self::commit();
@@ -1150,11 +1148,15 @@ where
         0
     }
 
+    fn tx_gen() -> u32 {
+        0
+    }
+
     /// Prints memory information
     fn print_info() {}
 
-    #[cfg(feature = "capture_footprint")]
-    fn footprint() -> usize {
+    #[cfg(feature = "stat_footprint")]
+    fn stat_footprint() -> usize {
         0
     }
 }

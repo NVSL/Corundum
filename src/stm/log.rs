@@ -2,21 +2,15 @@ use crate::alloc::MemPool;
 use crate::ll::*;
 use crate::ptr::Ptr;
 use crate::stm::*;
-use crate::PSafe;
+use crate::*;
 use std::clone::Clone;
 use std::fmt::{self, Debug};
 use std::ptr;
 
-#[cfg(feature = "verbose")]
-use term_painter::Color::*;
-
-#[cfg(feature = "verbose")]
-use term_painter::ToStyle;
-
 type Offset = u64;
 
 /// Log Types
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub enum LogEnum {
     /// `(src, log, len)`: An undo log of slice `src..src+len` kept in
     /// `log..log+len`.
@@ -38,7 +32,11 @@ pub enum LogEnum {
     /// on failure, useful for high-level allocation.
     DropOnFailure(u64, usize),
 
-    /// Unlocks a [`Mutex`](../sync/struct.Mutex.html) on transaction commit.
+    /// `(src, inc/dec)`: A log indicating that the object is a counter
+    /// and should increment/decrement on failure.
+    RecountOnFailure(u64, bool),
+
+    /// Unlocks a [`PMutex`](../sync/struct.PMutex.html) on transaction commit.
     UnlockOnCommit(u64),
     None,
 }
@@ -47,19 +45,20 @@ fn offset_to_str(off: u64) -> String {
     if off == u64::MAX {
         "INF".to_string()
     } else {
-        off.to_string()
+        format!("{:x}", off)
     }
 }
 
 impl Debug for LogEnum {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::result::Result<(), fmt::Error> {
         match *self {
-            DataLog(off, _, _) => write!(f, "DataLog({})", offset_to_str(off)),
-            DropOnAbort(off, _) => write!(f, "DropOnAbort({})", offset_to_str(off)),
-            DropOnCommit(off, _) => write!(f, "DropOnCommit({})", offset_to_str(off)),
-            DropOnFailure(off, _) => write!(f, "DropOnFailure({})", offset_to_str(off)),
-            UnlockOnCommit(off) => write!(f, "UnlockOnCommit({})", offset_to_str(off)),
-            None => write!(f, "None"),
+            DataLog(off, _, _)       => write!(f, "DataLog         ({})", offset_to_str(off)),
+            DropOnAbort(off, _)      => write!(f, "DropOnAbort     ({})", offset_to_str(off)),
+            DropOnCommit(off, _)     => write!(f, "DropOnCommit    ({})", offset_to_str(off)),
+            DropOnFailure(off, _)    => write!(f, "DropOnFailure   ({})", offset_to_str(off)),
+            RecountOnFailure(off, _) => write!(f, "RecountOnFailure({})", offset_to_str(off)),
+            UnlockOnCommit(off)      => write!(f, "UnlockOnCommit  ({})", offset_to_str(off)),
+            None                     => write!(f, "None"),
         }
     }
 }
@@ -72,6 +71,7 @@ impl Debug for LogEnum {
 /// keeps a pointer to the flag and updates it accordingly. The pointer is
 /// persistent meaning that it remains valid after restart of crash.
 /// 
+#[derive(PartialEq, Eq)]
 pub enum Notifier<A: MemPool> {
     /// Atomically update the log flag
     Atomic(Ptr<u8, A>),
@@ -147,6 +147,7 @@ impl<A: MemPool> Notifier<A> {
 /// [`Journal`]: ./struct.Journal.html
 /// [`LogEnum`]: ./enum.LogEnum.html
 /// [`Notifier`]: ./enum.Notifier.html
+/// 
 pub struct Log<A: MemPool>(LogEnum, Notifier<A>);
 
 impl<A: MemPool> Copy for Log<A> {}
@@ -155,6 +156,14 @@ impl<A: MemPool> Clone for Log<A> {
     fn clone(&self) -> Self {
         Self(self.0, self.1)
     }
+}
+
+impl<A: MemPool> PartialEq<LogEnum> for Log<A> {
+    fn eq(&self, other: &LogEnum) -> bool { self.0 == *other }
+}
+
+impl<A: MemPool> PartialEq for Log<A> {
+    fn eq(&self, other: &Self) -> bool { self.0 == other.0 }
 }
 
 impl<A: MemPool> Debug for Log<A> {
@@ -199,7 +208,7 @@ impl<A: MemPool> Log<A> {
     /// # use corundum::default::*;
     /// # use corundum::stm::Log;
     /// # type P = BuddyAlloc;
-    /// # let _ = P::open_no_root("foo.pool", O_CF).unwrap();
+    /// # let _p = P::open_no_root("foo.pool", O_CF).unwrap();
     /// P::transaction(|j| unsafe {
     ///     // Create a neutral high-level log to drop the allocation on failure.
     ///     // It is different from the low-level drop log which is inside the
@@ -241,16 +250,9 @@ impl<A: MemPool> Log<A> {
     pub fn set(&mut self, off: u64, len: usize, zone: usize) {
         debug_assert_ne!(len, 0);
 
-        #[cfg(feature = "verbose")]
-        println!(
-            "{}",
-            Yellow.paint(format!(
-                "        CHNGE LOG     TO:         ({:>4}..{:<4}) = {:<5} {:?}",
-                offset_to_str(off),
-                offset_to_str((off as usize + (len - 1)) as u64),
-                len,
-                self.0
-            ))
+        log!(A, Yellow, "CHNGE LOG", "TO:          ({:>6}:{:<6}) = {:<6} {:?}",
+            offset_to_str(off), offset_to_str((off as usize + (len - 1)) as u64),
+            len, self.0
         );
 
         match &self.0 {
@@ -260,44 +262,49 @@ impl<A: MemPool> Log<A> {
                 A::log64(A::off_unchecked(offset), off, zone);
                 A::log64(A::off_unchecked(length), len as u64, zone);
             },
+            RecountOnFailure(offset, _) => unsafe {
+                A::log64(A::off_unchecked(offset), off, zone);
+            }
             _ => {}
         }
+    }
+
+    /// Returns an string specifying the type of this log
+    pub fn kind(&self) -> String {
+        match self.0 {
+            DataLog(_, _, _) => "DataLog",
+            DropOnAbort(_, _) => "DropOnAbort",
+            DropOnCommit(_, _) => "DropOnCommit",
+            DropOnFailure(_, _) => "DropOnFailure",
+            RecountOnFailure(_, _) => "RecountOnFailure",
+            UnlockOnCommit(_) => "UnlockOnCommit",
+            None => "None"
+        }.to_string()
+    }
+
+    /// Returns the inner value
+    pub fn inner(&self) -> LogEnum {
+        self.0
     }
 }
 
 use LogEnum::*;
 
-/// Print traces verbosely
-#[allow(unused_macros)]
-macro_rules! print_log {
-    ($x:expr,$off:expr,$len:expr) => {
-        #[cfg(feature = "verbose")] {
-            println!(
-                "{}",
-                Yellow.paint(format!(
-                    "              LOG    FOR:         ({:>4}..{:<4}) = {:<5} DataLog  TYPE: {}",
-                    offset_to_str($off),
-                    offset_to_str(($off as usize + ($len - 1)) as u64),
-                    $len,
-                    std::any::type_name_of_val($x)
-                ))
-            );
-            dump_data::<A>("DATA", $off, $len);
-        }
-    };
-}
-
 #[cfg(feature = "verbose")]
 fn dump_data<A: MemPool>(tag: &str, off: u64, len: usize) {
-    print!("{}", BrightBlue.paint(format!("             {}    ", tag)));
+    use term_painter::Color::*;
+    use term_painter::ToStyle;
+
+    print!("{}", BrightBlue.paint(format!("{:>19}  ", tag)));
     for i in 0..len {
         let d = unsafe { A::get_unchecked::<u8>(off + i as u64) };
         print!("{}", BrightBlue.paint(format!("{:02x} ", *d)));
         if i % 16 == 15 && i+1 < len {
             println!();
-            print!("                     ");
+            print!("{:>21}", " ");
         }
     }
+
     println!();
 }
 
@@ -321,36 +328,44 @@ impl<A: MemPool> Log<A> {
 
     /// Takes a log of `x` into `journal` and notifies the owner that log is
     /// taken if `notifier` is specified.
-    pub fn take<T: PSafe + ?Sized>(
+    pub fn take<T: ?Sized>(
         x: &T,
         journal: &Journal<A>,
-        notifier: Notifier<A>,
+        mut notifier: Notifier<A>,
     ) -> Ptr<Log<A>, A> {
+        #[cfg(feature = "stat_perf")]
+        let _perf = crate::stat::Measure::<A>::DataLog(std::time::Instant::now());
+
         let len = std::mem::size_of_val(x);
         if len == 0 {
+            notifier.update(1);
             Ptr::dangling()
         } else {
             let pointer = unsafe { Ptr::<T, A>::new_unchecked(x) };
 
-            #[cfg(feature = "verbose")]
-            print_log!(x, pointer.off(), len);
+            log!(A, Yellow, "LOG", "FOR:         ({:>6}:{:<6}) = {:<6} DataLog  TYPE: {}",
+                offset_to_str(pointer.off()), offset_to_str((pointer.off() as usize + (len - 1)) as u64),
+                len, std::any::type_name_of_val(x)
+            );
+            #[cfg(feature = "verbose")] {
+                dump_data::<A>("DATA", pointer.off(), len);
+            }
 
             let log = unsafe { pointer.dup() };
-            let _log = log.as_ref();
 
-            if cfg!(feature = "replace_with_log") {
-                pointer.replace(log.replace(pointer.off()));
+            // if cfg!(feature = "replace_with_log") {
+            //     pointer.replace(log.replace(pointer.off()));
 
-                debug_assert_eq!(
-                    crate::utils::as_slice(pointer.as_ref()), 
-                    crate::utils::as_slice(log.as_ref()),
-                    "Log is not the same as the original data");
+            //     debug_assert_eq!(
+            //         crate::utils::as_slice(pointer.as_ref()), 
+            //         crate::utils::as_slice(log.as_ref()),
+            //         "Log is not the same as the original data");
 
-                Self::take_impl(log.off(), pointer.off(), len, journal, notifier)
-            } else {
-                crate::ll::msync_obj(log.as_ref());
+            //     Self::take_impl(log.off(), pointer.off(), len, journal, notifier)
+            // } else {
+                crate::ll::persist_obj(log.as_ref(), false);
                 Self::take_impl(pointer.off(), log.off(), len, journal, notifier)
-            }
+            // }
         }
     }
 
@@ -362,6 +377,7 @@ impl<A: MemPool> Log<A> {
     ) -> Ptr<Log<A>, A> {
         let log = journal.write(log, notifier.clone());
         notifier.update(1);
+        sfence();
         log
     }
 
@@ -372,15 +388,13 @@ impl<A: MemPool> Log<A> {
     pub fn drop_on_commit(offset: u64, len: usize, journal: &Journal<A>) -> Ptr<Log<A>, A> {
         debug_assert_ne!(len, 0);
 
-        #[cfg(feature = "verbose")]
-        println!(
-            "{}",
-            Yellow.paint(format!(
-                "          NEW LOG    FOR:         ({:>4}..{:<4}) = {:<5} DropOnCommit",
-                offset_to_str(offset),
-                offset_to_str((offset as usize + (len - 1)) as u64),
-                len
-            ))
+        #[cfg(feature = "stat_perf")]
+        let _perf = crate::stat::Measure::<A>::DropLog(std::time::Instant::now());
+
+        log!(A, Yellow, "NEW LOG", "FOR:         ({:>6}:{:<6}) = {:<6} DropOnCommit",
+            offset_to_str(offset),
+            offset_to_str((offset as usize + (len - 1)) as u64),
+            len
         );
         Self::write_on_journal(DropOnCommit(offset, len), journal, Notifier::None)
     }
@@ -392,16 +406,15 @@ impl<A: MemPool> Log<A> {
     pub fn drop_on_abort(offset: u64, len: usize, journal: &Journal<A>) -> Ptr<Log<A>, A> {
         debug_assert_ne!(len, 0);
 
-        #[cfg(feature = "verbose")]
-        println!(
-            "{}",
-            Yellow.paint(format!(
-                "          NEW LOG    FOR:         ({:>4}..{:<4}) = {:<5} DropOnAbort",
-                offset_to_str(offset),
-                offset_to_str((offset as usize + (len - 1)) as u64),
-                len
-            ))
+        #[cfg(feature = "stat_perf")]
+        let _perf = crate::stat::Measure::<A>::DropLog(std::time::Instant::now());
+
+        log!(A, Yellow, "NEW LOG", "FOR:         ({:>6}:{:<6}) = {:<6} DropOnAbort",
+            offset_to_str(offset),
+            offset_to_str((offset as usize + (len - 1)) as u64),
+            len
         );
+
         Self::write_on_journal(DropOnAbort(offset, len), journal, Notifier::None)
     }
 
@@ -409,18 +422,16 @@ impl<A: MemPool> Log<A> {
     /// log and writes it on `journal`
     #[inline]
     #[track_caller]
-    pub fn drop_on_failure(offset: u64, len: usize, journal: &Journal<A>) -> Ptr<Log<A>, A> {
+    pub unsafe fn drop_on_failure(offset: u64, len: usize, journal: &Journal<A>) -> Ptr<Log<A>, A> {
         debug_assert_ne!(len, 0);
 
-        #[cfg(feature = "verbose")]
-        println!(
-            "{}",
-            Yellow.paint(format!(
-                "          NEW LOG    FOR:         ({:>4}..{:<4}) = {:<5} DropOnFailure",
-                offset_to_str(offset),
-                offset_to_str((offset as usize + (len - 1)) as u64),
-                len
-            ))
+        #[cfg(feature = "stat_perf")]
+        let _perf = crate::stat::Measure::<A>::DropLog(std::time::Instant::now());
+
+        log!(A, Yellow, "NEW LOG", "FOR:         ({:>6}:{:<6}) = {:<6} DropOnFailure",
+            offset_to_str(offset),
+            offset_to_str((offset as usize + (len - 1)) as u64),
+            len
         );
 
         Self::write_on_journal(DropOnFailure(offset, len), journal, Notifier::None)
@@ -430,52 +441,48 @@ impl<A: MemPool> Log<A> {
     /// for locking data in a thread
     #[inline]
     #[track_caller]
-    pub fn unlock_on_commit(
+    pub unsafe fn unlock_on_commit(
         virt_addr: u64,
         journal: &Journal<A>,
     ) {
-        #[cfg(feature = "verbose")]
-        {
-            println!(
-                "{}",
-                Yellow.paint(format!(
-                    "          NEW LOG    FOR:         v@{:<18} UnlockOnCommit",
-                    virt_addr
-                ))
-            );
-        }
+        #[cfg(feature = "stat_perf")]
+        let _perf = crate::stat::Measure::<A>::MutexLog(std::time::Instant::now());
+
+        log!(A, Yellow, "NEW LOG", "FOR:         v@{:<18} UnlockOnCommit", virt_addr);
         
-        if cfg!(feature = "pthread") {
-            unsafe {
-                let b = &mut *(virt_addr as *mut (bool, libc::pthread_mutex_t, 
-                    libc::pthread_mutexattr_t));
-                if b.0 { return; }
-            }
+        if cfg!(any(feature = "no_pthread", windows)) {
+            let b = &mut *(virt_addr as *mut (bool, u64));
+            if b.0 { return; }
         } else {
-            unsafe {
-                let b = &mut *(virt_addr as *mut (bool, u64));
-                if b.0 { return; }
-            }
+            let b = &mut *(virt_addr as *mut (bool, libc::pthread_mutex_t, 
+                libc::pthread_mutexattr_t));
+            if b.0 { return; }
         };
 
         Self::write_on_journal(UnlockOnCommit(virt_addr), journal, Notifier::None);
+    }
+
+    /// Creates a new [`DropOnCommit`](./enum.LogEnum.html#variant.DropOnCommit)
+    /// log and writes it on `journal`
+    #[inline]
+    #[track_caller]
+    pub unsafe fn recount_on_failure(offset: u64, inc: bool, journal: &Journal<A>) -> Ptr<Log<A>, A> {
+        log!(A, Yellow, "NEW LOG", "FOR:         ({:>6}:{:<6}) = {:<6} RecountOnFailure",
+            offset_to_str(offset),
+            offset_to_str(offset),
+            8
+        );
+        Self::write_on_journal(RecountOnFailure(offset, inc), journal, Notifier::None)
     }
 
     fn rollback_datalog(src: &mut u64, log: &mut u64, len: &usize) {
         debug_assert_ne!(*len, 0);
 
         if *log != u64::MAX && *src != u64::MAX {
+            log!(A, Magenta, "ROLLBACK", "FOR:         ({:>6}:{:<6}) = {:<6} DataLog({})",
+                *src, *src as usize + (len - 1), len, log   
+            );
             #[cfg(feature = "verbose")] {
-                println!(
-                    "{}",
-                    Magenta.paint(format!(
-                        "         ROLLBACK    FOR:         ({:>4}..{:<4}) = {:<5} DataLog({})",
-                        *src,
-                        *src as usize + (len - 1),
-                        len,
-                        log
-                    ))
-                );
                 dump_data::<A>(" ORG", *src, *len);
                 dump_data::<A>(" LOG", *log, *len);
             }
@@ -483,12 +490,15 @@ impl<A: MemPool> Log<A> {
                 let src = A::get_mut_unchecked::<u8>(*src);
                 let log = A::get_mut_unchecked::<u8>(*log);
                 ptr::copy_nonoverlapping(log, src, *len);
-                msync(log, *len);
+                persist(log, *len, true);
             }
         }
     }
 
-    pub(crate) fn rollback(&mut self) {
+    pub(crate) unsafe fn rollback(&mut self) {
+        #[cfg(feature = "stat_perf")]
+        let _perf = crate::stat::Measure::<A>::RollbackLog(std::time::Instant::now());
+
         match &mut self.0 {
             DataLog(src, log, len) => {
                 Self::rollback_datalog(src, log, len);
@@ -497,11 +507,9 @@ impl<A: MemPool> Log<A> {
             }
             DropOnAbort(src, len) => {
                 if *src != u64::MAX {
-                    unsafe {
-                        let z = A::pre_dealloc(A::get_mut_unchecked(*src), *len);
-                        A::log64(A::off_unchecked(src), u64::MAX, z);
-                        A::perform(z);
-                    }
+                    let z = A::pre_dealloc(A::get_mut_unchecked(*src), *len);
+                    A::log64(A::off_unchecked(src), u64::MAX, z);
+                    A::perform(z);
                 }
             }
             _ => {}
@@ -509,7 +517,7 @@ impl<A: MemPool> Log<A> {
     }
 
     /// Recovers from the crash or power failure
-    pub(crate) fn recover(&mut self, rollback: bool) {
+    pub(crate) unsafe fn recover(&mut self, rollback: bool) {
         match &mut self.0 {
             DataLog(src, log, layout) => {
                 if rollback {
@@ -523,13 +531,29 @@ impl<A: MemPool> Log<A> {
             DropOnFailure(src, len) => {
                 if rollback {
                     if *src != u64::MAX {
-                        unsafe {
-                            debug_assert!(A::allocated(*src, 1), "Access Violation");
-                            let z = A::pre_dealloc(A::get_mut_unchecked(*src), *len);
-                            A::log64(A::off_unchecked(src), u64::MAX, z);
-                            A::perform(z);
+                        debug_assert!(A::allocated(*src, 1), "Access Violation");
+                        let z = A::pre_dealloc(A::get_mut_unchecked(*src), *len);
+                        A::log64(A::off_unchecked(src), u64::MAX, z);
+                        A::perform(z);
+                    }
+                }
+            }
+            RecountOnFailure(src, inc) => {
+                let off = *src;
+                if off != u64::MAX {
+                    debug_assert!(A::allocated(off, 1), "Access Violation");
+                    let c = A::get_mut_unchecked::<u64>(off);
+                    let z = A::zone(off);
+                    A::prepare(z);
+                    if *c != u64::MAX {
+                        if *inc {
+                            A::log64(off, *c as u64 + 1, z);
+                        } else {
+                            A::log64(off, *c as u64 - 1, z);
                         }
                     }
+                    A::log64(A::off_unchecked(src), u64::MAX, z);
+                    A::perform(z);
                 }
             }
             UnlockOnCommit(src) => {
@@ -541,13 +565,16 @@ impl<A: MemPool> Log<A> {
 
     /// Commits changes
     pub(crate) fn commit(&mut self) {
+        #[cfg(feature = "stat_perf")]
+        let _perf = crate::stat::Measure::<A>::CommitLog(std::time::Instant::now());
+
         match &mut self.0 {
             DataLog(_src, _log, _len) => {
                 debug_assert!(A::allocated(*_src, 1), "Access Violation at address 0x{:x}", *_src);
 
                 #[cfg(all(not(feature = "no_flush_updates"), not(feature = "replace_with_log")))]
                 unsafe {
-                    msync::<u8>(A::get_mut_unchecked(*_src), *_len);
+                    persist::<u8>(A::get_mut_unchecked(*_src), *_len, true);
                 }
             }
             DropOnCommit(src, len) => {
@@ -570,59 +597,43 @@ impl<A: MemPool> Log<A> {
     /// * If it is a [`UnlockOnCommit`](./enum.LogEnum.html#variant.UnlockOnCommit),
     /// it unlocks the mutex.
     /// 
-    pub fn clear(&mut self) {
+    pub unsafe fn clear(&mut self) {
+        #[cfg(feature = "stat_perf")]
+        let _perf = crate::stat::Measure::<A>::ClearLog(std::time::Instant::now());
+
         match &mut self.0 {
             DataLog(_src, log, len) => {
                 if *log != u64::MAX {
-                    #[cfg(feature = "verbose")]
-                    println!(
-                        "{}",
-                        Magenta.paint(format!(
-                            "          DEL LOG    FOR:         ({:>4}..{:<4}) = {:<5} DataLog({})",
-                            *_src,
-                            *_src as usize + (*len - 1),
-                            *len,
-                            log
-                        ))
+                    log!(A, Magenta, "DEL LOG", "FOR:         ({:>6x}:{:<6x}) = {:<6} DataLog({})",
+                        *_src, *_src as usize + (*len - 1), *len, log
                     );
-                    unsafe {
-                        debug_assert!(A::allocated(*log, 1), "Access Violation at address 0x{:x}", *log);
-                        let z = A::pre_dealloc(A::get_mut_unchecked(*log), *len);
-                        A::log64(A::off_unchecked(log), u64::MAX, z);
-                        A::perform(z);
-                    }
+                    debug_assert!(A::allocated(*log, 1), "Access Violation at address 0x{:x}", *log);
+                    let z = A::pre_dealloc(A::get_mut_unchecked(*log), *len);
+                    A::log64(A::off_unchecked(log), u64::MAX, z);
+                    A::perform(z);
                 }
             }
             UnlockOnCommit(src) => {
                 if *src != u64::MAX {
-                    #[cfg(feature = "verbose")]
-                    {
-                        println!(
-                            "{}",
-                            Magenta
-                                .paint(format!("           UNLOCK    FOR:          v@{}", *src,))
-                        );
+                    log!(A, Magenta, "UNLOCK", "FOR:          v@{}", *src);
+                    #[cfg(not(any(feature = "no_pthread", windows)))] {
+                        let b = &mut *(*src as *mut (bool, libc::pthread_mutex_t, libc::pthread_mutexattr_t));
+                        b.0 = false;
+                        let lock = &mut b.1;
+                        let attr = &mut b.2;
+                        let result = libc::pthread_mutex_unlock(lock);
+                        if result != 0 {
+                            crate::sync::init_lock(lock, attr);
+                        }
                     }
-                    unsafe {
-                        #[cfg(feature = "pthread")] {
-                            let b = &mut *(*src as *mut (bool, libc::pthread_mutex_t, libc::pthread_mutexattr_t));
-                            b.0 = false;
-                            let lock = &mut b.1;
-                            let attr = &mut b.2;
-                            let result = libc::pthread_mutex_unlock(lock);
-                            if result != 0 {
-                                crate::sync::init_lock(lock, attr);
-                            }
-                        }
-                        #[cfg(not(feature = "pthread"))] {
-                            let b = &mut *(*src as *mut (bool, u64));
-                            b.0 = false;
-                            let lock = &mut b.1;
-                            std::intrinsics::atomic_store_rel(lock, 0);
-                        }
+                    #[cfg(any(feature = "no_pthread", windows))] {
+                        let b = &mut *(*src as *mut (bool, u64));
+                        b.0 = false;
+                        let lock = &mut b.1;
+                        std::intrinsics::atomic_store_rel(lock, 0);
+                    }
 
-                        *src = u64::MAX;
-                    }
+                    *src = u64::MAX;
                 }
             }
             _ => {}
@@ -631,7 +642,7 @@ impl<A: MemPool> Log<A> {
 
     /// Notify the owner that the log is taken/cleared according to `v`
     #[inline]
-    pub fn notify(&mut self, v: u8) {
+    pub unsafe fn notify(&mut self, v: u8) {
         if let DataLog(src, _, _) = self.0 {
             if src != u64::MAX {
                 self.1.update(v)

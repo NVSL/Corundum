@@ -1,7 +1,6 @@
 use std::marker::PhantomData;
 use crate::alloc::MemPool;
-use crate::ptr::Ptr;
-use crate::stm::{Journal, Notifier, Logger};
+use crate::stm::Journal;
 use crate::{PSafe, TxOutSafe};
 use std::fmt;
 use std::ops::{Deref, DerefMut};
@@ -86,8 +85,8 @@ impl<T: fmt::Debug + PSafe + ?Sized> fmt::Debug for NonNull<T> {
 /// 
 /// This type is `!PSafe` and its constructor functions are `unsafe`. This is
 /// because of `LogNonNull` treating like a raw pointer. `LogNonNull` objects are
-/// useful for obtaining performance. [`LogRefCell`]`::`[`as_non_null_mut()`] 
-/// is an alternative to [`LogRefCell`]`::`[`borrow_mut()`] which provides unsafe
+/// useful for obtaining performance. [`PRefCell`]`::`[`as_non_null_mut()`] 
+/// is an alternative to [`PRefCell`]`::`[`borrow_mut()`] which provides unsafe
 /// mutable access to the underlying data.
 /// 
 /// [`PNonNullMut`] is an alias name in the pool module for `LogNonNullMut`.
@@ -126,15 +125,18 @@ impl<T: fmt::Debug + PSafe + ?Sized> fmt::Debug for NonNull<T> {
 /// assert_eq!(*root.borrow(), 50);
 /// ```
 ///
-/// [`LogRefCell`]: ../cell/struct.LogRefCell.html
-/// [`as_non_null_mut()`]: ../cell/struct.LogRefCell.html#method.as_non_null_mut
-/// [`borrow_mut()`]: ../cell/struct.LogRefCell.html#method.borrow_mut
+/// [`PRefCell`]: ../cell/struct.PRefCell.html
+/// [`as_non_null_mut()`]: ../cell/struct.PRefCell.html#method.as_non_null_mut
+/// [`borrow_mut()`]: ../cell/struct.PRefCell.html#method.borrow_mut
 /// [`PNonNullMut`]: ../alloc/default/type.PNonNullMut.html
 /// 
 pub struct LogNonNull<T: PSafe + ?Sized, A: MemPool> {
     ptr: *mut T,
     journal: *const Journal<A>,
+
+    #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))]
     logged: *mut u8,
+
     phantom: PhantomData<*mut T>
 }
 
@@ -144,7 +146,10 @@ impl<T: PSafe + ?Sized, A: MemPool> Clone for LogNonNull<T, A> {
         Self {
             ptr: self.ptr,
             journal: self.journal,
+
+            #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))]
             logged: self.logged,
+
             phantom: PhantomData
         }
     }
@@ -161,23 +166,48 @@ impl<T: PSafe, A: MemPool> LogNonNull<T, A> {
     ///
     /// `ptr` and `logged` must be non-null.
     #[inline]
-    pub const unsafe fn new_unchecked(ptr: *mut T, logged: *mut u8, j: &Journal<A>) -> Self {
+    pub const unsafe fn new_unchecked(ptr: *mut T,
+
+        #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))]
+        logged: *mut u8,
+
+        j: &Journal<A>
+    ) -> Self {
         // SAFETY: the caller must guarantee that `ptr` is non-null.
         Self {
             ptr,
             journal: j as *const _,
+
+            #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))]
             logged,
+            
             phantom: PhantomData
         } 
     }
 
     /// Creates a `Some(LogNonNull)` if `ptr` is not null; otherwise `None`.
     #[inline]
-    pub unsafe fn new(ptr: *mut T, logged: *mut u8, j: &Journal<A>) -> Option<Self> {
-        if !ptr.is_null() && !logged.is_null() {
-            Some(Self::new_unchecked(ptr, logged, j))
-        } else {
-            None
+    pub unsafe fn new(ptr: *mut T,
+
+        #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))]
+        logged: *mut u8,
+
+        j: &Journal<A>
+    ) -> Option<Self> {
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
+            if !ptr.is_null() {
+                Some(Self::new_unchecked(ptr, j))
+            } else {
+                None
+            }
+        }
+
+        #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))] {
+            if !ptr.is_null() && !logged.is_null() {
+                Some(Self::new_unchecked(ptr, logged, j))
+            } else {
+                None
+            }
         }
     }
 }
@@ -193,8 +223,12 @@ impl<T: PSafe + ?Sized, A: MemPool> DerefMut for LogNonNull<T, A> {
     fn deref_mut(&mut self) -> &mut T {
         unsafe {
             let value = &mut *self.ptr;
-            if *self.logged == 0 {
-                value.take_log(&*self.journal, Notifier::NonAtomic(Ptr::from_raw(self.logged)));
+            #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))] {
+                use crate::ptr::Ptr;
+                use crate::stm::{Notifier, Logger};
+                if *self.logged == 0 {
+                    value.take_log(&*self.journal, Notifier::NonAtomic(Ptr::from_raw(self.logged)));
+                }
             }
             value
         }

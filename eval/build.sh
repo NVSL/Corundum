@@ -3,27 +3,23 @@
 full_path=$(realpath $0)
 dir_path=$(dirname $full_path)
 
-wget https://github.com/pmem/pmdk/archive/1.8.tar.gz && \
-    tar -xzvf 1.8.tar.gz && rm -f 1.8.tar.gz && cd pmdk-1.8 && \
-    make -j && make install && cd ..
+mkdir $HOME/.corundum
+rm -f $HOME/.corundum/env
 
-wget https://github.com/pmem/libpmemobj-cpp/archive/1.8.tar.gz && \
-    tar -xzvf 1.8.tar.gz && rm -f 1.8.tar.gz && cd libpmemobj-cpp-1.8 && \
-    mkdir -p build && cd build && cmake .. && make -j && make install && \
-    cd ../..
+$dir_path/pmdk/build.sh
+$dir_path/atlas/build.sh
+$dir_path/go/build.sh
+$dir_path/mnemosyne/build.sh
 
 source $HOME/.cargo/env
-rustup update
 rustup default nightly
+rustup update
 
-ldconfig
-
-cd $dir_path/simplekv
-g++ -O2 -o simplekv simplekv.cpp -lpmemobj
-
-cd $dir_path/bst
-gcc -O2 -o btree btree.c -lpmemobj
+echo "source \$HOME/.cargo/env" >> $HOME/.corundum/env
 
 cd $dir_path/..
 cargo build --release --examples
+
+echo "Please run the following command to setup the environment:
+    source \$HOME/.corundum/env"
 

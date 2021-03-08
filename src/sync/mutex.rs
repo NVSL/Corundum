@@ -1,9 +1,8 @@
-use crate::as_mut;
 use crate::alloc::MemPool;
 use crate::cell::VCell;
 use crate::ptr::Ptr;
 use crate::stm::{Journal, Log, Notifier, Logger};
-use crate::{PSafe, RootObj, TxInSafe, TxOutSafe};
+use crate::*;
 use std::cell::UnsafeCell;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
@@ -85,7 +84,7 @@ use std::{fmt, intrinsics};
 /// [`sync`]: std::sync
 /// [`std`]: std
 ///
-pub struct Mutex<T, A: MemPool> {
+pub struct PMutex<T, A: MemPool> {
     heap: PhantomData<A>,
     inner: VCell<MutexInner, A>,
     data: UnsafeCell<(u8, T)>,
@@ -94,16 +93,16 @@ pub struct Mutex<T, A: MemPool> {
 struct MutexInner {
     borrowed: bool,
 
-    #[cfg(feature = "pthread")]
+    #[cfg(not(any(feature = "no_pthread", windows)))]
     lock: (bool, libc::pthread_mutex_t, libc::pthread_mutexattr_t),
 
-    #[cfg(not(feature = "pthread"))]
+    #[cfg(any(feature = "no_pthread", windows))]
     lock: (bool, u64)
 }
 
 impl Default for MutexInner {
 
-    #[cfg(feature = "pthread")]
+    #[cfg(not(any(feature = "no_pthread", windows)))]
     fn default() -> Self {
         use std::mem::MaybeUninit;
         let mut attr = MaybeUninit::<libc::pthread_mutexattr_t>::uninit();
@@ -112,7 +111,7 @@ impl Default for MutexInner {
         MutexInner { borrowed: false, lock: (false, lock, unsafe { attr.assume_init() }) }
     }
 
-    #[cfg(not(feature = "pthread"))]
+    #[cfg(any(feature = "no_pthread", windows))]
     fn default() -> Self {
         MutexInner { borrowed: false, lock: (false, 0) }
     }
@@ -123,40 +122,40 @@ impl MutexInner {
         if self.borrowed {
             false
         } else {
-            as_mut(self).borrowed = true;
+            utils::as_mut(self).borrowed = true;
             true
         }
     }
 
     fn release(&self) {
-        as_mut(self).borrowed = false;
+        utils::as_mut(self).borrowed = false;
     }
 }
 
-impl<T: ?Sized, A: MemPool> !TxOutSafe for Mutex<T, A> {}
-impl<T, A: MemPool> UnwindSafe for Mutex<T, A> {}
-impl<T, A: MemPool> RefUnwindSafe for Mutex<T, A> {}
+impl<T: ?Sized, A: MemPool> !TxOutSafe for PMutex<T, A> {}
+impl<T, A: MemPool> UnwindSafe for PMutex<T, A> {}
+impl<T, A: MemPool> RefUnwindSafe for PMutex<T, A> {}
 
-unsafe impl<T, A: MemPool> TxInSafe for Mutex<T, A> {}
-unsafe impl<T, A: MemPool> PSafe for Mutex<T, A> {}
-unsafe impl<T: Send, A: MemPool> Send for Mutex<T, A> {}
-unsafe impl<T: Send, A: MemPool> Sync for Mutex<T, A> {}
+unsafe impl<T, A: MemPool> TxInSafe for PMutex<T, A> {}
+unsafe impl<T, A: MemPool> PSafe for PMutex<T, A> {}
+unsafe impl<T: Send, A: MemPool> Send for PMutex<T, A> {}
+unsafe impl<T: Send, A: MemPool> Sync for PMutex<T, A> {}
+unsafe impl<T, A: MemPool> PSend for PMutex<T, A> {}
 
-impl<T, A: MemPool> Mutex<T, A> {
+impl<T, A: MemPool> PMutex<T, A> {
     /// Creates a new `Mutex`
     /// 
     /// # Examples
     /// 
     /// ```
-    /// # use corundum::alloc::*;
-    /// use corundum::sync::{Parc,Mutex};
+    /// # use corundum::alloc::heap::*;
     /// 
     /// Heap::transaction(|j| {
-    ///     let p = Parc::new(Mutex::new(10, j), j);
+    ///     let p = Parc::new(PMutex::new(10), j);
     /// }).unwrap();
     /// ```
-    pub fn new(data: T, _journal: &Journal<A>) -> Mutex<T, A> {
-        Mutex {
+    pub fn new(data: T) -> PMutex<T, A> {
+        PMutex {
             heap: PhantomData,
             inner: VCell::new(MutexInner::default()),
             data: UnsafeCell::new((0, data)),
@@ -164,14 +163,16 @@ impl<T, A: MemPool> Mutex<T, A> {
     }
 }
 
-impl<T: PSafe, A: MemPool> Mutex<T, A> {
+impl<T: PSafe, A: MemPool> PMutex<T, A> {
     #[inline]
     #[allow(clippy::mut_from_ref)]
+    #[track_caller]
     /// Takes a log and returns a `&mut T` for interior mutability
     pub(crate) fn get_mut(&self, journal: &Journal<A>) -> &mut T {
         unsafe {
             let inner = &mut *self.data.get();
             if inner.0 == 0 {
+                assert!(A::valid(inner), "The object is not in the pool's valid range");
                 inner.1.take_log(journal, Notifier::NonAtomic(Ptr::from_ref(&inner.0)));
             }
             &mut inner.1
@@ -188,26 +189,26 @@ impl<T: PSafe, A: MemPool> Mutex<T, A> {
     }
 }
 
-impl<T, A: MemPool> Mutex<T, A> {
+impl<T, A: MemPool> PMutex<T, A> {
     #[inline]
     fn raw_lock(&self, journal: &Journal<A>) {
         unsafe {
             // Log::unlock_on_failure(self.inner.get(), journal);
             let lock = &self.inner.lock.1 as *const _ as *mut _;
-            #[cfg(feature = "pthread")] {
+            #[cfg(not(any(feature = "no_pthread", windows)))] {
                 libc::pthread_mutex_lock(lock);
             }
-            #[cfg(not(feature = "pthread"))] {
+            #[cfg(any(feature = "no_pthread", windows))] {
                 let tid = std::thread::current().id().as_u64().get();
                 while intrinsics::atomic_cxchg_acqrel(lock, 0, tid).0 != tid {}
             }
             if self.inner.acquire() {
                 Log::unlock_on_commit(&self.inner.lock as *const _ as u64, journal);
             } else {
-                #[cfg(feature = "pthread")]
+                #[cfg(not(any(feature = "no_pthread", windows)))]
                 libc::pthread_mutex_unlock(lock);
 
-                #[cfg(not(feature = "pthread"))] 
+                #[cfg(any(feature = "no_pthread", windows))] 
                 intrinsics::atomic_store_rel(lock, 0);
 
                 panic!("Cannot have multiple instances of MutexGuard");
@@ -231,21 +232,20 @@ impl<T, A: MemPool> Mutex<T, A> {
     /// 
     /// ```
     /// use corundum::default::*;
-    /// use corundum::sync::{Parc,Mutex};
     /// use std::thread;
     /// 
     /// type P = BuddyAlloc;
     /// 
-    /// let obj = P::open::<Parc<Mutex<i32,P>,P>>("foo.pool", O_CF).unwrap();
+    /// let obj = P::open::<Parc<PMutex<i32>>>("foo.pool", O_CF).unwrap();
     /// 
     /// // Using short forms in the pool module, there is no need to specify the
     /// // pool type, as follows:
     /// // let obj = P::open::<Parc<PMutex<i32>>>("foo.pool", O_CF).unwrap();
     /// 
-    /// let obj = Parc::volatile(&obj);
+    /// let obj = Parc::demote(&obj);
     /// thread::spawn(move || {
     ///     transaction(move |j| {
-    ///         if let Some(obj) = obj.upgrade(j) {
+    ///         if let Some(obj) = obj.promote(j) {
     ///             *obj.lock(j) += 1;
     ///         }
     ///     }).unwrap();
@@ -265,10 +265,10 @@ impl<T, A: MemPool> Mutex<T, A> {
         unsafe {
             let lock = &self.inner.lock.1 as *const _ as *mut _;
 
-            #[cfg(feature = "pthread")]
+            #[cfg(not(any(feature = "no_pthread", windows)))]
             let result = libc::pthread_mutex_trylock(lock) == 0;
 
-            #[cfg(not(feature = "pthread"))]
+            #[cfg(any(feature = "no_pthread", windows))]
             let result = {
                 let tid = std::thread::current().id().as_u64().get();
                 intrinsics::atomic_cxchg_acqrel(lock, 0, tid).0 == tid
@@ -279,10 +279,10 @@ impl<T, A: MemPool> Mutex<T, A> {
                     Log::unlock_on_commit(&self.inner.lock as *const _ as u64, journal);
                     true
                 } else {
-                    #[cfg(feature = "pthread")] 
+                    #[cfg(not(any(feature = "no_pthread", windows)))] 
                     libc::pthread_mutex_unlock(lock);
 
-                    #[cfg(not(feature = "pthread"))] 
+                    #[cfg(any(feature = "no_pthread", windows))] 
                     intrinsics::atomic_store_rel(lock, 0);
 
                     panic!("Cannot have multiple instances of MutexGuard");
@@ -317,10 +317,10 @@ impl<T, A: MemPool> Mutex<T, A> {
     /// 
     /// let obj = P::open::<Parc<PMutex<i32>>>("foo.pool", O_CF).unwrap();
     ///
-    /// let a = Parc::volatile(&obj);
+    /// let a = Parc::demote(&obj);
     /// thread::spawn(move || {
     ///     transaction(|j| {
-    ///         if let Some(obj) = a.upgrade(j) {
+    ///         if let Some(obj) = a.promote(j) {
     ///             let mut lock = obj.try_lock(j);
     ///             if let Ok(ref mut mutex) = lock {
     ///                 **mutex = 10;
@@ -346,20 +346,20 @@ impl<T, A: MemPool> Mutex<T, A> {
     }
 }
 
-impl<T: RootObj<A>, A: MemPool> RootObj<A> for Mutex<T, A> {
+impl<T: RootObj<A>, A: MemPool> RootObj<A> for PMutex<T, A> {
     fn init(journal: &Journal<A>) -> Self {
-        Mutex::new(T::init(journal), journal)
+        PMutex::new(T::init(journal))
     }
 }
 
-impl<T: fmt::Debug, A: MemPool> fmt::Debug for Mutex<T, A> {
+impl<T: fmt::Debug, A: MemPool> fmt::Debug for PMutex<T, A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.data.fmt(f)
     }
 }
 
 pub struct MutexGuard<'a, T: 'a, A: MemPool> {
-    lock: &'a Mutex<T, A>,
+    lock: &'a PMutex<T, A>,
     journal: *const Journal<A>,
 }
 
@@ -381,7 +381,7 @@ impl<T: fmt::Display, A: MemPool> fmt::Display for MutexGuard<'_, T, A> {
 
 impl<'mutex, T, A: MemPool> MutexGuard<'mutex, T, A> {
     unsafe fn new(
-        lock: &'mutex Mutex<T, A>,
+        lock: &'mutex PMutex<T, A>,
         journal: &'mutex Journal<A>,
     ) -> MutexGuard<'mutex, T, A> {
         MutexGuard { lock, journal }
@@ -397,6 +397,7 @@ impl<T, A: MemPool> Deref for MutexGuard<'_, T, A> {
 }
 
 impl<T: PSafe, A: MemPool> DerefMut for MutexGuard<'_, T, A> {
+    #[track_caller]
     fn deref_mut(&mut self) -> &mut T {
         unsafe { self.lock.get_mut(&*self.journal) }
     }
@@ -408,7 +409,7 @@ impl<T, A: MemPool> Drop for MutexGuard<'_, T, A> {
     }
 }
 
-#[cfg(feature = "pthread")]
+#[cfg(not(any(feature = "no_pthread", windows)))]
 pub unsafe fn init_lock(mutex: *mut libc::pthread_mutex_t, attr: *mut libc::pthread_mutexattr_t) {
     *mutex = libc::PTHREAD_MUTEX_INITIALIZER;
     let result = libc::pthread_mutexattr_init(attr);

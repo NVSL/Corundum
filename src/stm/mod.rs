@@ -1,8 +1,10 @@
 //! Software transactional memory APIs
 
 mod chaperon;
-pub mod journal;
+mod journal;
 mod log;
+pub mod pspd;
+pub mod vspd;
 
 use crate::alloc::MemPool;
 use crate::result::Result;
@@ -17,7 +19,7 @@ pub use log::*;
 /// 
 /// See [`MemPool::transaction()`](../alloc/trait.MemPool.html#method.transaction)
 /// for more details.
-pub fn transaction<T, F: Fn(&Journal<A>) -> T, A: MemPool>(body: F) -> Result<T>
+pub fn transaction<T, F: FnOnce(&Journal<A>) -> T, A: MemPool>(body: F) -> Result<T>
 where
     F: TxInSafe + UnwindSafe,
     T: TxOutSafe,

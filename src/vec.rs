@@ -4,14 +4,14 @@ use crate::convert::PFrom;
 use crate::alloc::get_idx;
 use crate::alloc::MemPool;
 use crate::clone::PClone;
-use crate::ptr::FatPtr;
-use crate::stm::Journal;
-use crate::{PSafe, VSafe};
+use crate::ptr::*;
+use crate::stm::*;
+use crate::*;
 use std::alloc::Layout;
 use std::cmp::Ordering;
 use std::fmt::{Debug, Display, Formatter};
 use std::marker::PhantomData;
-use std::ops::{Index,IndexMut};
+use std::ops::Index;
 use std::slice::SliceIndex;
 use std::vec::Vec as StdVec;
 use std::{mem, ptr, slice};
@@ -27,9 +27,9 @@ use std::{mem, ptr, slice};
 ///
 /// ```
 /// # use corundum::vec::Vec;
-/// # use corundum::alloc::*;
+/// # use corundum::alloc::heap::*;
 /// Heap::transaction(|j| {
-///     let mut vec = Vec::new(j);
+///     let mut vec = Vec::new();
 ///     vec.push(1, j);
 ///     vec.push(2, j);
 ///
@@ -39,20 +39,17 @@ use std::{mem, ptr, slice};
 ///     assert_eq!(vec.pop(), Some(2));
 ///     assert_eq!(vec.len(), 1);
 ///
-///     vec[0] = 7;
-///     assert_eq!(vec[0], 7);
-///
 ///     vec.extend_from_slice(&[1, 2, 3], j);
 ///
 ///     for x in vec.as_slice() {
 ///         println!("{}", x);
 ///     }
-///     assert_eq!(vec, [7, 1, 2, 3]);
+///     assert_eq!(vec, [1, 1, 2, 3]);
 ///
 /// }).unwrap();
 /// ```
 pub struct Vec<T: PSafe, A: MemPool> {
-    buf: FatPtr<T, A>,
+    buf: Slice<T, A>,
     len: usize,
     marker: PhantomData<[T]>,
 }
@@ -64,7 +61,7 @@ impl<T, A: MemPool> !VSafe for Vec<T, A> {}
 
 impl<T: PSafe, A: MemPool> Vec<T, A> {
     /// Creates an empty vector with zero capacity for the pool of the give `Journal`
-    pub const fn new(_j: &Journal<A>) -> Self {
+    pub const fn new() -> Self {
         Self::empty()
     }
 
@@ -74,7 +71,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
     ///     let mut vec = Vec::from_slice(&[1, 2], j);
     ///
@@ -84,16 +81,13 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///     assert_eq!(vec.pop(), Some(2));
     ///     assert_eq!(vec.len(), 1);
     ///
-    ///     vec[0] = 7;
-    ///     assert_eq!(vec[0], 7);
-    ///
     ///     vec.extend_from_slice(&[1, 2, 3], j);
     ///
     ///     for x in &*vec {
     ///         println!("{}", x);
     ///     }
     ///
-    ///     assert_eq!(vec, [7, 1, 2, 3]);
+    ///     assert_eq!(vec, [1, 1, 2, 3]);
     /// }).unwrap();
     /// ```
     pub fn from_slice(x: &[T], journal: &Journal<A>) -> Self {
@@ -105,13 +99,12 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
         }
     }
 
-    pub(crate) unsafe fn from_slice_nolog(x: &[T]) -> Self {
+    pub(crate) unsafe fn from_slice_nolog(x: &[T]) -> (Self, usize) {
         if x.len() == 0 {
-            Self::empty()
+            (Self::empty(), 0)
         } else {
             let (buf, off, _, z) = A::atomic_new_slice(x);
-            A::perform(z);
-            Self::from_off_len(off, buf.len(), buf.len())
+            (Self::from_off_len(off, buf.len(), buf.len()), z)
         }
     }
 
@@ -129,7 +122,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
     ///     let mut vec = Vec::with_capacity(10, j);
     ///
@@ -157,6 +150,66 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
         }
     }
 
+    /// Creates a `PVec<T>` directly from the raw components of another vector.
+    ///
+    /// # Safety
+    ///
+    /// This is highly unsafe, due to the number of invariants that aren't
+    /// checked:
+    ///
+    /// * `ptr` needs to have been previously allocated via [`String`]/`Vec<T>`
+    ///   (at least, it's highly likely to be incorrect if it wasn't).
+    /// * `ptr` should point to the same pool
+    /// * `T` needs to have the same size as what `ptr` was allocated with.
+    /// * `length` needs to be less than or equal to `capacity`.
+    /// * `capacity` needs to be the capacity that the pointer was allocated with.
+    ///
+    /// The ownership of `ptr` is effectively transferred to the
+    /// `PVec<T>` which may then deallocate, reallocate or change the
+    /// contents of memory pointed to by the pointer at will. Ensure
+    /// that nothing else uses the pointer after calling this
+    /// function.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::ptr;
+    /// use std::mem;
+    /// use corundum::alloc::heap::Heap;
+    /// use corundum::vec::Vec as PVec;
+    ///
+    /// let v = vec![1, 2, 3];
+    ///
+    /// // Prevent running `v`'s destructor so we are in complete control
+    /// // of the allocation.
+    /// let mut v = mem::ManuallyDrop::new(v);
+    ///
+    /// // Pull out the various important pieces of information about `v`
+    /// let p = v.as_mut_ptr();
+    /// let len = v.len();
+    /// let cap = v.capacity();
+    ///
+    /// unsafe {
+    ///     // Overwrite memory with 4, 5, 6
+    ///     for i in 0..len as isize {
+    ///         ptr::write(p.offset(i), 4 + i);
+    ///     }
+    ///
+    ///     // Put everything back together into a Vec
+    ///     let rebuilt = PVec::<isize, Heap>::from_raw_parts(p, len, cap);
+    ///     assert_eq!(rebuilt, [4, 5, 6]);
+    /// }
+    /// ```
+    #[inline]
+    pub unsafe fn from_raw_parts(ptr: *mut T, length: usize, capacity: usize) -> Self {
+        let off = A::off_unchecked(ptr);
+        Self {
+            buf: Slice::<T,A>::from_off_cap(off, capacity),
+            len: length,
+            marker: PhantomData
+        }
+    }
+
     /// Creates an empty vector with zero capacity
     pub const fn empty() -> Self {
         Self::from_off_len(u64::MAX, 0, 0)
@@ -168,9 +221,9 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
-    ///     let mut v = Vec::new(j);
+    ///     let mut v = Vec::new();
     ///     assert!(v.is_empty());
     ///
     ///     v.push(1, j);
@@ -195,7 +248,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
     ///     let mut vec = Vec::from_slice(&[1,2,3], j);
     ///     let vec2 = vec.split_off(1, j);
@@ -228,7 +281,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     /// `capacity`, and the `length` of the vector.
     pub(crate) const fn from_off_len(offset: u64, capacity: usize, length: usize) -> Self {
         Self {
-            buf: FatPtr::from_off_cap(offset, capacity),
+            buf: Slice::from_off_cap(offset, capacity),
             len: length,
             marker: PhantomData,
         }
@@ -329,7 +382,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
 
     #[inline]
     fn to_slice_mut<'a>(off: u64, len: usize) -> &'a mut [T] {
-        if len == 0 {
+        if len == 0 || off == u64::MAX {
             &mut []
         } else {
             unsafe { A::deref_slice_unchecked_mut(off, len) }
@@ -346,7 +399,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
     ///     let mut vec = Vec::from_slice(&[1, 2, 3], j);
     ///     let mut other = vec![4, 5, 6];
@@ -358,7 +411,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
         if other.len() != 0 {
             unsafe {
                 let len = self.len;
-                let new_cap = usize::max(self.capacity(), len + other.len());
+                let new_cap = self.capacity().max(len + other.len());
                 self.reserve(new_cap - self.capacity(), j);
                 let ptr = self.buf.as_mut_ptr();
                 ptr::copy(other.as_ptr(), ptr.add(len), other.len());
@@ -370,21 +423,24 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     #[inline]
     pub fn shrink_to(&mut self, new_cap: usize, j: &Journal<A>) {
         let cap = self.capacity();
+        eprintln!("shrink_to");
 
         // Prevent shrinking to smaller than data
-        let new_cap = usize::max(new_cap, self.len);
+        let new_cap = new_cap.max(self.len);
         if get_idx(new_cap * mem::size_of::<T>()) != get_idx(cap * mem::size_of::<T>()) {
             unsafe {
                 let buf = self.as_slice_mut();
-                let (rem, left) = buf.split_at_mut(usize::min(buf.len(), new_cap));
+                let (rem, left) = buf.split_at_mut(buf.len().min(new_cap));
                 if !left.is_empty() {
-                    drop(left);
+                    ptr::drop_in_place(left);
+                    // FIXME: use power of 2 sizes padding to be able to free memory
+                    // of each individual item
                 }
                 if rem.is_empty() {
-                    self.buf = FatPtr::empty();
+                    self.buf = Slice::empty();
                 } else {
                     let new = A::new_slice(rem, j);
-                    self.buf = FatPtr::from_off_cap(A::off_unchecked(new), new.len());
+                    self.buf = Slice::from_off_cap(A::off_unchecked(new), new.len());
                 }
             }
         }
@@ -396,11 +452,11 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     /// It will drop down as close as possible to the length but the allocator
     /// may still inform the vector that there is space for a few more elements.
     ///
-    /// # Examples
+    /// # ExamplesSlice
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
     ///     let mut vec = Vec::with_capacity(10, j);
     ///     vec.extend_from_slice(&[1, 2, 3], j);
@@ -425,7 +481,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
     ///     let mut vec = Vec::from_slice(&[1, 2, 3], j);
     ///     let mut other = vec![4, 5, 6];
@@ -441,7 +497,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
 
         let cap = self.buf.capacity();
         let len = self.len;
-        let new_cap = usize::max(len + additional, cap);
+        let new_cap = cap.max(len + additional);
         if get_idx(new_cap * mem::size_of::<T>()) == get_idx(len * mem::size_of::<T>()) {
             self.buf.set_cap(new_cap);
         } else {
@@ -450,10 +506,8 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
                 let layout = Layout::array::<T>(new_cap).unwrap();
                 let new = A::new_uninit_for_layout(layout.size(), j).cast();
                 ptr::copy(old.as_ptr(), new, len);
-                if !old.is_empty() {
-                    A::free_slice(self.buf.as_slice_mut());
-                }
-                self.buf = FatPtr::new(slice::from_raw_parts(new, new_cap));
+                A::free_slice(Self::to_slice_mut(self.off(), self.capacity()));
+                self.buf = Slice::new(slice::from_raw_parts(new, new_cap));
             }
         }
     }
@@ -474,7 +528,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
     ///     let mut vec = Vec::from_slice(&[1, 2, 3, 4, 5], j);
     ///
@@ -493,7 +547,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
     ///     let mut vec = Vec::from_slice(&[1, 2, 3], j);
     ///     vec.truncate(8);
@@ -506,7 +560,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
     ///     let mut vec = Vec::from_slice(&[1, 2, 3], j);
     ///     vec.truncate(0);
@@ -551,7 +605,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
     ///     let mut v = Vec::from_slice(&[1, 2, 3, 4], j);
     ///
@@ -586,7 +640,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
     ///     let mut vec = Vec::from_slice(&[1, 2, 3], j);
     ///     vec.insert(1, 4, j);
@@ -631,7 +685,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
     ///     let mut v = Vec::from_slice(&[1, 2, 3], j);
     ///     assert_eq!(v.remove(1), 2);
@@ -669,7 +723,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
     ///     let mut vec = Vec::from_slice(&[1, 2, 3, 4], j);
     ///     vec.retain(|&x| x % 2 == 0);
@@ -681,7 +735,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
     ///     let mut vec = Vec::from_slice(&[1, 2, 3, 4, 5], j);
     ///     let keep = [false, true, true, false, true];
@@ -721,7 +775,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     // ///
     // /// ```
     // /// # use corundum::vec::Vec;
-    // /// # use corundum::alloc::*;
+    // /// # use corundum::alloc::heap::*;
 /// Heap::transaction(|j| {
     // ///     let mut vec = Vec::from_slice(&[10, 20, 21, 30, 20], j);
     // ///
@@ -753,7 +807,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     // /// ```
     // /// # use corundum::vec::Vec;
     // /// # use corundum::str::*;
-    // /// # use corundum::alloc::*;
+    // /// # use corundum::alloc::heap::*;
 /// Heap::transaction(|j| {
     // ///     let mut vec = Vec::from_slice(&["foo", "bar", "Bar", "baz", "bar"], j);
     // ///
@@ -783,7 +837,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
     ///     let mut vec = Vec::from_slice(&[1, 2], j);
     ///     vec.push(3, j);
@@ -813,7 +867,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
     ///     let mut vec = Vec::from_slice(&[1, 2, 3], j);
     ///     assert_eq!(vec.pop(), Some(3));
@@ -842,7 +896,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
     ///     let mut vec = Vec::from_slice(&[1, 2, 3], j);
     ///     let mut vec2 = Vec::from_slice(&[4, 5, 6], j);
@@ -868,7 +922,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
     ///     let mut v = Vec::from_slice(&[1, 2, 3], j);
     ///     v.clear();
@@ -883,8 +937,8 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     /// Drops content without logging
     #[inline]
     pub(crate) unsafe fn free_nolog(&mut self) {
-        if !self.buf.is_empty() {
-            A::free_nolog(self.as_slice_mut());
+        if A::valid(self) && self.capacity() > 0 {
+            A::free_nolog(Self::to_slice_mut(self.off(), self.capacity()));
         }
         self.buf.set_cap(0);
         self.len = 0;
@@ -918,13 +972,13 @@ impl<A: MemPool, T: PSafe, I: SliceIndex<[T]>> Index<I> for Vec<T, A> {
     }
 }
 
-impl<A: MemPool, T: PSafe, I: SliceIndex<[T]>> IndexMut<I> for Vec<T, A> {
-    #[inline]
-    fn index_mut(&mut self, index: I) -> &mut Self::Output {
-        let self_mut = self.as_slice() as *const [T] as *mut [T];
-        IndexMut::index_mut(unsafe { &mut *self_mut }, index)
-    }
-}
+// impl<A: MemPool, T: PSafe, I: SliceIndex<[T]>> IndexMut<I> for Vec<T, A> {
+//     #[inline]
+//     fn index_mut(&mut self, index: I) -> &mut Self::Output {
+//         let self_mut = self.as_slice() as *const [T] as *mut [T];
+//         IndexMut::index_mut(unsafe { &mut *self_mut }, index)
+//     }
+// }
 
 // impl<T: PSafe, A: MemPool> Index<usize> for Vec<T, A> {
 //     fn index(&self, i: usize) -> &T {
@@ -946,11 +1000,11 @@ impl<T: PSafe, A: MemPool> std::ops::Deref for Vec<T, A> {
     }
 }
 
-impl<T: PSafe, A: MemPool> std::ops::DerefMut for Vec<T, A> {
-    fn deref_mut(&mut self) -> &mut [T] {
-        self.as_slice_mut()
-    }
-}
+// impl<T: PSafe, A: MemPool> std::ops::DerefMut for Vec<T, A> {
+//     fn deref_mut(&mut self) -> &mut [T] {
+//         self.as_slice_mut()
+//     }
+// }
 
 impl<T: PSafe + Debug, A: MemPool> Debug for Vec<T, A> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
@@ -1022,7 +1076,6 @@ impl<A: MemPool, T: PSafe + PartialOrd> PartialOrd for Vec<T, A> {
 impl<A: MemPool, T: PSafe + PClone<A>> PClone<A> for Vec<T, A> {
     fn pclone(&self, j: &Journal<A>) -> Self {
         Vec::from_slice(PClone::pclone(&self.as_slice(), j), j)
-
     }
 }
 
@@ -1044,13 +1097,13 @@ impl<T: PSafe, A: MemPool> Default for Vec<T, A> {
 
 // Consuming iterator
 
-// structure helper for consuming iterator.
+/// structure helper for consuming iterator.
 pub struct IntoIteratorHelper<T> {
     iter: std::vec::IntoIter<T>,
 }
 
-// implement the IntoIterator trait for a consuming iterator. Iteration will
-// consume the Words structure
+/// implement the IntoIterator trait for a consuming iterator. Iteration will
+/// consume the Words structure
 impl<T: PSafe, A: MemPool> IntoIterator for Vec<T, A> {
     type Item = T;
     type IntoIter = IntoIteratorHelper<T>;
@@ -1082,13 +1135,13 @@ impl<T: PSafe> Iterator for IntoIteratorHelper<T> {
 
 // non-consuming iterator
 
-// structure helper for non-consuming iterator.
+/// structure helper for non-consuming iterator.
 pub struct IterHelper<'a, T> {
     iter: std::slice::Iter<'a, T>,
 }
 
-// implement the IntoIterator trait for a non-consuming iterator. Iteration will
-// borrow the Words structure
+/// implement the IntoIterator trait for a non-consuming iterator. Iteration will
+/// borrow the Words structure
 impl<'a, T: PSafe, A: MemPool> IntoIterator for &'a Vec<T, A> {
     type Item = &'a T;
     type IntoIter = IterHelper<'a, T>;
@@ -1101,7 +1154,7 @@ impl<'a, T: PSafe, A: MemPool> IntoIterator for &'a Vec<T, A> {
     }
 }
 
-// now, implements Iterator trait for the helper struct, to be used by adapters
+/// now, implements Iterator trait for the helper struct, to be used by adapters
 impl<'a, T> Iterator for IterHelper<'a, T> {
     type Item = &'a T;
 
@@ -1117,11 +1170,11 @@ impl<T: PSafe, A: MemPool> AsRef<Vec<T, A>> for Vec<T, A> {
     }
 }
 
-impl<T: PSafe, A: MemPool> AsMut<Vec<T, A>> for Vec<T, A> {
-    fn as_mut(&mut self) -> &mut Vec<T, A> {
-        self
-    }
-}
+// impl<T: PSafe, A: MemPool> AsMut<Vec<T, A>> for Vec<T, A> {
+//     fn as_mut(&mut self) -> &mut Vec<T, A> {
+//         self
+//     }
+// }
 
 impl<T: PSafe, A: MemPool> AsRef<[T]> for Vec<T, A> {
     fn as_ref(&self) -> &[T] {
@@ -1129,11 +1182,11 @@ impl<T: PSafe, A: MemPool> AsRef<[T]> for Vec<T, A> {
     }
 }
 
-impl<T: PSafe, A: MemPool> AsMut<[T]> for Vec<T, A> {
-    fn as_mut(&mut self) -> &mut [T] {
-        self
-    }
-}
+// impl<T: PSafe, A: MemPool> AsMut<[T]> for Vec<T, A> {
+//     fn as_mut(&mut self) -> &mut [T] {
+//         self
+//     }
+// }
 
 impl<T: Clone + PSafe, A: MemPool> PFrom<&[T], A> for Vec<T, A> {
     fn pfrom(s: &[T], j: &Journal<A>) -> Vec<T, A> {
@@ -1205,7 +1258,7 @@ mod test {
         impl RootObj<A> for Root {
             fn init(j: &Journal) -> Self {
                 Self {
-                    buf: Pbox::new(PRefCell::new(PVec::default(), j), j),
+                    buf: Pbox::new(PRefCell::new(PVec::default()), j),
                 }
             }
         }
@@ -1245,7 +1298,7 @@ mod test {
         impl RootObj<A> for Root {
             fn init(j: &Journal) -> Self {
                 Self {
-                    buf: Pbox::new(PRefCell::new(PVec::empty(), j), j),
+                    buf: Pbox::new(PRefCell::new(PVec::empty()), j),
                 }
             }
         }
@@ -1273,7 +1326,7 @@ mod test {
     #[test]
     fn test_clear() {
         use crate::vec::Vec;
-        Heap::transaction::<_, _>(|j| {
+        heap::Heap::transaction::<_, _>(|j| {
             let mut vec = Vec::from_slice(&[1, 2, 3], j);
             vec.truncate(0);
             assert_eq!(vec, []);

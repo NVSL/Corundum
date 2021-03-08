@@ -1,16 +1,17 @@
-use crate::RootObj;
 use crate::ptr::{LogNonNull,NonNull};
 use crate::convert::PFrom;
 use crate::alloc::MemPool;
 use crate::cell::VCell;
-use crate::ptr::Ptr;
-use crate::stm::{Journal, Notifier, Logger};
-use crate::{PSafe, TxInSafe, TxOutSafe};
+use crate::stm::Journal;
+use crate::*;
 use std::cell::UnsafeCell;
 use std::fmt::{self, Debug, Display};
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 use std::panic::{RefUnwindSafe, UnwindSafe};
+
+#[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
+use crate::cell::TCell;
 
 /// A persistent memory location with safe interior mutability and dynamic
 /// borrow checking
@@ -30,46 +31,65 @@ use std::panic::{RefUnwindSafe, UnwindSafe};
 /// * Borrowing the value mutably twice
 /// * Borrowing the value immutably while it was already borrowed mutably
 ///
-/// It does not implement [`Sync`], so it is not possible to share `LogRefCell`
+/// It does not implement [`Sync`], so it is not possible to share `PRefCell`
 /// between threads. To provide thread-safe interior mutability, use
-/// [`Mutex`].
+/// [`PMutex`].
 /// 
-/// [`PRefCell`] is an alias name in the pool module for `LogRefCell`.
+/// [`PRefCell`] is an alias name in the pool module for `PRefCell`.
 ///
 /// [`Sync`]: std::marker::Sync
-/// [`Mutex`]: ../sync/mutex/struct.Mutex.html
+/// [`PMutex`]: ../sync/mutex/struct.PMutex.html
 /// [`RwLock`]: ../sync/mutex/struct.RwLock.html
 /// [`PRefCell`]: ../alloc/default/type.PRefCell.html
 ///
-pub struct LogRefCell<T: PSafe + ?Sized, A: MemPool> {
+pub struct PRefCell<T: PSafe + ?Sized, A: MemPool> {
     heap: PhantomData<A>,
+
     borrow: VCell<i8, A>,
+
+    #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
+    temp: TCell<Option<*mut T>, A>,
+
+    #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
+    value: UnsafeCell<T>,
+
+    #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))]
     value: UnsafeCell<(u8, T)>,
 }
 
-impl<T: PSafe + ?Sized, A: MemPool> RefUnwindSafe for LogRefCell<T, A> {}
-impl<T: PSafe + ?Sized, A: MemPool> UnwindSafe for LogRefCell<T, A> {}
-unsafe impl<T: PSafe + ?Sized, A: MemPool> TxInSafe for LogRefCell<T, A> {}
-impl<T: ?Sized, A: MemPool> !TxOutSafe for LogRefCell<T, A> {}
-unsafe impl<T: PSafe + ?Sized, A: MemPool> PSafe for LogRefCell<T, A> {}
+impl<T: PSafe + ?Sized, A: MemPool> RefUnwindSafe for PRefCell<T, A> {}
+impl<T: PSafe + ?Sized, A: MemPool> UnwindSafe for PRefCell<T, A> {}
+unsafe impl<T: PSafe + ?Sized, A: MemPool> TxInSafe for PRefCell<T, A> {}
+impl<T: ?Sized, A: MemPool> !TxOutSafe for PRefCell<T, A> {}
+unsafe impl<T: PSafe + ?Sized, A: MemPool> PSafe for PRefCell<T, A> {}
 
 /// Safe to transfer between thread boundaries
-unsafe impl<T: PSafe + ?Sized, A: MemPool> Send for LogRefCell<T, A> {}
+unsafe impl<T: PSafe + ?Sized, A: MemPool> Send for PRefCell<T, A> {}
 
 /// Not safe for thread data sharing
-impl<T: ?Sized, A: MemPool> !Sync for LogRefCell<T, A> {}
+impl<T: ?Sized, A: MemPool> !Sync for PRefCell<T, A> {}
 
-impl<T: PSafe, A: MemPool> LogRefCell<T, A> {
-    /// Creates a new instance of `LogRefCell` with the given value
-    pub fn new(value: T, _j: &Journal<A>) -> Self {
+impl<T: ?Sized, A: MemPool> !PSend for PRefCell<T, A> {}
+
+impl<T: PSafe, A: MemPool> PRefCell<T, A> {
+    /// Creates a new instance of `PRefCell` with the given value
+    pub fn new(value: T) -> Self {
         Self::def(value)
     }
 
     #[inline]
     fn def(value: T) -> Self {
-        LogRefCell {
+        PRefCell {
             heap: PhantomData,
             borrow: VCell::new(0),
+
+            #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
+            temp: TCell::invalid(None),
+
+            #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
+            value: UnsafeCell::new(value),
+
+            #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))]
             value: UnsafeCell::new((0, value)),
         }
     }
@@ -86,12 +106,10 @@ impl<T: PSafe, A: MemPool> LogRefCell<T, A> {
     /// # Examples
     ///
     /// ```
-    /// use corundum::alloc::*;
-    /// use corundum::boxed::Pbox;
-    /// use corundum::cell::LogRefCell;
+    /// use corundum::alloc::heap::*;
     ///
     /// Heap::transaction(|j| {
-    ///     let cell = Pbox::new(LogRefCell::new(5, j), j);
+    ///     let cell = Pbox::new(PRefCell::new(5), j);
     ///     
     ///     let old_value = cell.replace(6, j);
     ///     assert_eq!(old_value, 5);
@@ -113,12 +131,10 @@ impl<T: PSafe, A: MemPool> LogRefCell<T, A> {
     /// # Examples
     ///
     /// ```
-    /// use corundum::alloc::*;
-    /// use corundum::boxed::Pbox;
-    /// use corundum::cell::LogRefCell;
+    /// use corundum::alloc::heap::*;
     ///
     /// Heap::transaction(|j| {
-    ///     let cell = Pbox::new(LogRefCell::new(5, j), j);
+    ///     let cell = Pbox::new(PRefCell::new(5), j);
     ///     
     ///     let old_value = cell.replace_with(j, |&mut old| old + 1);
     ///     assert_eq!(old_value, 5);
@@ -145,13 +161,12 @@ impl<T: PSafe, A: MemPool> LogRefCell<T, A> {
     /// 
     /// ```
     /// use corundum::default::*;
-    /// use corundum::cell::LogRefCell;
     ///
     /// let _pool = BuddyAlloc::open_no_root("foo.pool", O_CF);
     ///     
     /// BuddyAlloc::transaction(|j| {
-    ///     let c1 = Pbox::new(LogRefCell::new(5i32, j), j);
-    ///     let c2 = Pbox::new(LogRefCell::new(10i32, j), j);
+    ///     let c1 = Pbox::new(PRefCell::new(5i32), j);
+    ///     let c2 = Pbox::new(PRefCell::new(10i32), j);
     ///     c1.swap(&c2, j);
     ///     assert_eq!(10, c1.take(j));
     ///     assert_eq!(5, c2.take(j));
@@ -163,31 +178,31 @@ impl<T: PSafe, A: MemPool> LogRefCell<T, A> {
     }
 }
 
-// impl<T: PSafe + Default, A: MemPool> Default for LogRefCell<T, A> {
+// impl<T: PSafe + Default, A: MemPool> Default for PRefCell<T, A> {
 //     fn default() -> Self {
 //         Self::def(T::default())
 //     }
 // }
 
-impl<T: PSafe + RootObj<A>, A: MemPool> RootObj<A> for LogRefCell<T, A> {
+impl<T: PSafe + RootObj<A>, A: MemPool> RootObj<A> for PRefCell<T, A> {
     default fn init(j: &Journal<A>) -> Self {
         Self::def(T::init(j))
     }
 }
 
-impl<T: PSafe + Display + ?Sized, A: MemPool> Display for LogRefCell<T, A> {
+impl<T: PSafe + Display + ?Sized, A: MemPool> Display for PRefCell<T, A> {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         self.as_ref().fmt(fmt)
     }
 }
 
-impl<T: PSafe + Debug + ?Sized, A: MemPool> Debug for LogRefCell<T, A> {
+impl<T: PSafe + Debug + ?Sized, A: MemPool> Debug for PRefCell<T, A> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         self.as_ref().fmt(f)
     }
 }
 
-impl<T: PSafe + ?Sized, A: MemPool> LogRefCell<T, A> {
+impl<T: PSafe + ?Sized, A: MemPool> PRefCell<T, A> {
     #[inline(always)]
     #[allow(clippy::mut_from_ref)]
     fn self_mut(&self) -> &mut Self {
@@ -208,13 +223,12 @@ impl<T: PSafe + ?Sized, A: MemPool> LogRefCell<T, A> {
     ///
     /// ```
     /// use corundum::default::*;
-    /// use corundum::cell::LogRefCell;
     ///
     /// let _pool = BuddyAlloc::open_no_root("foo.pool", O_CF);
     ///     
     /// BuddyAlloc::transaction(|j| {
-    ///     let c1 = Pbox::new(LogRefCell::new(5i32, j), j);
-    ///     let c2 = Pbox::new(LogRefCell::new(10i32, j), j);
+    ///     let c1 = Pbox::new(PRefCell::new(5i32), j);
+    ///     let c2 = Pbox::new(PRefCell::new(10i32), j);
     ///     c1.swap(&c2, j);
     ///     assert_eq!(10, *c1.borrow());
     ///     assert_eq!(5, *c2.borrow());
@@ -224,7 +238,17 @@ impl<T: PSafe + ?Sized, A: MemPool> LogRefCell<T, A> {
         let inner = unsafe { &mut *self.value.get() };
         self.take_log(journal);
 
-        &mut inner.1
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] unsafe {
+            if let Some(tmp) = *self.temp {
+                &mut *tmp
+            } else {
+                &mut *inner
+            }
+        }
+    
+        #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))] {
+            &mut inner.1
+        }
     }
 
     #[inline]
@@ -239,11 +263,11 @@ impl<T: PSafe + ?Sized, A: MemPool> LogRefCell<T, A> {
     ///
     /// ```
     /// use corundum::default::*;
-    /// use corundum::cell::LogRefCell;
+    /// use corundum::cell::PRefCell;
     /// 
     /// type P = BuddyAlloc;
     /// 
-    /// let root = P::open::<LogRefCell<i32,P>>("foo.pool", O_CF).unwrap();
+    /// let root = P::open::<PRefCell<i32,P>>("foo.pool", O_CF).unwrap();
     /// 
     /// unsafe {
     ///     let mut data = root.as_mut();
@@ -252,7 +276,17 @@ impl<T: PSafe + ?Sized, A: MemPool> LogRefCell<T, A> {
     /// 
     /// ```
     pub unsafe fn as_mut(&self) -> &mut T {
-        &mut (*self.value.get()).1
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
+            if let Some(tmp) = *self.temp {
+                &mut *tmp
+            } else {
+                &mut *self.value.get()
+            }
+        }
+    
+        #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))] {
+            &mut (*self.value.get()).1
+        }
     }
 
     #[inline]
@@ -260,7 +294,19 @@ impl<T: PSafe + ?Sized, A: MemPool> LogRefCell<T, A> {
     #[inline]
     /// Returns an immutable reference of the inner value
     pub(crate) fn as_ref(&self) -> &T {
-        unsafe { &(*self.value.get()).1 }
+        unsafe {
+            #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
+                if let Some(tmp) = *self.temp {
+                    &*tmp
+                } else {
+                    &*self.value.get()
+                }
+            }
+        
+            #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))] {
+                &(*self.value.get()).1
+            }
+        }
     }
 
     #[inline]
@@ -269,12 +315,11 @@ impl<T: PSafe + ?Sized, A: MemPool> LogRefCell<T, A> {
     /// # Examples
     ///
     /// ```
-    /// use corundum::alloc::*;
+    /// use corundum::alloc::heap::*;
     /// use corundum::boxed::Pbox;
-    /// use corundum::cell::LogRefCell;
     ///
     /// Heap::transaction(|j| {
-    ///     let cell = Pbox::new(LogRefCell::new(5, j), j);
+    ///     let cell = Pbox::new(PRefCell::new(5), j);
     ///     
     ///     assert_eq!(*cell.borrow(), 5);
     /// }).unwrap();
@@ -295,12 +340,10 @@ impl<T: PSafe + ?Sized, A: MemPool> LogRefCell<T, A> {
     /// # Examples
     ///
     /// ```
-    /// use corundum::alloc::*;
-    /// use corundum::boxed::Pbox;
-    /// use corundum::cell::LogRefCell;
+    /// use corundum::alloc::heap::*;
     ///
     /// Heap::transaction(|j| {
-    ///     let cell = Pbox::new(LogRefCell::new(5, j), j);
+    ///     let cell = Pbox::new(PRefCell::new(5), j);
     ///     
     ///     assert_eq!(cell.read(), 5);
     /// }).unwrap();
@@ -313,57 +356,74 @@ impl<T: PSafe + ?Sized, A: MemPool> LogRefCell<T, A> {
     }
 
     #[inline]
+    #[track_caller]
     pub(crate) fn take_log(&self, journal: &Journal<A>) {
         unsafe {
             let inner = &mut *self.value.get();
-            if inner.0 == 0 {
-                inner.1.take_log(journal, Notifier::NonAtomic(Ptr::from_ref(&inner.0)));
+            #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
+                if self.temp.is_none() {
+                    self.temp.as_mut().replace(journal.draft(&inner));
+                }
+            }
+            #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))] {
+                use crate::ptr::Ptr;
+                use crate::stm::{Notifier, Logger};
+                if inner.0 == 0 {
+                    assert!(A::valid(inner), "The object is not in the pool's valid range");
+                    inner.1.take_log(journal, Notifier::NonAtomic(Ptr::from_ref(&inner.0)));
+                }
             }
         }
     }
 }
 
-impl<T: PSafe + PClone<A>, A: MemPool> PFrom<Ref<'_, T, A>, A> for LogRefCell<T, A> {
-    /// Crates a new `LogRefCell` and drops the `Ref`
+impl<T: PSafe + PClone<A>, A: MemPool> PFrom<Ref<'_, T, A>, A> for PRefCell<T, A> {
+    /// Crates a new `PRefCell` and drops the `Ref`
     /// 
     /// After calling this function, the `Ref` won't be available anymore. It 
-    /// will be possible to borrow the `LogRefCell` mutably. The new
-    /// `LogRefCell` has a new location with the same data.
+    /// will be possible to borrow the `PRefCell` mutably. The new
+    /// `PRefCell` has a new location with the same data.
     fn pfrom(other: Ref<'_, T, A>, j: &Journal<A>) -> Self {
         Self::def(other.pclone(j))
     }
 }
 
-impl<T: PSafe + PClone<A>, A: MemPool> PFrom<RefMut<'_, T, A>, A> for LogRefCell<T, A> {
-    /// Crates a new `LogRefCell` and drops the `Ref`
+impl<T: PSafe + PClone<A>, A: MemPool> PFrom<RefMut<'_, T, A>, A> for PRefCell<T, A> {
+    /// Crates a new `PRefCell` and drops the `Ref`
     /// 
     /// After calling this function, the `Ref` won't be available anymore. It 
-    /// will be possible to borrow the `LogRefCell` mutably. The new
-    /// `LogRefCell` has a new location with the same data.
+    /// will be possible to borrow the `PRefCell` mutably. The new
+    /// `PRefCell` has a new location with the same data.
     fn pfrom(other: RefMut<'_, T, A>, j: &Journal<A>) -> Self {
         Self::def(other.pclone(j))
     }
 }
 
-impl<T: PSafe, A: MemPool> PFrom<T, A> for LogRefCell<T, A> {
-    /// Crates a new `LogRefCell`
-    fn pfrom(value: T, j: &Journal<A>) -> Self {
-        Self::new(value, j)
+impl<T: PSafe, A: MemPool> PFrom<T, A> for PRefCell<T, A> {
+    /// Crates a new `PRefCell`
+    fn pfrom(value: T, _j: &Journal<A>) -> Self {
+        Self::new(value)
     }
 }
 
-impl<T: PSafe + Default, A: MemPool> LogRefCell<T, A> {
+
+impl<T: PSafe, A: MemPool> From<T> for PRefCell<T, A> {
+    /// Crates a new `PRefCell`
+    fn from(value: T) -> Self {
+        Self::new(value)
+    }
+}
+
+impl<T: PSafe + Default, A: MemPool> PRefCell<T, A> {
     /// Takes the value of the cell, leaving `Default::default()` in its place.
     ///
     /// # Examples
     ///
     /// ```
-    /// use corundum::alloc::*;
-    /// use corundum::boxed::Pbox;
-    /// use corundum::cell::LogRefCell;
+    /// use corundum::alloc::heap::*;
     ///
     /// Heap::transaction(|j| {
-    ///     let c = Pbox::new(LogRefCell::new(5, j), j);
+    ///     let c = Pbox::new(PRefCell::new(5), j);
     ///     let five = c.take(j);
     ///
     ///     assert_eq!(five, 5);
@@ -375,7 +435,7 @@ impl<T: PSafe + Default, A: MemPool> LogRefCell<T, A> {
     }
 }
 
-impl<T: PSafe, A: MemPool> LogRefCell<T, A> {
+impl<T: PSafe, A: MemPool> PRefCell<T, A> {
     /// Mutably borrows from an owned value.
     ///
     /// It returns a `RefMut` type for interior mutability which takes a log of
@@ -385,12 +445,11 @@ impl<T: PSafe, A: MemPool> LogRefCell<T, A> {
     /// # Examples
     ///
     /// ```
-    /// use corundum::alloc::*;
+    /// use corundum::alloc::heap::*;
     /// use corundum::boxed::Pbox;
-    /// use corundum::cell::LogRefCell;
     ///
     /// let cell=Heap::transaction(|j| {
-    ///     let cell = Pbox::new(LogRefCell::new(5, j), j);
+    ///     let cell = Pbox::new(PRefCell::new(5), j);
     ///     {
     ///         let mut cell = cell.borrow_mut(j);
     ///         *cell = 10;
@@ -422,90 +481,106 @@ impl<T: PSafe, A: MemPool> LogRefCell<T, A> {
     /// recommended to use this function without necessary manual checks.
     /// 
     pub unsafe fn as_non_null_mut(&self, journal: &Journal<A>) -> LogNonNull<T, A> {
-        let (logged, ptr) = &mut *self.value.get();
-        LogNonNull::new_unchecked(ptr, logged, journal)
+        let inner = &mut *self.value.get();
+        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
+            LogNonNull::new_unchecked(inner, journal)
+        }
+        #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))] {
+            LogNonNull::new_unchecked(&mut inner.1, &mut inner.0, journal)
+        }
     }
 
     /// Returns a `NonNull` pointer to the data
     pub fn as_non_null(&self) -> NonNull<T> {
         unsafe { 
-            let (_, ptr) = &mut *self.value.get();
-            NonNull::new_unchecked(ptr)
+            let inner = &mut *self.value.get();
+            #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
+                NonNull::new_unchecked(inner)
+            }
+            #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))] {
+                NonNull::new_unchecked(&mut inner.1)
+            }
         }
     }
 }
 
 use crate::clone::PClone;
-impl<T: PSafe + PClone<A>, A: MemPool> PClone<A> for LogRefCell<T, A> {
+impl<T: PSafe + PClone<A>, A: MemPool> PClone<A> for PRefCell<T, A> {
     #[inline]
-    fn pclone(&self, j: &Journal<A>) -> LogRefCell<T, A> {
-        LogRefCell::new(self.as_ref().pclone(j), j)
+    fn pclone(&self, j: &Journal<A>) -> PRefCell<T, A> {
+        PRefCell::new(self.as_ref().pclone(j))
     }
 }
 
-impl<T: PSafe + PartialEq + ?Sized, A: MemPool> PartialEq for LogRefCell<T, A> {
+impl<T: PSafe + Clone, A: MemPool> Clone for PRefCell<T, A> {
     #[inline]
-    fn eq(&self, other: &LogRefCell<T, A>) -> bool {
+    fn clone(&self) -> PRefCell<T, A> {
+        PRefCell::new(self.as_ref().clone())
+    }
+}
+
+impl<T: PSafe + PartialEq + ?Sized, A: MemPool> PartialEq for PRefCell<T, A> {
+    #[inline]
+    fn eq(&self, other: &PRefCell<T, A>) -> bool {
         *self.as_ref() == *other.as_ref()
     }
 }
 
-impl<T: PSafe + Eq + ?Sized, A: MemPool> Eq for LogRefCell<T, A> {}
+impl<T: PSafe + Eq + ?Sized, A: MemPool> Eq for PRefCell<T, A> {}
 
-impl<T: PSafe + PartialOrd + ?Sized, A: MemPool> PartialOrd for LogRefCell<T, A> {
+impl<T: PSafe + PartialOrd + ?Sized, A: MemPool> PartialOrd for PRefCell<T, A> {
     #[inline]
-    fn partial_cmp(&self, other: &LogRefCell<T, A>) -> Option<std::cmp::Ordering> {
+    fn partial_cmp(&self, other: &PRefCell<T, A>) -> Option<std::cmp::Ordering> {
         self.as_ref().partial_cmp(&*other.as_ref())
     }
 
     #[inline]
-    fn lt(&self, other: &LogRefCell<T, A>) -> bool {
+    fn lt(&self, other: &PRefCell<T, A>) -> bool {
         *self.as_ref() < *other.as_ref()
     }
 
     #[inline]
-    fn le(&self, other: &LogRefCell<T, A>) -> bool {
+    fn le(&self, other: &PRefCell<T, A>) -> bool {
         *self.as_ref() <= *other.as_ref()
     }
 
     #[inline]
-    fn gt(&self, other: &LogRefCell<T, A>) -> bool {
+    fn gt(&self, other: &PRefCell<T, A>) -> bool {
         *self.as_ref() > *other.as_ref()
     }
 
     #[inline]
-    fn ge(&self, other: &LogRefCell<T, A>) -> bool {
+    fn ge(&self, other: &PRefCell<T, A>) -> bool {
         *self.as_ref() >= *other.as_ref()
     }
 }
 
-impl<T: PSafe + Ord + ?Sized, A: MemPool> Ord for LogRefCell<T, A> {
+impl<T: PSafe + Ord + ?Sized, A: MemPool> Ord for PRefCell<T, A> {
     #[inline]
-    fn cmp(&self, other: &LogRefCell<T, A>) -> std::cmp::Ordering {
+    fn cmp(&self, other: &PRefCell<T, A>) -> std::cmp::Ordering {
         self.as_ref().cmp(&*other.as_ref())
     }
 }
 
 pub struct Ref<'b, T: 'b + PSafe + ?Sized, A: MemPool> {
-    value: *const LogRefCell<T, A>,
+    value: *const PRefCell<T, A>,
     phantom: PhantomData<&'b T>
 }
 
 impl<T: ?Sized, A: MemPool> !TxOutSafe for Ref<'_, T, A> {}
 impl<T: ?Sized, A: MemPool> !Send for Ref<'_, T, A> {}
 impl<T: ?Sized, A: MemPool> !Sync for Ref<'_, T, A> {}
-unsafe impl<T: PSafe + ?Sized, A: MemPool> PSafe for Ref<'_, T, A> {}
 
 impl<'b, T: PSafe + ?Sized, A: MemPool> Ref<'b, T, A> {
     /// Copies a `Ref`.
     ///
-    /// The `LogRefCell` is already immutably borrowed, so this cannot fail. To
+    /// The `PRefCell` is already immutably borrowed, so this cannot fail. To
     /// be able to borrow mutably, all `Ref`s should go out of scope.
     ///
     /// This is an associated function that needs to be used as
     /// `Ref::clone(...)`. A `Clone` implementation or a method would interfere
     /// with the widespread use of `r.borrow().clone()` to clone the contents of
-    /// a `LogRefCell`.
+    /// a `PRefCell`.
     #[inline]
     #[track_caller]
     pub fn clone(orig: &Ref<'b, T, A>) -> Ref<'b, T, A> {
@@ -565,8 +640,8 @@ impl<T: PSafe + ?Sized, A: MemPool> Ref<'_, T, A> {
         res
     }
 
-    /// Returns the `&LogRefCell` and drops the `Ref`
-    pub fn into_inner<'a>(orig: Ref<'a, T, A>) -> &'a LogRefCell<T, A> {
+    /// Returns the `&PRefCell` and drops the `Ref`
+    pub fn into_inner<'a>(orig: Ref<'a, T, A>) -> &'a PRefCell<T, A> {
         let inner = orig.value;
         std::mem::drop(orig);
         unsafe { &*inner }
@@ -596,7 +671,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Drop for Ref<'_, T, A> {
 }
 
 pub struct RefMut<'b, T: 'b + PSafe + ?Sized, A: MemPool> {
-    value: *mut LogRefCell<T, A>,
+    value: *mut PRefCell<T, A>,
     journal: *const Journal<A>,
     phantom: PhantomData<&'b T>
 }
@@ -604,7 +679,6 @@ pub struct RefMut<'b, T: 'b + PSafe + ?Sized, A: MemPool> {
 impl<T: ?Sized, A: MemPool> !TxOutSafe for RefMut<'_, T, A> {}
 impl<T: ?Sized, A: MemPool> !Send for RefMut<'_, T, A> {}
 impl<T: ?Sized, A: MemPool> !Sync for RefMut<'_, T, A> {}
-unsafe impl<T: PSafe + ?Sized, A: MemPool> PSafe for RefMut<'_, T, A> {}
 
 #[cfg(feature = "refcell_lifetime_change")]
 impl<T: PSafe + ?Sized, A: MemPool> RefMut<'_, T, A> {
@@ -625,8 +699,8 @@ impl<T: PSafe + ?Sized, A: MemPool> RefMut<'_, T, A> {
         res
     }
 
-    /// Returns the `&LogRefCell` and drops the `RefMut`
-    pub fn into_inner<'a>(orig: RefMut<'a, T, A>) -> &'a LogRefCell<T, A> {
+    /// Returns the `&PRefCell` and drops the `RefMut`
+    pub fn into_inner<'a>(orig: RefMut<'a, T, A>) -> &'a PRefCell<T, A> {
         let inner = orig.value;
         std::mem::drop(orig);
         unsafe { &*inner }
@@ -651,6 +725,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Deref for RefMut<'_, T, A> {
 
 impl<T: PSafe + ?Sized, A: MemPool> DerefMut for RefMut<'_, T, A> {
     #[inline]
+    #[track_caller]
     fn deref_mut(&mut self) -> &mut T {
         unsafe { (*self.value).get_mut(&*self.journal) }
     }

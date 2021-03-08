@@ -23,7 +23,7 @@ impl<T: NVData> Node<T> {
         *self.next.borrow_mut(j) = Some(Pbox::new(
             Node {
                 data,
-                next: PRefCell::new(None, j),
+                next: PRefCell::new(None),
             },
             j,
         ));
@@ -141,10 +141,10 @@ impl<T: NVData + Display> Display for List<T> {
     }
 }
 
-impl<T: NVData> RootObj<P> for List<T> {
-    fn init(j: &Journal) -> Self {
+impl<T: NVData> Default for List<T> {
+    fn default() -> Self {
         Self {
-            root: PRefCell::new(None, j),
+            root: PRefCell::new(None),
         }
     }
 }

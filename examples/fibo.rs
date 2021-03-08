@@ -9,14 +9,14 @@ type P1 = pool1::BuddyAlloc;
 type P2 = pool2::BuddyAlloc;
 
 struct Root<P: MemPool> {
-    val: LogRefCell<f64, P>,
-    idx: LogRefCell<u64, P>,
+    val: PRefCell<f64, P>,
+    idx: PRefCell<u64, P>,
 }
-impl<M: MemPool> RootObj<M> for Root<M> {
-    fn init(j: &Journal<M>) -> Self {
+impl<M: MemPool> Default for Root<M> {
+    fn default() -> Self {
         Root {
-            val: LogRefCell::new(0.0, j),
-            idx: LogRefCell::new(0, j),
+            val: PRefCell::new(0.0),
+            idx: PRefCell::new(0),
         }
     }
 }
@@ -26,7 +26,7 @@ fn main() {
     let n2 = P2::open::<Root<P2>>("fibo2.pool", O_CFNE).unwrap();
 
     while !Chaperon::session("fibo.pool", || {
-        let n1_val = f64::max(1.0, *n1.val.borrow());
+        let n1_val = 1f64.max(*n1.val.borrow());
         let n1_idx = *n1.idx.borrow();
 
         if n1_idx >= 100 {
@@ -38,21 +38,17 @@ fn main() {
             let old_n2 = *n2;
             *n2 = n1_val;
             old_n2
-        })
-        .unwrap();
+        }).unwrap();
 
         P1::transaction(|j| {
             let mut n1_idx = n1.idx.borrow_mut(j);
             let mut n1 = n1.val.borrow_mut(j);
             *n1 += n2_val;
             *n1_idx += 1;
-        })
-        .unwrap();
+        }).unwrap();
 
         false
-    })
-    .unwrap()
-    {}
+    }).unwrap() {}
 
     let n1 = n1.val.read();
     let n2 = n2.val.read();

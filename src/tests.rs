@@ -14,24 +14,24 @@ pub(crate) mod problems {
         type P = BuddyAlloc;
 
         struct Root {
-            v1: Parc<Mutex<i32, P>, P>,
+            v1: Parc<PMutex<i32, P>, P>,
         }
 
         impl RootObj<P> for Root {
             fn init(j: &Journal<P>) -> Self {
                 Root {
-                    v1: Parc::new(Mutex::new(0, j), j),
+                    v1: Parc::new(PMutex::new(0), j),
                 }
             }
         }
 
         std::thread::spawn(|| {
             let root = P::open::<Root>("challenge_mt1.pool", O_CFNE).unwrap();
-            let v1 = root.v1.volatile();
+            let v1 = root.v1.demote();
             std::thread::spawn(move || {
                 std::thread::sleep(std::time::Duration::from_secs(1));
                 P::transaction(|j| {
-                    if let Some(r) = v1.upgrade(j) {
+                    if let Some(r) = v1.promote(j) {
                         let mut r = r.lock(j);
                         *r += 1;
                         println!("root = {}", *r);
@@ -53,13 +53,13 @@ pub(crate) mod problems {
         type P = BuddyAlloc;
 
         struct Root {
-            v1: Parc<Mutex<Vec<String<P>, P>, P>, P>,
+            v1: Parc<PMutex<Vec<String<P>, P>, P>, P>,
         }
 
         impl RootObj<P> for Root {
             fn init(j: &Journal<P>) -> Self {
                 Root {
-                    v1: Parc::new(Mutex::new(Vec::new(j), j), j),
+                    v1: Parc::new(PMutex::new(Vec::new()), j),
                 }
             }
         }
@@ -73,10 +73,10 @@ pub(crate) mod problems {
         })
         .unwrap();
         for i in 0..1 {
-            let v1 = root.v1.volatile();
+            let v1 = root.v1.demote();
             threads.push(thread::spawn(move || {
                 P::transaction(move |j| {
-                    if let Some(v1) = v1.upgrade(j) {
+                    if let Some(v1) = v1.promote(j) {
                         let mut v = v1.lock(j);
                         println!("{:?} old value = {:#?}", thread::current().id(), v);
                         v.push(
@@ -100,6 +100,53 @@ pub(crate) mod problems {
     }
 
     #[test]
+    fn paper() {
+        use crate::default::*;
+        type P = BuddyAlloc;
+        struct Node { val: i32, next: PRefCell<Option<Pbox<Node>>> }
+        impl RootObj<P> for Node {
+            fn init(_j: &Journal) -> Self { Self{
+                val: 0, next: PRefCell::new(None)
+            }}
+        }
+        fn append(n: &Node, v:i32, j: &Journal) {
+            let mut t = n.next.borrow_mut(j);
+            match &*t {
+                Some(succ) => append(succ, v, j),
+                None => *t = Some(Pbox::new(
+                    Node {
+                    val: v,
+                    next: PRefCell::new(None)
+                    }, j))
+            }
+        }
+        fn go(v: i32) {
+            let head = BuddyAlloc::open::<Node>("list.pool",O_CFNE).unwrap();
+            transaction(|j| {
+                append(&head, v, j);
+            }).unwrap();
+        }
+
+        fn print(n: &Node) {
+            let t = n.next.borrow();
+            print!("{} ", n.val);
+            match &*t {
+                Some(succ) => print(succ),
+                None => {}
+            }
+        }
+
+        fn print_all() {
+            let head = BuddyAlloc::open::<Node>("list.pool",O_CFNE).unwrap();
+            print(&head);
+            println!();
+        }
+
+        go(rand::random());
+        print_all();
+    }
+
+    #[test]
     #[ignore]
     fn memory_leak_problem() {
         use crate::default::*;
@@ -111,11 +158,11 @@ pub(crate) mod problems {
 
         let _ = P::transaction(|j| {
             let a = Parc::new(42, j);
-            let b = a.volatile();
+            let b = a.demote();
             std::thread::spawn(move || {
                 let _ = P::transaction(|j| {
                     std::thread::sleep(Duration::from_millis(900));
-                    if let Some(b) = b.upgrade(j) {
+                    if let Some(b) = b.promote(j) {
                         println!("Exit {}", *b);
                         std::process::exit(0); // Memory leak may happen here
                     }
@@ -144,7 +191,7 @@ pub(crate) mod problems {
         impl RootObj<P> for Root {
             fn init(j: &Journal<P>) -> Self {
                 Root {
-                    data: Parc::new(PMutex::new(Parc::new(10, j), j), j),
+                    data: Parc::new(PMutex::new(Parc::new(10, j)), j),
                 }
             }
         }
@@ -152,11 +199,11 @@ pub(crate) mod problems {
         let root = P::open::<Root>("test_pack.pool", O_CFNE).unwrap();
         crate::tests::test::print_usage(0);
 
-        let b = root.data.volatile();
+        let b = root.data.demote();
         std::thread::spawn(move || {
             P::transaction(|j| {
                 std::thread::sleep(Duration::from_millis(900));
-                if let Some(b) = b.upgrade(j) {
+                if let Some(b) = b.promote(j) {
                     let mut b = b.lock(j);
                     *b = Parc::new(**b + 1, j);
                     println!("data1 {}", *b);
@@ -168,12 +215,12 @@ pub(crate) mod problems {
         std::thread::sleep(Duration::from_millis(1000));
         crate::tests::test::print_usage(1);
 
-        let b = root.data.volatile();
+        let b = root.data.demote();
         P::transaction(|_| {
             std::thread::spawn(move || {
                 P::transaction(|j| {
                     std::thread::sleep(Duration::from_millis(900));
-                    if let Some(b) = b.upgrade(j) {
+                    if let Some(b) = b.promote(j) {
                         let mut b = b.lock(j);
                         *b = Parc::new(**b + 1, j);
                         println!("data2 {}", *b);
@@ -201,12 +248,12 @@ pub(crate) mod problems {
 
         P::transaction(|j| {
             let root = Parc::new(10, j);
-            let b = root.volatile(); // Panics here because `pack` should be called
+            let b = root.demote(); // Panics here because `pack` should be called
                                  // outside transaction
             std::thread::spawn(move || {
                 std::thread::sleep(Duration::from_millis(900));
                 P::transaction(|j| {
-                    if let Some(b) = b.upgrade(j) {
+                    if let Some(b) = b.promote(j) {
                         println!("data1 {}", *b);
                         std::thread::sleep(Duration::from_millis(2000));
                         std::process::exit(0); // Memory leak may happen here
@@ -220,21 +267,19 @@ pub(crate) mod problems {
 
     #[test]
     fn ref_cycle_mem_leak() {
-        use crate::prc::*;
-        use crate::clone::PClone;
-
+        use crate::default::*;
         type P = BuddyAlloc;
 
         #[derive(Debug)]
         enum List {
-            Cons(i32, LogRefCell<Prc<List,P>,P>),
+            Cons(i32, PRefCell<Prc<List>>),
             Nil,
         }
 
         use List::*;
 
         impl List {
-            fn tail(&self) -> Option<&LogRefCell<Prc<List,P>,P>> {
+            fn tail(&self) -> Option<&PRefCell<Prc<List>>> {
                 match self {
                     Cons(_, item) => Some(item),
                     Nil => None,
@@ -245,12 +290,12 @@ pub(crate) mod problems {
         let _img = P::open_no_root("ref_cycle_mem_leak.pool", O_CF).unwrap();
         println!("usage 1: {}", P::used());
         P::transaction(|j| {
-            let a = Prc::new(Cons(5, LogRefCell::new(Prc::new(Nil, j), j)), j);
+            let a = Prc::new(Cons(5, PRefCell::new(Prc::new(Nil, j))), j);
 
             println!("a initial rc count = {}", Prc::strong_count(&a));
             println!("a next item = {:?}", a.tail());
         
-            let b = Prc::new(Cons(10, LogRefCell::new(Prc::pclone(&a, j), j)), j);
+            let b = Prc::new(Cons(10, PRefCell::new(Prc::pclone(&a, j))), j);
         
             println!("a rc count after b creation = {}", Prc::strong_count(&a));
             println!("b initial rc count = {}", Prc::strong_count(&b));
@@ -268,35 +313,34 @@ pub(crate) mod problems {
 
     #[test]
     fn test_vweak() {
-        use crate::prc::*;
-
+        use crate::default::*;
         type P = BuddyAlloc;
 
         struct Root {
-            v: LogRefCell<Prc<u32, P>, P>,
+            v: PRefCell<Prc<u32>>,
         }
 
         impl RootObj<P> for Root {
-            fn init(j: &Journal<P>) -> Self {
+            fn init(j: &Journal) -> Self {
                 Root {
-                    v: LogRefCell::new(Prc::new(10, j), j),
+                    v: PRefCell::new(Prc::new(10, j)),
                 }
             }
         }
 
         let ovp = {
             let root = P::open::<Root>("test_vweak.pool", O_CFNE).unwrap();
-            let vp = Prc::volatile(&root.v.borrow());
+            let vp = Prc::demote(&root.v.borrow());
             P::transaction(|j| {
-                if let Some(p) = vp.upgrade(j) {
+                if let Some(p) = vp.promote(j) {
 
-                    let _vp2 = Prc::volatile(&p);
+                    let _vp2 = Prc::demote(&p);
                     // drop a recently created volatile reference
-                    let _vp2 = Prc::volatile(&p);
+                    let _vp2 = Prc::demote(&p);
                     // drop a recently created volatile reference
-                    let _vp2 = Prc::volatile(&p);
+                    let _vp2 = Prc::demote(&p);
                     // drop a recently created volatile reference
-                    let _vp2 = Prc::volatile(&p);
+                    let _vp2 = Prc::demote(&p);
                 // drop a recently created volatile reference
                 } else {
                     println!("no data");
@@ -306,7 +350,7 @@ pub(crate) mod problems {
                 let mut b = root.v.borrow_mut(j);
                 *b = Prc::new(12, j);
 
-                if let Some(p) = vp.upgrade(j) {
+                if let Some(p) = vp.promote(j) {
                     println!("new data = {}", p);
                 } else {
                     println!("no new data");
@@ -314,10 +358,10 @@ pub(crate) mod problems {
             })
             .unwrap();
 
-            let x = Prc::volatile(&root.v.borrow());
+            let x = Prc::demote(&root.v.borrow());
             P::transaction(|j| {
                 // Trying to access a volatile pointer from the current session
-                if let Some(p) = x.upgrade(j) {
+                if let Some(p) = x.promote(j) {
                     println!("data = {}", p);
                 } else {
                     println!("no data");
@@ -331,7 +375,7 @@ pub(crate) mod problems {
         let _root = P::open::<Root>("test_vweak.pool", O_CFNE).unwrap();
         P::transaction(|j| {
             // Trying to access a volatile pointer from previous session
-            if let Some(p) = ovp.upgrade(j) {
+            if let Some(p) = ovp.promote(j) {
                 println!("data = {}", p);
             } else {
                 println!("no data");
@@ -341,40 +385,55 @@ pub(crate) mod problems {
     }
 
     #[test]
-    fn trans_inside_fn() {
+    fn chaperon_swap() {
+        use crate::cell::PRefCell as RefCell;
+        use crate::boxed::Pbox;
+
         crate::pool!(pool1);
         crate::pool!(pool2);
 
         type P1 = pool1::BuddyAlloc;
         type P2 = pool2::BuddyAlloc;
 
-        fn foo<M: MemPool>(root: &LogRefCell<i32, M>, v: i32) -> i32 {
+        fn foo<M: MemPool>(root: &RefCell<i32, M>, v: i32) -> i32 {
             M::transaction(|j| {
                 let mut root = root.borrow_mut(j);
                 *root = v;
                 *root
-            })
-            .unwrap()
+            }).unwrap()
         }
 
-        let root1 = P1::open::<Pbox<LogRefCell<i32, P1>, P1>>("pool5.pool", O_CFNE).unwrap();
-        let root2 = P2::open::<Pbox<LogRefCell<i32, P2>, P2>>("pool6.pool", O_CFNE).unwrap();
-        Chaperon::session("foo1.pool", || {
-            let other = foo::<P2>(&root2, 10); // <-- foo commits here
-            P1::transaction(|j| {
+        let root1 = P1::open::<Pbox<RefCell<i32, P1>, P1>>("pool5.pool", O_CFNE).unwrap();
+        let root2 = P2::open::<Pbox<RefCell<i32, P2>, P2>>("pool6.pool", O_CFNE).unwrap();
+
+        println!("root1 = {}", root1);
+        println!("root2 = {}", root2);
+
+        let _res = Chaperon::session("foo1.pool", || {
+            let root1_old = P1::transaction(|j| {
                 let mut root = root1.borrow_mut(j);
-                *root = other
-            })
-            .unwrap();
+                let old = *root;
+                *root = *root2.borrow();
+                if *root == 0 {
+                    *root = 10;
+                }
+                old
+            }).unwrap();
             P2::transaction(|j| {
                 // <-- Creates a Journal<P2>
                 let mut root = root2.borrow_mut(j);
-                *root = other;
-            })
-            .unwrap();
-            let _other = foo::<P1>(&root1, 20); // <-- foo dose not commit here (postponed) because a trans is open
-        })
-        .unwrap();
+                *root = root1_old;
+                if *root == 0 {
+                    *root = 20;
+                }
+                // std::process::exit(0);
+            }).unwrap();
+            // let _other = foo::<P1>(&root1, 20); // <-- foo dose not commit here (postponed) because a trans is open
+            // std::process::exit(0);
+        });
+
+        println!("P1: {}", P1::used());
+        println!("P2: {}", P2::used());
     }
 
     #[test]
@@ -397,9 +456,9 @@ pub(crate) mod problems {
             // let e = root.borrow_mut(j); <-- Error: multiple mutable borrows
             // let f = root.borrow(); <-- Error: already mutably borrowed
 
-            let new = Pbox::new(LogRefCell::pfrom(d, j), j); // A new `LogRefCell`
+            let new = Pbox::new(PRefCell::pfrom(d, j), j); // A new `PRefCell`
             let mut e = new.borrow_mut(j);
-            *e = 30; // The original LogRefCell won't change
+            *e = 30; // The original PRefCell won't change
 
             // `d` is still available here 
         }).unwrap();
@@ -410,7 +469,6 @@ pub(crate) mod problems {
     #[test]
     fn test_concurrent() {
         use crate::alloc::*;
-        use crate::boxed::Pbox;
         use std::time::Instant;
 
         let _pool = BuddyAlloc::open_no_root("conc.pool", O_CF).unwrap();
@@ -449,17 +507,56 @@ pub(crate) mod problems {
         println!("Time elapsed in serial execution is: {:?}", duration);
         println!("usage = {} bytes", BuddyAlloc::used());
     }
+
+    #[test]
+    fn parc_two_threads() {
+        use crate::default::*;
+
+        type P = BuddyAlloc;
+        let root = P::open::<Parc<i32>>("parc_two_threads.pool", O_CFNE).unwrap();
+        println!("usage: {}", P::used());
+        println!("strong = {}", Parc::strong_count(&root));
+        let c1 = root.demote();
+        let c2 = root.demote();
+        let t1 = std::thread::spawn(move || {
+            let _=P::transaction(|j| {
+                if let Some(p) = c2.promote(j) {
+                    let m = p.pclone(j);
+                    println!("strong(t1) = {}", Parc::strong_count(&m));
+                    std::thread::sleep(std::time::Duration::from_millis(30));
+                    println!("t1 is done");
+                }
+            });
+        });
+        
+        let t2 = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(25));
+            let _ = P::transaction(|j| {
+                if let Some(p) = c1.promote(j) {
+                    let m = p.pclone(j);
+                    println!("strong(t2) = {}", Parc::strong_count(&m));
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                    // std::process::exit(0);
+                    panic!("abort");
+                }
+            });
+        });
+
+        t1.join().unwrap();
+        t2.join().unwrap();
+        assert_eq!(Parc::strong_count(&root), 1);
+    }
 }
 
 #[cfg(test)]
 pub(crate) mod test {
+    use crate::alloc::heap::Heap;
     use crate::default::*;
     use crate::cell::*;
-    use crate::clone::*;
     use crate::prc::*;
     use crate::stm::*;
     use crate::stm::Journal;
-    use crate::sync::Mutex;
+    use crate::sync::PMutex;
     use crate::*;
 
     type A = BuddyAlloc;
@@ -470,15 +567,15 @@ pub(crate) mod test {
         // Race condition problem (cyclic locks) is still possible
 
         struct Root {
-            a: Mutex<u32, A>,
-            b: Mutex<u32, A>,
+            a: PMutex<u32, A>,
+            b: PMutex<u32, A>,
         }
 
         impl RootObj<A> for Root {
-            fn init(j: &Journal<A>) -> Self {
+            fn init(_j: &Journal<A>) -> Self {
                 Self {
-                    a: Mutex::new(0, j),
-                    b: Mutex::new(0, j),
+                    a: PMutex::new(0),
+                    b: PMutex::new(0),
                 }
             }
         }
@@ -527,14 +624,14 @@ pub(crate) mod test {
         }
         pub struct Consumer {
             pattern: String<A>,
-            data: Mutex<String<A>, A>,
+            data: PMutex<String<A>, A>,
         }
 
         impl RootObj<A> for Consumer {
-            fn init(j: &Journal<A>) -> Self {
+            fn init(_j: &Journal<A>) -> Self {
                 Self {
-                    pattern: String::new(j),
-                    data: Mutex::new(String::new(j), j),
+                    pattern: String::new(),
+                    data: PMutex::new(String::new()),
                 }
             }
         }
@@ -543,10 +640,10 @@ pub(crate) mod test {
 
         let mut threads = vec![];
         for i in 0..10 {
-            let root = root.volatile();
+            let root = root.demote();
             threads.push(thread::spawn(move || {
                 A::transaction(|j| {
-                    if let Some(data) = root.upgrade(j) {
+                    if let Some(data) = root.promote(j) {
                         let mut data = data.data.lock(j);
                         let r = rand().to_string();
                         println!("Old persisted data: `{}`", data);
@@ -568,15 +665,13 @@ pub(crate) mod test {
 
     #[test]
     fn multiple_transactions() {
-        use crate::boxed::Pbox;
-
         let _image = A::open_no_root("nosb.pool", O_CF).unwrap();
 
         A::transaction(|j1| {
-            let b1 = Pbox::new(LogCell::new(1, j1), j1);
+            let b1 = Pbox::new(default::PCell::new(1), j1);
             b1.set(
                 Heap::transaction(move |j2| {
-                    let b2 = Pbox::new(LogCell::new(1, j2), j2);
+                    let b2 = Pbox::new(heap::PCell::new(1), j2);
                     b2.get()
                 })
                 .unwrap(),
@@ -589,18 +684,16 @@ pub(crate) mod test {
     #[test]
     #[ignore]
     fn multiple_open() {
-        use crate::boxed::Pbox;
-
         let mut threads = vec![];
 
         for _ in 0..10 {
             threads.push(std::thread::spawn(move || {
                 let _image = A::open_no_root("nosb.pool", O_CF).unwrap();
                 A::transaction(|j1| {
-                    let b1 = Pbox::new(LogRefCell::new(1, j1), j1);
+                    let b1 = Pbox::new(default::PRefCell::new(1), j1);
                     let mut b1 = b1.borrow_mut(j1);
                     *b1 = Heap::transaction(move |j2| {
-                        let b2 = Pbox::new(LogRefCell::new(1, j2), j2);
+                        let b2 = Pbox::new(heap::PRefCell::new(1), j2);
                         b2.read()
                     })
                     .unwrap();
@@ -634,6 +727,8 @@ pub(crate) mod test {
 
     #[test]
     fn multiple_pools() {
+        use crate::cell::PRefCell;
+
         crate::pool!(pool1);
         crate::pool!(pool2);
 
@@ -641,12 +736,12 @@ pub(crate) mod test {
         type P2 = pool2::BuddyAlloc;
 
         struct Root<P: MemPool> {
-            val: Pbox<LogRefCell<i32, P>, P>,
+            val: Pbox<PRefCell<i32, P>, P>,
         }
         impl<M: MemPool> RootObj<M> for Root<M> {
             fn init(j: &Journal<M>) -> Self {
                 Root {
-                    val: Pbox::new(LogRefCell::new(0, j), j),
+                    val: Pbox::new(PRefCell::new(0), j),
                 }
             }
         }
@@ -694,17 +789,19 @@ pub(crate) mod test {
 
     #[test]
     fn concat_test() {
+        use crate::default::*;
+
         type P = BuddyAlloc;
-        type Ptr = Option<Prc<LogRefCell<Node, P>, P>>;
+        type Ptr = Option<Prc<PRefCell<Node>>>;
         struct Node {
             val: i32,
             next: Ptr,
         }
         fn remove_all(k: i32) {
-            let root = P::open::<Pbox<LogRefCell<Ptr, P>, P>>("foo3.pool", 0).unwrap();
+            let root = P::open::<Pbox<PRefCell<Ptr>>>("foo3.pool", 0).unwrap();
             P::transaction(|j| {
                 let mut curr = root.borrow().pclone(j);
-                let mut prev = Weak::<LogRefCell<Node, P>, P>::new();
+                let mut prev = prc::PWeak::<PRefCell<Node>>::new();
                 while let Some(n) = curr {
                     let p = n.borrow();
                     if p.val == k {
@@ -725,26 +822,28 @@ pub(crate) mod test {
 
     #[test]
     fn prc_test() {
+        use crate::default::*;
+
         let _image = A::open_no_root("nosb.pool", O_CF).unwrap();
 
         struct Cell {
             k: i32,
-            next: Option<Prc<LogRefCell<Cell, A>, A>>,
+            next: Option<Prc<PRefCell<Cell>>>,
         }
 
         impl Cell {
             pub fn new(x: i32) -> Self {
                 Cell { k: x, next: None }
             }
-            pub fn add(&mut self, v: i32, j: &Journal<A>) {
+            pub fn add(&mut self, v: i32, j: &Journal) {
                 if let Some(next) = &self.next {
                     let mut next = next.borrow_mut(j);
                     next.add(v, j);
                 } else {
-                    self.next = Some(Prc::new(LogRefCell::new(Cell::new(v), j), j));
+                    self.next = Some(Prc::new(PRefCell::new(Cell::new(v)), j));
                 }
             }
-            pub fn sum(&self, j: &Journal<A>) -> i32 {
+            pub fn sum(&self, j: &Journal) -> i32 {
                 if let Some(next) = &self.next {
                     self.k + next.borrow().sum(j)
                 } else {
@@ -754,8 +853,8 @@ pub(crate) mod test {
         }
 
         transaction(|j| {
-            let shared_root: Prc<LogRefCell<Cell, A>, A> =
-                Prc::new(LogRefCell::new(Cell::new(10), j), j);
+            let shared_root: Prc<PRefCell<Cell>> =
+                Prc::new(PRefCell::new(Cell::new(10)), j);
             // Create a new block to limit the scope of the dynamic borrow
             {
                 let mut root = shared_root.borrow_mut(j);
@@ -791,17 +890,17 @@ pub(crate) mod test {
             next: PRefCell<Option<Prc<Cell>>>,
         }
 
-        impl RootObj<A> for Cell {
-            fn init(j: &Journal<A>) -> Self {
-                Cell::new(0, j)
+        impl Default for Cell {
+            fn default() -> Self {
+                Cell::new(0)
             }
         }
 
         impl Cell {
-            pub fn new(x: i32, j: &Journal<A>) -> Self {
+            pub fn new(x: i32) -> Self {
                 Cell {
                     k: VCell::new(RefCell::new(Some(Box::new(x)))),
-                    next: LogRefCell::new(None, j),
+                    next: PRefCell::new(None),
                 }
             }
             pub fn add(&self, v: i32, j: &Journal<A>) {
@@ -809,7 +908,7 @@ pub(crate) mod test {
                     next.add(v, j);
                     return;
                 }
-                *self.next.borrow_mut(j) = Some(Prc::new(Cell::new(v, j), j));
+                *self.next.borrow_mut(j) = Some(Prc::new(Cell::new(v), j));
             }
             pub fn sum(&self, j: &Journal<A>) -> i32 {
                 let mut k = if let Some(g) = &*self.k.borrow() {
@@ -910,7 +1009,7 @@ pub(crate) mod test {
                     } else {
                         *next = Some(Node {
                             val,
-                            next: Prc::new(PRefCell::new(None, j), j)
+                            next: Prc::new(PRefCell::new(None), j)
                         })
                     }
                 }).unwrap()
@@ -920,6 +1019,8 @@ pub(crate) mod test {
 
     #[test]
     fn test_gadget_owners() {
+        use crate::default::*;
+
         let _image = A::open_no_root("nosb.pool", O_CF);
         struct Owner {
             name: [u8; 8],
@@ -927,7 +1028,7 @@ pub(crate) mod test {
         }
         struct Gadget {
             id: i32,
-            owner: Prc<LogRefCell<Owner, A>, A>,
+            owner: Prc<PRefCell<Owner>>,
         }
         impl Owner {
             fn new(name: &str) -> Self {
@@ -952,8 +1053,8 @@ pub(crate) mod test {
             // Create a reference-counted `Owner`. Note that we've put the `Owner`'s
             // vector of `Gadget`s inside a `RefCell` so that we can mutate it through
             // a shared reference.
-            let gadget_owner: Prc<LogRefCell<Owner, A>, A> =
-                Prc::new(LogRefCell::new(Owner::new("Dany"), j), j);
+            let gadget_owner: Prc<PRefCell<Owner>> =
+                Prc::new(PRefCell::new(Owner::new("Dany")), j);
             print_usage(1);
 
             // Create `Gadget`s belonging to `gadget_owner`, as before.
@@ -1037,20 +1138,22 @@ pub(crate) mod test {
     #[test]
     #[allow(clippy::comparison_chain)]
     fn test_dblist() {
+        use crate::default::{*, prc::PWeak};
+
         struct SB {
-            root: Prc<LogRefCell<Node<i32>, A>, A>,
+            root: Prc<PRefCell<Node<i32>>>,
         }
         impl RootObj<A> for SB {
-            fn init(j: &Journal<A>) -> Self {
+            fn init(j: &Journal) -> Self {
                 Self {
-                    root: Prc::new(LogRefCell::new(Node::new(0), j), j),
+                    root: Prc::new(PRefCell::new(Node::new(0)), j),
                 }
             }
         }
         struct Node<T: PSafe + std::fmt::Display> {
             value: T,
-            next: Option<Prc<LogRefCell<Node<T>, A>, A>>,
-            prev: Weak<LogRefCell<Node<T>, A>, A>,
+            next: Option<Prc<PRefCell<Node<T>>>>,
+            prev: PWeak<PRefCell<Node<T>>>,
         }
         impl<T: PSafe + std::fmt::Display> Node<T> {
             fn new(x: T) -> Self {
@@ -1065,7 +1168,7 @@ pub(crate) mod test {
             AddNewRndNum = 0,
             DelRndNum = 1,
             DelAll = 2,
-        };
+        }
         use Operation::*;
         let r = rand() % 100;
         let cmd = if r < 20 {
@@ -1084,10 +1187,10 @@ pub(crate) mod test {
             match cmd {
                 AddNewRndNum => {
                     println!("adding new element {}", value);
-                    let new = Prc::new(LogRefCell::new(Node::new(value),j),j);
+                    let new = Prc::new(PRefCell::new(Node::new(value)),j);
                     if let Some(root) = &sb.next {
                         let mut curr = Prc::downgrade(&root, j);
-                        let mut last = Weak::<LogRefCell<Node<i32>,A>,A>::new();
+                        let mut last = PWeak::<PRefCell<Node<i32>>>::new();
                         let mut added = false;
                         while let Some(pnode) = curr.upgrade(j) {
                             let node = pnode.borrow_mut(j);
@@ -1273,9 +1376,11 @@ pub(crate) mod test {
 
     #[test]
     fn test_transaction() {
+        use crate::default::*;
+
         let _heap = A::open_no_root("nosb.pool", O_CF);
         A::transaction(|j| {
-            let data = Pbox::new(LogRefCell::new(1, j), j);
+            let data = Pbox::new(PRefCell::new(1), j);
             let mut data = data.borrow_mut(j);
             *data = 2;
             println!("data = {}", data);
@@ -1285,15 +1390,17 @@ pub(crate) mod test {
 
     #[test]
     fn test_logs() {
+        use crate::default::*;
+
         struct Root {
-            head: Option<LogRefCell<i32, A>>,
+            head: Option<PRefCell<i32>>,
         }
         impl Default for Root {
             fn default() -> Self {
                 Root { head: None }
             }
         }
-        let root = A::open::<Pbox<LogRefCell<Root, A>, A>>("sb7.pool", O_CFNE).unwrap();
+        let root = A::open::<Pbox<PRefCell<Root>>>("sb7.pool", O_CFNE).unwrap();
         let data = A::transaction(|j| {
             let mut root = root.borrow_mut(j);
             if let Some(obj) = &root.head {
@@ -1302,10 +1409,10 @@ pub(crate) mod test {
                 *obj
             } else {
                 // let _root = root.borrow_mut();
-                // let _new_node = LogRefCell::new(1);
+                // let _new_node = PRefCell::new(1);
                 // std::process::exit(0);
 
-                let new_node = LogRefCell::new(1, j); //std::process::exit(0)
+                let new_node = PRefCell::new(1); //std::process::exit(0)
                 root.head = Some(new_node);
                 1
             }
@@ -1317,7 +1424,6 @@ pub(crate) mod test {
     // Parc tests
 
     use crate::boxed::Pbox;
-    use crate::prc::Prc;
     use crate::sync::Parc;
 
     use std::thread;
@@ -1335,10 +1441,10 @@ pub(crate) mod test {
             //
             // Here we're using an Arc to share memory among threads, and the data inside
             // the Arc is protected with a mutex.
-            let data = Parc::new(Mutex::new(0, j), j);
+            let data = Parc::new(PMutex::new(0), j);
             let (tx, rx) = channel();
             for _ in 0..N {
-                let (data, tx) = (data.volatile(), tx.clone());
+                let (data, tx) = (data.demote(), tx.clone());
                 thread::spawn(move || {
                     // The shared state can only be accessed once the lock is held.
                     // Our non-atomic increment is safe because we're the only thread
@@ -1347,7 +1453,7 @@ pub(crate) mod test {
                     // We unwrap() the return value to assert that we are not expecting
                     // threads to ever fail while holding the lock.
                     let res = Heap::transaction(|j| {
-                        let data = data.upgrade(j).unwrap();
+                        let data = data.promote(j).unwrap();
                         let mut data = data.lock(j);
                         *data += 1;
                         *data
@@ -1365,21 +1471,31 @@ pub(crate) mod test {
         .unwrap();
     }
 
+
+    #[test]
+    fn parc_heap() {
+        Heap::transaction(|j| {
+            // the Arc is protected with a mutex.
+            let _data = Parc::new(10, j);
+            let _weak_five = Parc::downgrade(&_data, j);
+        }).unwrap();
+    }
+
     #[test]
     fn test_parallel_alloc() {
         let mut threads = vec![];
         struct Node {
             id: i32,
-            next: Option<Pbox<Node, A>>,
+            next: Option<Parc<Node, A>>,
         }
         struct Root {
-            root: Parc<Mutex<Option<Pbox<Node, A>>, A>, A>,
+            root: Parc<PMutex<Option<Node>, A>, A>,
         }
         impl RootObj<A> for Root {
             fn init(j: &Journal<A>) -> Self {
-                let node = Pbox::new(Node { id: 0, next: None }, j);
+                let node = Node { id: 0, next: None };
                 Self {
-                    root: Parc::new(Mutex::new(Some(node), j), j),
+                    root: Parc::new(PMutex::new(Some(node)), j),
                 }
             }
         }
@@ -1387,11 +1503,11 @@ pub(crate) mod test {
         print_usage(0);
         // let prev = A::used();
         for i in 0..5 {
-            let root = root.root.volatile();
+            let root = root.root.demote();
             threads.push(thread::spawn(move || {
                 A::transaction(|j| {
-                    if let Some(root) = root.upgrade(j) {
-                        let node = Pbox::new(Node { id: i, next: None }, j);
+                    if let Some(root) = root.promote(j) {
+                        let node = Node { id: i, next: None };
                         let mut root = root.lock(j);
                         *root = Some(node);
                     }
@@ -1403,24 +1519,27 @@ pub(crate) mod test {
             thread.join().unwrap();
         }
         print_usage(1);
+
         // assert_eq!(A::used(), prev);
     }
 
     #[test]
     fn test_mutex() {
+        use crate::default::*;
+
         struct SB {
-            root: Option<Prc<Mutex<i32, A>, A>>,
+            root: Option<Prc<PMutex<i32>>>,
         }
         impl Default for SB {
             fn default() -> Self {
                 SB { root: None }
             }
         }
-        let sb = A::open::<Pbox<LogRefCell<SB, A>, A>>("sb9.pool", O_CFNE).unwrap();
+        let sb = A::open::<Pbox<PRefCell<SB>>>("sb9.pool", O_CFNE).unwrap();
         transaction(|j| {
             let mut sb = sb.borrow_mut(j);
             if sb.root.is_none() {
-                sb.root = Some(Prc::new(Mutex::new(12, j), j));
+                sb.root = Some(Prc::new(PMutex::new(12), j));
             }
             let mut val = sb.root.as_ref().unwrap().lock(j);
             println!("data is {}", val);
@@ -1435,12 +1554,12 @@ pub(crate) mod test {
     #[test]
     fn test_mutex_mt() {
         struct SB {
-            value: Parc<Mutex<i32, A>, A>,
+            value: Parc<PMutex<i32, A>, A>,
         }
         impl RootObj<A> for SB {
-            fn init(j: &stm::journal::Journal<A>) -> Self {
+            fn init(j: &stm::Journal<A>) -> Self {
                 SB {
-                    value: Parc::new(Mutex::new(0, j), j),
+                    value: Parc::new(PMutex::new(0), j),
                 }
             }
         }
@@ -1459,13 +1578,13 @@ pub(crate) mod test {
             let v = v.clone();
             sum += v[i] + v[5 + i];
             let sb = sb.clone();
-            let value = sb.value.volatile();
+            let value = sb.value.demote();
             threads.push(std::thread::spawn(move || {
                 // let _lock = mutex.lock();
                 let delta1 = v[i];
                 let delta2 = v[5 + i];
                 let res = A::transaction(|j| {
-                    if let Some(val) = value.upgrade(j) {
+                    if let Some(val) = value.promote(j) {
                         {
                             // use std::io::Write;
                             // std::io::stdout().flush().unwrap();
@@ -1524,12 +1643,12 @@ pub(crate) mod test {
     #[test]
     fn test_tramutex_mt() {
         struct SB {
-            value: Parc<Mutex<i32, A>, A>,
+            value: Parc<PMutex<i32, A>, A>,
         }
         impl RootObj<A> for SB {
-            fn init(j: &stm::journal::Journal<A>) -> Self {
+            fn init(j: &stm::Journal<A>) -> Self {
                 SB {
-                    value: Parc::new(Mutex::new(0, j), j),
+                    value: Parc::new(PMutex::new(0), j),
                 }
             }
         }
@@ -1549,13 +1668,13 @@ pub(crate) mod test {
             let v = v.clone();
             sum += v[i] + v[5 + i];
             let sb = sb.clone();
-            let value = sb.value.volatile();
+            let value = sb.value.demote();
             threads.push(std::thread::spawn(move || {
                 // let _lock = mutex.lock();
                 let delta1 = v[i];
                 let delta2 = v[5 + i];
                 let res = A::transaction(|j| {
-                    if let Some(val) = value.upgrade(j) {
+                    if let Some(val) = value.promote(j) {
                         {
                             // use std::io::Write;
                             // std::io::stdout().flush().unwrap();
@@ -1621,21 +1740,23 @@ pub(crate) mod test {
     //     type P1 = pool1::BuddyAlloc;
     //     type P2 = pool2::BuddyAlloc;
 
-    //     type Root = Pbox<LogRefCell<Option<Pbox<i32,P2>>,P1>,P1>;
+    //     type Root = Pbox<PRefCell<Option<Pbox<i32,P2>>,P1>,P1>;
     //     let root = P1::open::<Root>("interpool.pool", O_CFNE).unwrap();
-    //     let _ = P2::open_no_root("interpool2.pool", O_CFNE).unwrap();
-    //     let _=P2::transaction(|j2| {
+    //     let _p = P2::open_no_root("interpool2.pool", O_CFNE).unwrap();
+    //     let _ = P2::transaction(|j2| {
     //         let mut root = root.borrow_mut(j2);
-    //         let b: Pbox<LogRefCell<Option<Pbox<i32,P2>>,P1>,P1>;
-    //         b = Pbox::new(LogRefCell::new(None, j1), j1);
+    //         let b: Pbox<PRefCell<Option<Pbox<i32,P2>>,P1>,P1>;
+    //         b = Pbox::new(PRefCell::new(None, j1), j1);
     //     });
     // }
 
     #[test]
     fn propagate_panic() {
+        use crate::default::*;
+
         let _image = A::open_no_root("nosb.pool", O_CF);
         if A::transaction(|j| {
-            let ptr = Parc::new(Mutex::new(1, j), j);
+            let ptr = Parc::new(PMutex::new(1), j);
             print_usage(1);
             let _ = transaction(|j| {
                 let _k = ptr.pclone(j);
@@ -1656,6 +1777,24 @@ pub(crate) mod test {
         //     let _k = p.clone();
         //     // panic!("yes");
         // });
+    }
+
+    #[test]
+    #[should_panic]
+    fn outside_tx() {
+        use crate::default::*;
+
+        let _image = A::open_no_root("nosb.pool", O_CF);
+        let b = PRefCell::new(10);
+        let c = PCell::new(10);
+        let m = PMutex::new(10);
+        A::transaction(|j| {
+            let mut b = b.borrow_mut(j);
+            *b = 20;
+            c.set(20, j);
+            let mut m = m.lock(j);
+            *m = 20;
+        }).unwrap();
     }
 }
 
@@ -1996,30 +2135,16 @@ mod test_btree {
 
 mod temp_test {
     #[test]
-    fn abort_prc() {
-        use std::mem::drop;
-        use crate::default::*;
-        type P = BuddyAlloc;
-        let obj = P::open::<Root>("foo.pool", O_CF).unwrap();
-
-        struct Root(PRefCell<Option<Parc<i32>>>);
-        impl RootObj<P> for Root {
-            fn init(j: &Journal) -> Self {
-                Root(PRefCell::new(Some(Parc::new(10, j)),j))
-            }
-        }
-
-        let vweak_obj = obj.0.borrow().as_ref().unwrap().volatile();
-        
-        P::transaction(|j| {
-            let strong_obj = vweak_obj.upgrade(j);
-            assert!(strong_obj.is_some());
-            
-            // Destroy all strong pointers.
-            drop(strong_obj);
-            *obj.0.borrow_mut(j) = None;
-        
-            assert!(vweak_obj.upgrade(j).is_none());
-        }).unwrap();
+    fn temp() {
+        let m = 10927;
+        let mut len = m;
+        len -= 1;
+        len |= len >> 1;
+        len |= len >> 2;
+        len |= len >> 4;
+        len |= len >> 8;
+        len |= len >> 16;
+        len += 1;
+        println!("fn({}) = {} {}", m, len, ((u32::MAX as u64) + 2) >> 33);
     }
 }

@@ -1,12 +1,11 @@
 //! Persistent unicode string slices
 
 use crate::convert::PFrom;
-use std::string::FromUtf8Error;
 use crate::alloc::MemPool;
-use crate::cell::RootObj;
 use crate::clone::PClone;
-use crate::stm::Journal;
+use crate::stm::*;
 use crate::vec::Vec;
+use std::string::FromUtf8Error;
 use std::borrow::{Cow, ToOwned};
 use std::char::decode_utf16;
 use std::ops::{self, Index, IndexMut, RangeBounds};
@@ -31,7 +30,7 @@ use std::{fmt, hash, ptr, str};
 /// You can create a `String` from a literal string with [`String::from`]:
 ///
 /// ```
-/// # use corundum::alloc::*;
+/// # use corundum::alloc::heap::*;
 /// # use corundum::str::String;
 /// # use corundum::convert::PFrom;
 /// Heap::transaction(|j| {
@@ -43,7 +42,7 @@ use std::{fmt, hash, ptr, str};
 /// append a [`&str`] with the [`push_str`] method:
 ///
 /// ```
-/// # use corundum::alloc::*;
+/// # use corundum::alloc::heap::*;
 /// # use corundum::str::String;
 /// # use corundum::convert::PFrom;
 /// Heap::transaction(|j| {
@@ -63,7 +62,7 @@ use std::{fmt, hash, ptr, str};
 /// the [`from_utf8`] method:
 ///
 /// ```
-/// # use corundum::alloc::*;
+/// # use corundum::alloc::heap::*;
 /// # use corundum::str::String;
 /// Heap::transaction(|j| {
 ///     // some bytes, in a vector
@@ -109,7 +108,7 @@ use std::{fmt, hash, ptr, str};
 /// function which takes a [`&str`] by using an ampersand (`&`):
 ///
 /// ```
-/// # use corundum::alloc::*;
+/// # use corundum::alloc::heap::*;
 /// # use corundum::str::String;
 /// # use corundum::convert::PFrom;
 /// fn takes_str(s: &str) { }
@@ -146,15 +145,14 @@ impl<A: MemPool> String<A> {
     /// Basic usage:
     ///
     /// ```
-    /// # use corundum::alloc::*;
-    /// # use corundum::str::String;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
-    ///     let s = String::<Heap>::new(j);
+    ///     let s = PString::new();
     /// }).unwrap();
     /// ```
     #[inline]
-    pub const fn new(j: &Journal<A>) -> String<A> {
-        String { vec: Vec::new(j) }
+    pub const fn new() -> String<A> {
+        String { vec: Vec::new() }
     }
 
     /// Creates a new empty `String` with a particular capacity.
@@ -178,7 +176,7 @@ impl<A: MemPool> String<A> {
     /// Basic usage:
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # use corundum::str::String;
     /// Heap::transaction(|j| {
     ///     let mut s = String::with_capacity(10, j);
@@ -213,7 +211,7 @@ impl<A: MemPool> String<A> {
     /// # Example
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # use corundum::str::String;
     /// let hello = "Hello World!!!";
     ///
@@ -228,10 +226,9 @@ impl<A: MemPool> String<A> {
         }
     }
 
-    pub(crate) unsafe fn from_str_nolog(s: &str) -> String<A> {
-        Self {
-            vec: Vec::from_slice_nolog(s.as_bytes()),
-        }
+    pub(crate) unsafe fn from_str_nolog(s: &str) -> (String<A>, usize) {
+        let (vec, z) = Vec::from_slice_nolog(s.as_bytes());
+        (Self { vec }, z)
     }
 
     pub(crate) unsafe fn off(&self) -> u64 {
@@ -254,7 +251,7 @@ impl<A: MemPool> String<A> {
     /// This method will take care to not copy the vector, for efficiency's
     /// sake.
     ///
-    /// If you need a [`&str`] instead of a `String`, consider
+    /// If you need a `&str` instead of a `String`, consider
     /// [`str::from_utf8`].
     ///
     /// The inverse of this method is [`into_bytes`].
@@ -269,7 +266,7 @@ impl<A: MemPool> String<A> {
     /// Basic usage:
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # use corundum::str::String;
     /// // some bytes, in a vector
     /// let sparkle_heart = vec![240, 159, 146, 150];
@@ -285,7 +282,7 @@ impl<A: MemPool> String<A> {
     /// Incorrect bytes:
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # use corundum::str::String;
     /// Heap::transaction(|j| {
     ///     // some invalid bytes, in a vector
@@ -344,7 +341,7 @@ impl<A: MemPool> String<A> {
     /// Basic usage:
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # use corundum::str::String;
     /// // some bytes, in a vector
     /// let sparkle_heart = vec![240, 159, 146, 150];
@@ -359,7 +356,7 @@ impl<A: MemPool> String<A> {
     /// Incorrect bytes:
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # use corundum::str::String;
     /// Heap::transaction(|j| {
     ///     // some invalid bytes
@@ -383,7 +380,7 @@ impl<A: MemPool> String<A> {
     /// Basic usage:
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # use corundum::str::String;
     /// # use corundum::convert::PFrom;
     /// Heap::transaction(|j| {
@@ -429,7 +426,7 @@ impl<A: MemPool> String<A> {
     /// Basic usage:
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # use corundum::str::String;
     /// # use corundum::convert::PFrom;
     /// Heap::transaction(|j| {
@@ -467,7 +464,7 @@ impl<A: MemPool> String<A> {
     /// Basic usage:
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # use corundum::str::String;
     /// Heap::transaction(|j| {
     ///     // some bytes, in a vector
@@ -496,7 +493,7 @@ impl<A: MemPool> String<A> {
     /// Basic usage:
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # use corundum::str::String;
     /// # use corundum::convert::PFrom;
     /// Heap::transaction(|j| {
@@ -518,7 +515,7 @@ impl<A: MemPool> String<A> {
     /// Basic usage:
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # use corundum::str::String;
     /// # use corundum::convert::PFrom;
     ///
@@ -540,7 +537,7 @@ impl<A: MemPool> String<A> {
     /// Basic usage:
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # use corundum::str::String;
     /// # use corundum::convert::PFrom;
     /// corundum::transaction(|j| {
@@ -563,7 +560,7 @@ impl<A: MemPool> String<A> {
     /// Basic usage:
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # use corundum::str::String;
     /// Heap::transaction(|j| {
     ///     let s = String::with_capacity(10, j);
@@ -597,10 +594,9 @@ impl<A: MemPool> String<A> {
     /// Basic usage:
     ///
     /// ```
-    /// # use corundum::alloc::*;
-    /// # use corundum::str::String;
+    /// # use corundum::alloc::heap::*;
     /// Heap::transaction(|j| {
-    ///     let mut s = String::<Heap>::new(j);
+    ///     let mut s = PString::new();
     ///
     ///     s.reserve(10, j);
     ///
@@ -611,7 +607,7 @@ impl<A: MemPool> String<A> {
     /// This may not actually increase the capacity:
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # use corundum::str::String;
     /// Heap::transaction(|j| {
     ///     let mut s = String::with_capacity(10, j);
@@ -619,14 +615,14 @@ impl<A: MemPool> String<A> {
     ///     s.push('b', j);
     ///
     ///     // s now has a length of 2 and a capacity of 10
-    ///     assert_eq!(2, s.len());
-    ///     assert_eq!(10, s.capacity());
+    ///     assert_eq!(2, s.len(), "a");
+    ///     assert_eq!(10, s.capacity(), "b");
     ///
     ///     // Since we already have an extra 8 capacity, calling this...
     ///     s.reserve(8, j);
     ///
     ///     // ... doesn't actually increase.
-    ///     assert_eq!(10, s.capacity());
+    ///     assert_eq!(10, s.capacity(), "c");
     /// }).unwrap();
     /// ```
     #[inline]
@@ -641,7 +637,7 @@ impl<A: MemPool> String<A> {
     /// Basic usage:
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # use corundum::str::String;
     /// # use corundum::convert::PFrom;
     /// corundum::transaction(|j| {
@@ -670,7 +666,7 @@ impl<A: MemPool> String<A> {
     /// # Examples
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # use corundum::str::String;
     /// # use corundum::convert::PFrom;
     /// Heap::transaction(|j| {
@@ -699,7 +695,7 @@ impl<A: MemPool> String<A> {
     /// Basic usage:
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # use corundum::str::*;
     /// # use corundum::convert::PFrom;
     /// # Heap::transaction(|j| {
@@ -733,7 +729,7 @@ impl<A: MemPool> String<A> {
     /// Basic usage:
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # use corundum::str::String;
     /// # use corundum::convert::PFrom;
     /// Heap::transaction(|j| {
@@ -765,7 +761,7 @@ impl<A: MemPool> String<A> {
     /// Basic usage:
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # use corundum::str::String;
     /// # use corundum::convert::PFrom;
     /// Heap::transaction(|j| {
@@ -795,7 +791,7 @@ impl<A: MemPool> String<A> {
     /// Basic usage:
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # use corundum::str::*;
     /// # use corundum::convert::PFrom;
     /// # Heap::transaction(|j| {
@@ -839,7 +835,7 @@ impl<A: MemPool> String<A> {
     /// Basic usage:
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # use corundum::str::*;
     /// # use corundum::convert::PFrom;
     /// # Heap::transaction(|j| {
@@ -879,7 +875,7 @@ impl<A: MemPool> String<A> {
     /// # Examples
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # use corundum::str::*;
     /// # use corundum::convert::PFrom;
     /// # Heap::transaction(|j| {
@@ -894,7 +890,7 @@ impl<A: MemPool> String<A> {
     /// The exact order may be useful for tracking external state, like an index.
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # use corundum::str::*;
     /// # use corundum::convert::PFrom;
     /// # Heap::transaction(|j| {
@@ -1018,7 +1014,7 @@ impl<A: MemPool> String<A> {
     /// Basic usage:
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # use corundum::str::*;
     /// # use corundum::convert::PFrom;
     /// # Heap::transaction(|j| {
@@ -1038,40 +1034,6 @@ impl<A: MemPool> String<A> {
         }
     }
 
-    /// Returns a mutable reference to the contents of this `String`.
-    ///
-    /// # Safety
-    ///
-    /// This function is unsafe because it does not check that the bytes passed
-    /// to it are valid UTF-8. If this constraint is violated, it may cause
-    /// memory unsafety issues with future users of the `String`, as the rest of
-    /// the standard library assumes that `String`s are valid UTF-8.
-    ///
-    /// # Examples
-    ///
-    /// Basic usage:
-    ///
-    /// ```
-    /// # use corundum::alloc::*;
-    /// # use corundum::convert::PFrom;
-    /// # use corundum::str::*;
-    /// # Heap::transaction(|j| {
-    /// let mut s = String::pfrom("hello", j);
-    ///
-    /// unsafe {
-    ///     let mut vec = s.as_mut_vec();
-    ///     assert_eq!(&[104, 101, 108, 108, 111][..], &vec[..]);
-    ///
-    ///     vec.reverse();
-    /// }
-    /// assert_eq!(s, "olleh");
-    /// # }).unwrap();
-    /// ```
-    #[inline]
-    pub unsafe fn as_mut_vec(&mut self) -> &mut Vec<u8, A> {
-        &mut self.vec
-    }
-
     /// Returns the length of this `String`, in bytes, not [`char`]s or
     /// graphemes. In other words, it may not be what a human considers the
     /// length of the string.
@@ -1081,7 +1043,7 @@ impl<A: MemPool> String<A> {
     /// Basic usage:
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # use corundum::str::*;
     /// # use corundum::convert::PFrom;
     /// # Heap::transaction(|j| {
@@ -1132,7 +1094,7 @@ impl<A: MemPool> String<A> {
     /// # Examples
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # use corundum::str::*;
     /// # use corundum::convert::PFrom;
     /// # Heap::transaction(|j| {
@@ -1159,7 +1121,7 @@ impl<A: MemPool> String<A> {
     /// Basic usage:
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # use corundum::str::*;
     /// # use corundum::convert::PFrom;
     /// # Heap::transaction(|j| {
@@ -1199,7 +1161,7 @@ impl<A: MemPool> String<A> {
     /// Basic usage:
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # use corundum::str::*;
     /// # use corundum::convert::PFrom;
     /// # Heap::transaction(|j| {
@@ -1220,7 +1182,7 @@ impl<A: MemPool> String<A> {
         if s.len() > self.len() {
             self.vec.reserve(s.len()-self.len(), j);
         }
-        let slice: &mut [u8] = self.vec.as_mut();
+        let slice: &mut [u8] = self.vec.as_slice_mut();
         unsafe {
             ptr::copy_nonoverlapping(
                 s.as_bytes() as *const _ as *const u8, 
@@ -1625,7 +1587,7 @@ pub trait ToStringSlice<A: MemPool> {
     /// Basic usage:
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # use corundum::str::*;
     /// # use corundum::convert::PFrom;
     /// Heap::transaction(|j| {
@@ -1669,7 +1631,7 @@ impl<A: MemPool> ToStringSlice<A> for StdVec<&str> {
     }
 }
 
-pub trait ToString<A: MemPool> {
+pub trait ToPString<A: MemPool> {
     /// Converts the given value to a `String`.
     ///
     /// # Examples
@@ -1677,7 +1639,7 @@ pub trait ToString<A: MemPool> {
     /// Basic usage:
     ///
     /// ```
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # use corundum::convert::PFrom;
     /// # use corundum::str::*;
     /// Heap::transaction(|j| {
@@ -1696,7 +1658,7 @@ pub trait ToString<A: MemPool> {
 /// if the `Display` implementation returns an error.
 /// This indicates an incorrect `Display` implementation
 /// since `fmt::Write for String` never returns an error itself.
-impl<T: fmt::Display + ?Sized, A: MemPool> ToString<A> for T {
+impl<T: fmt::Display + ?Sized, A: MemPool> ToPString<A> for T {
     #[inline]
     default fn to_pstring(&self, journal: &Journal<A>) -> String<A> {
         use fmt::Write;
@@ -1708,34 +1670,34 @@ impl<T: fmt::Display + ?Sized, A: MemPool> ToString<A> for T {
     }
 }
 
-impl<A: MemPool> ToString<A> for str {
+impl<A: MemPool> ToPString<A> for str {
     #[inline]
     fn to_pstring(&self, journal: &Journal<A>) -> String<A> {
         String::from_str(self, journal)
     }
 }
 
-impl<A: MemPool> ToString<A> for Cow<'_, str> {
+impl<A: MemPool> ToPString<A> for Cow<'_, str> {
     #[inline]
     fn to_pstring(&self, journal: &Journal<A>) -> String<A> {
         String::from_str(&self[..].to_owned(), journal)
     }
 }
 
-impl<A: MemPool> ToString<A> for StdString {
+impl<A: MemPool> ToPString<A> for StdString {
     #[inline]
     fn to_pstring(&self, journal: &Journal<A>) -> String<A> {
         String::from_str(self, journal)
     }
 }
 
-// impl<A: MemPool> ToString for String<A> {
+// impl<A: MemPool> ToPString for String<A> {
 //     #[inline]
 //     fn to_string(&self) -> String<A> {
 //         String::from(self)
 //     }
 // }
-// impl<A: MemPool> ToString for Cow<'_, str> {
+// impl<A: MemPool> ToPString for Cow<'_, str> {
 //     #[inline]
 //     fn to_string(&self) -> String<A> {
 //         self[..].to_owned()
@@ -1873,7 +1835,7 @@ impl<A: MemPool> From<String<A>> for Vec<u8, A> {
     ///
     /// ```
     /// # use corundum::vec::Vec;
-    /// # use corundum::alloc::*;
+    /// # use corundum::alloc::heap::*;
     /// # use corundum::convert::PFrom;
     /// # use corundum::str::*;
     /// Heap::transaction(|j| {
@@ -1906,12 +1868,6 @@ impl<A: MemPool> fmt::Write for String<A> {
             .0;
         self.push(c, unsafe { &*j });
         Ok(())
-    }
-}
-
-impl<A: MemPool> RootObj<A> for String<A> {
-    fn init(j: &Journal<A>) -> Self {
-        Self::new(j)
     }
 }
 
@@ -1979,15 +1935,12 @@ impl<A: MemPool> RootObj<A> for String<A> {
 #[cfg(test)]
 mod test {
     use crate::default::*;
-    use crate::boxed::Pbox;
-    use crate::cell::*;
-    use crate::str::*;
 
     type A = BuddyAlloc;
 
     #[test]
     fn test_pstring() {
-        let root = A::open::<Pbox<LogRefCell<String<A>, A>, A>>("sb6.pool", O_CFNE).unwrap();
+        let root = A::open::<Pbox<PRefCell<PString>>>("sb6.pool", O_CFNE).unwrap();
 
         // let hello = "Hello World!!!";
         let _ = A::transaction(|j| {

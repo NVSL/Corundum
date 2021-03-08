@@ -1,57 +1,67 @@
 //! Implementation of persistent binary search tree
 
 use corundum::alloc::*;
-use corundum::default::*;
-use std::convert::TryInto;
+use corundum::*;
 use std::env;
 use std::fmt::{Display, Error, Formatter};
 
 type P = corundum::default::BuddyAlloc;
+//type P = Heap;
+type Pbox<T> = corundum::boxed::Pbox<T, P>;
 type Ptr = Option<Pbox<BTreeNode>>;
+
+struct FixStr {
+    chars: [u8; 32]
+}
+
+impl From<String> for FixStr {
+    fn from(value: String) -> Self {
+        let value = value.as_bytes();
+        let mut chars = [0u8; 32];
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                &value[0],
+                &mut chars[0] as *mut u8,
+                value.len().min(32));
+        }
+        FixStr {
+            chars
+        }
+    }
+}
+
+impl Display for FixStr {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        let s = String::from_utf8(self.chars.to_vec()).unwrap();
+        write!(f, "{}", s)
+    }
+}
 
 struct BTreeNode {
     key: i64,
     slots: [Ptr; 2],
-    value: [u8; 10],
+    value: FixStr,
 }
 
 impl BTreeNode {
     pub fn new(key: i64, value: &str) -> Self {
-        let mut value = value.as_bytes().to_vec();
-        value.truncate(10);
-        let mut vec = Vec::with_capacity(10);
-        vec.append(&mut value);
-        while vec.len() < 10 {
-            vec.push(0);
-        }
-
         Self {
             key,
             slots: [None, None],
-            value: vec.as_slice().try_into().unwrap(),
+            value: FixStr::from(value.to_string()),
         }
     }
 }
 
 impl Display for BTreeNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        write!(
-            f,
-            "{} {}",
-            self.key,
-            String::from_utf8(self.value.to_vec()).unwrap()
-        )
+        write!(f, "{} {}", self.key, self.value)
     }
 }
 
+#[derive(Root)]
 struct BTree {
     root: Ptr,
-}
-
-impl RootObj<P> for BTree {
-    fn init(_j: &Journal) -> Self {
-        Self { root: None }
-    }
 }
 
 impl BTree {
@@ -67,7 +77,7 @@ impl BTree {
         let mut curr = &self.root;
         while let Some(node) = curr {
             if node.key == key {
-                return Some(String::from_utf8(node.value.to_vec()).unwrap());
+                return Some(node.value.to_string());
             } else {
                 curr = &node.slots[if key > node.key { 1 } else { 0 }];
             }
@@ -136,3 +146,4 @@ fn main() {
         }
     }
 }
+

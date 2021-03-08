@@ -26,6 +26,7 @@ use crate::PSafe;
 /// [`pclone`]: #method.pclone
 /// [`Prc`]: ../prc/struct.Prc.html
 /// [`Parc`]: ../sync/struct.Parc.html
+/// [`default::BuddyAlloc`]: ../default/struct.BuddyAlloc.html
 ///
 /// For a generic struct, `#[derive]` implements `PClone` conditionally by
 /// adding bound `Clone` on generic parameters.
@@ -42,7 +43,7 @@ use crate::PSafe;
 /// 
 /// ```
 /// # use corundum::*;
-/// # use corundum::alloc::*;
+/// # use corundum::alloc::heap::*;
 /// # pool!(p); type P = p::BuddyAlloc;
 /// # pool!(q); type Q = q::BuddyAlloc;
 /// // `derive` implements PClone<P> and PClone<Q> for Reading<T> when T is 
