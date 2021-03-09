@@ -96,11 +96,11 @@ pub struct BuddyAlg<A: MemPool> {
     /// The stat_footprint of memory usage in bytes
     foot_print: usize,
 
-    #[cfg(not(any(feature = "no_pthread", target_os = "windows")))]
+    #[cfg(not(any(feature = "no_pthread", windows)))]
     /// A mutex for atomic operations
     mutex: (libc::pthread_mutex_t, libc::pthread_mutexattr_t),
 
-    #[cfg(any(feature = "no_pthread", target_os = "windows"))]
+    #[cfg(any(feature = "no_pthread", windows))]
     /// A mutex for atomic operations
     mutex: u64,
 
@@ -141,11 +141,11 @@ impl<A: MemPool> BuddyAlg<A> {
 
         Self::buddy(base).next = u64::MAX;
 
-        #[cfg(not(any(feature = "no_pthread", target_os = "windows")))] unsafe {
+        #[cfg(not(any(feature = "no_pthread", windows)))] unsafe {
         crate::sync::init_lock(&mut self.mutex.0, &mut self.mutex.1);
         }
 
-        #[cfg(any(feature = "no_pthread", target_os = "windows"))] {
+        #[cfg(any(feature = "no_pthread", windows))] {
         self.mutex = 0; }
     }
 
@@ -167,10 +167,10 @@ impl<A: MemPool> BuddyAlg<A> {
         unsafe { 
             // debug_assert!(self.aux.empty(), "locked before: aux is not empty");
 
-            #[cfg(not(any(feature = "no_pthread", target_os = "windows")))]
+            #[cfg(not(any(feature = "no_pthread", windows)))]
             libc::pthread_mutex_lock(&mut self.mutex.0); 
 
-            #[cfg(any(feature = "no_pthread", target_os = "windows"))] {
+            #[cfg(any(feature = "no_pthread", windows))] {
                 let tid = std::thread::current().id().as_u64().get();
                 while std::intrinsics::atomic_cxchg_acqrel(&mut self.mutex, 0, tid).0 != tid {}
             }
@@ -180,10 +180,10 @@ impl<A: MemPool> BuddyAlg<A> {
     #[inline]
     fn unlock(&mut self) {
         unsafe { 
-            #[cfg(not(any(feature = "no_pthread", target_os = "windows")))]
+            #[cfg(not(any(feature = "no_pthread", windows)))]
             libc::pthread_mutex_unlock(&mut self.mutex.0); 
 
-            #[cfg(any(feature = "no_pthread", target_os = "windows"))]
+            #[cfg(any(feature = "no_pthread", windows))]
             std::intrinsics::atomic_store_rel(&mut self.mutex, 0);
         }
     }
@@ -480,11 +480,11 @@ impl<A: MemPool> BuddyAlg<A> {
     /// 
     /// [`DropOnFailure`]: ../alloc/trait.MemPool.html#method.drop_on_failure
     pub fn recover(&mut self) {
-        #[cfg(not(any(feature = "no_pthread", target_os = "windows")))] unsafe {
+        #[cfg(not(any(feature = "no_pthread", windows)))] unsafe {
         crate::sync::init_lock(&mut self.mutex.0, &mut self.mutex.1);
         }
 
-        #[cfg(any(feature = "no_pthread", target_os = "windows"))] {
+        #[cfg(any(feature = "no_pthread", windows))] {
         self.mutex = 0; }
 
         if self.aux_valid {
