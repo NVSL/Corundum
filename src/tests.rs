@@ -2135,16 +2135,55 @@ mod test_btree {
 
 mod temp_test {
     #[test]
-    fn temp() {
-        let m = 10927;
-        let mut len = m;
-        len -= 1;
-        len |= len >> 1;
-        len |= len >> 2;
-        len |= len >> 4;
-        len |= len >> 8;
-        len |= len >> 16;
-        len += 1;
-        println!("fn({}) = {} {}", m, len, ((u32::MAX as u64) + 2) >> 33);
+    fn compare() {
+        use crate::default::*;
+        use std::alloc::*;
+
+        use std::time::Instant;
+
+        let start = Instant::now();
+        unsafe {
+            let layout = Layout::new::<[u8; 4096]>();
+            let mut p = alloc(layout);
+            for i in 0..4096 {
+                *p = i as u8;
+                p = p.add(8);
+            }
+        }
+        let duration = start.elapsed();
+        println!("DRAM: {:?}", duration);
+
+        let start = Instant::now();
+        unsafe {
+            let layout = Layout::new::<u8>();
+            for i in 0..4096 {
+                let p = alloc(layout);
+                *p = i as u8;
+            }
+        }
+        let duration = start.elapsed();
+        println!("DRAM Shard: {:?}", duration);
+
+        let _pool = BuddyAlloc::open_no_root("compare.pool", O_CF).unwrap();
+        let start = Instant::now();
+        unsafe {
+            let (mut p, _, _) = BuddyAlloc::alloc(4096);
+            for i in 0..4096 {
+                *p = i as u8;
+                p = p.add(8);
+            }
+        }
+        let duration = start.elapsed();
+        println!("PMEM: {:?}", duration);
+
+        let start = Instant::now();
+        unsafe {
+            for i in 0..4096 {
+                let (p, _, _) = BuddyAlloc::alloc(1);
+                *p = i as u8;
+            }
+        }
+        let duration = start.elapsed();
+        println!("PMEM Shard: {:?}", duration);
     }
 }

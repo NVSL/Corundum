@@ -80,11 +80,15 @@ impl<A: MemPool> Scratchpad<A> {
             let mut cur = 0;
             while cur < self.len as u64 {
                 let p = utils::read_addr::<u8>(cur + self.off + A::start()) as *mut u8;
+
+                // First 8 bytes is org_off
                 let org_off = *utils::read::<u64>(p);
     
+                // Second 8 bytes is the relative distance
                 let p = p.add(8);
                 let dist = *utils::read::<usize>(p);
     
+                // The last bytes contain data
                 let p = p.add(8);
                 let len = dist - 16;
                 let org = utils::read_addr::<u8>(org_off + A::start());
