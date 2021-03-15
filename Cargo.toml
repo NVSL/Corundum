@@ -1,6 +1,6 @@
 [package]
 name = "corundum"
-version = "0.3.1"
+version = "0.3.2"
 authors = ["Morteza Hoseinzadeh <mhoseinzadeh@cs.ucsd.edu>", "Steven Swanson <swanson@cs.ucsd.edu>"]
 edition = "2018"
 license = "MIT"

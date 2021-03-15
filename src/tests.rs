@@ -2135,6 +2135,7 @@ mod test_btree {
 
 mod temp_test {
     #[test]
+    #[ignore]
     fn compare() {
         use crate::default::*;
         use std::alloc::*;

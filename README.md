@@ -58,7 +58,7 @@ dependencies section:
 
 ```toml
 [dependencies]
-corundum = "0.3.1"
+corundum = "0.3.2"
 ```
 
 Or
@@ -73,7 +73,7 @@ If you wish to enable a feature like `pin_journals`, please add it to the
 
 ```toml
 [dependencies]
-corundum = { version="0.3.1", features=["pin_journals", "no_pthread"] }
+corundum = { version="0.3.2", features=["pin_journals", "no_pthread"] }
 ```
 
 ### Memory Pools
