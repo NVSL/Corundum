@@ -1266,6 +1266,115 @@
 <span id="1263">1263</span>
 <span id="1264">1264</span>
 <span id="1265">1265</span>
+<span id="1266">1266</span>
+<span id="1267">1267</span>
+<span id="1268">1268</span>
+<span id="1269">1269</span>
+<span id="1270">1270</span>
+<span id="1271">1271</span>
+<span id="1272">1272</span>
+<span id="1273">1273</span>
+<span id="1274">1274</span>
+<span id="1275">1275</span>
+<span id="1276">1276</span>
+<span id="1277">1277</span>
+<span id="1278">1278</span>
+<span id="1279">1279</span>
+<span id="1280">1280</span>
+<span id="1281">1281</span>
+<span id="1282">1282</span>
+<span id="1283">1283</span>
+<span id="1284">1284</span>
+<span id="1285">1285</span>
+<span id="1286">1286</span>
+<span id="1287">1287</span>
+<span id="1288">1288</span>
+<span id="1289">1289</span>
+<span id="1290">1290</span>
+<span id="1291">1291</span>
+<span id="1292">1292</span>
+<span id="1293">1293</span>
+<span id="1294">1294</span>
+<span id="1295">1295</span>
+<span id="1296">1296</span>
+<span id="1297">1297</span>
+<span id="1298">1298</span>
+<span id="1299">1299</span>
+<span id="1300">1300</span>
+<span id="1301">1301</span>
+<span id="1302">1302</span>
+<span id="1303">1303</span>
+<span id="1304">1304</span>
+<span id="1305">1305</span>
+<span id="1306">1306</span>
+<span id="1307">1307</span>
+<span id="1308">1308</span>
+<span id="1309">1309</span>
+<span id="1310">1310</span>
+<span id="1311">1311</span>
+<span id="1312">1312</span>
+<span id="1313">1313</span>
+<span id="1314">1314</span>
+<span id="1315">1315</span>
+<span id="1316">1316</span>
+<span id="1317">1317</span>
+<span id="1318">1318</span>
+<span id="1319">1319</span>
+<span id="1320">1320</span>
+<span id="1321">1321</span>
+<span id="1322">1322</span>
+<span id="1323">1323</span>
+<span id="1324">1324</span>
+<span id="1325">1325</span>
+<span id="1326">1326</span>
+<span id="1327">1327</span>
+<span id="1328">1328</span>
+<span id="1329">1329</span>
+<span id="1330">1330</span>
+<span id="1331">1331</span>
+<span id="1332">1332</span>
+<span id="1333">1333</span>
+<span id="1334">1334</span>
+<span id="1335">1335</span>
+<span id="1336">1336</span>
+<span id="1337">1337</span>
+<span id="1338">1338</span>
+<span id="1339">1339</span>
+<span id="1340">1340</span>
+<span id="1341">1341</span>
+<span id="1342">1342</span>
+<span id="1343">1343</span>
+<span id="1344">1344</span>
+<span id="1345">1345</span>
+<span id="1346">1346</span>
+<span id="1347">1347</span>
+<span id="1348">1348</span>
+<span id="1349">1349</span>
+<span id="1350">1350</span>
+<span id="1351">1351</span>
+<span id="1352">1352</span>
+<span id="1353">1353</span>
+<span id="1354">1354</span>
+<span id="1355">1355</span>
+<span id="1356">1356</span>
+<span id="1357">1357</span>
+<span id="1358">1358</span>
+<span id="1359">1359</span>
+<span id="1360">1360</span>
+<span id="1361">1361</span>
+<span id="1362">1362</span>
+<span id="1363">1363</span>
+<span id="1364">1364</span>
+<span id="1365">1365</span>
+<span id="1366">1366</span>
+<span id="1367">1367</span>
+<span id="1368">1368</span>
+<span id="1369">1369</span>
+<span id="1370">1370</span>
+<span id="1371">1371</span>
+<span id="1372">1372</span>
+<span id="1373">1373</span>
+<span id="1374">1374</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! Single-threaded reference-counting persistent pointers</span>
 
@@ -1277,6 +1386,7 @@
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">ptr</span>::<span class="ident">Ptr</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">stm</span>::<span class="kw-2">*</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="kw-2">*</span>;
+<span class="kw">use</span> <span class="ident">std</span>::<span class="ident">fmt</span>::{<span class="self">self</span>,<span class="ident">Debug</span>};
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">cmp</span>::<span class="ident">Ordering</span>;
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">hash</span>::<span class="ident">Hash</span>;
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">hash</span>::<span class="ident">Hasher</span>;
@@ -1285,17 +1395,41 @@
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">ops</span>::<span class="ident">Deref</span>;
 <span class="kw">use</span> <span class="ident">std</span>::<span class="kw-2">*</span>;
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>)]</span>
-<span class="kw">struct</span> <span class="ident">Counter</span> {
+<span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">any</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_pspd&quot;</span>, <span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_vspd&quot;</span>))]</span>
+<span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">cell</span>::<span class="ident">TCell</span>;
+
+<span class="kw">struct</span> <span class="ident">Counter</span><span class="op">&lt;</span><span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span> {
     <span class="ident">strong</span>: <span class="ident">usize</span>,
     <span class="ident">weak</span>: <span class="ident">usize</span>,
 
-    <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_log_rc&quot;</span>))]</span>
+    <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">any</span>(
+        <span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_log_rc&quot;</span>,
+        <span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_pspd&quot;</span>,
+        <span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_vspd&quot;</span>
+    )))]</span>
     <span class="ident">has_log</span>: <span class="ident">u8</span>,
+
+    <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">any</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_pspd&quot;</span>, <span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_vspd&quot;</span>))]</span>
+    <span class="ident">temp</span>: <span class="ident">TCell</span><span class="op">&lt;</span><span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="kw-2">*</span><span class="kw-2">mut</span> <span class="self">Self</span><span class="op">&gt;</span>, <span class="ident">A</span><span class="op">&gt;</span>,
+
+    <span class="ident">phantom</span>: <span class="ident">PhantomData</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>
+}
+
+<span class="kw">unsafe</span> <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span> <span class="ident">PSafe</span> <span class="kw">for</span> <span class="ident">Counter</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span> {}
+
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span> <span class="ident">Debug</span> <span class="kw">for</span> <span class="ident">Counter</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">fmt</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">f</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">fmt</span>::<span class="ident">Formatter</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">fmt</span>::<span class="ident">Error</span><span class="op">&gt;</span> {
+        <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;{{strong: {}, weak: {}}}&quot;</span>, <span class="self">self</span>.<span class="ident">strong</span>, <span class="self">self</span>.<span class="ident">weak</span>)<span class="question-mark">?</span>;
+
+        <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">any</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_pspd&quot;</span>, <span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_vspd&quot;</span>))]</span>
+        <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;(temp: {:?})&quot;</span>, <span class="self">self</span>.<span class="ident">temp</span>)<span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(())
+    }
 }
 
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">PrcBox</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span>, <span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span> {
-    <span class="ident">counter</span>: <span class="ident">Counter</span>,
+    <span class="ident">counter</span>: <span class="ident">Counter</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>,
 
     <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_volatile_pointers&quot;</span>))]</span>
     <span class="ident">vlist</span>: <span class="ident">VCell</span><span class="op">&lt;</span><span class="ident">VWeakList</span>, <span class="ident">A</span><span class="op">&gt;</span>,
@@ -1419,8 +1553,17 @@
                         <span class="ident">strong</span>: <span class="number">1</span>,
                         <span class="ident">weak</span>: <span class="number">1</span>,
 
-                        <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_log_rc&quot;</span>))]</span>
+                        <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">any</span>(
+                            <span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_log_rc&quot;</span>,
+                            <span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_pspd&quot;</span>,
+                            <span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_vspd&quot;</span>
+                        )))]</span>
                         <span class="ident">has_log</span>: <span class="number">0</span>,
+
+                        <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">any</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_pspd&quot;</span>, <span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_vspd&quot;</span>))]</span>
+                        <span class="ident">temp</span>: <span class="ident">TCell</span>::<span class="ident">new_invalid</span>(<span class="prelude-val">None</span>),
+
+                        <span class="ident">phantom</span>: <span class="ident">PhantomData</span>
                     },
 
                     <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_volatile_pointers&quot;</span>))]</span>
@@ -1467,8 +1610,17 @@
                         <span class="ident">strong</span>: <span class="number">1</span>,
                         <span class="ident">weak</span>: <span class="number">1</span>,
 
-                        <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_log_rc&quot;</span>))]</span>
+                        <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">any</span>(
+                            <span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_log_rc&quot;</span>,
+                            <span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_pspd&quot;</span>,
+                            <span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_vspd&quot;</span>
+                        )))]</span>
                         <span class="ident">has_log</span>: <span class="number">0</span>,
+
+                        <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">any</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_pspd&quot;</span>, <span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_vspd&quot;</span>))]</span>
+                        <span class="ident">temp</span>: <span class="ident">TCell</span>::<span class="ident">new_invalid</span>(<span class="prelude-val">None</span>),
+
+                        <span class="ident">phantom</span>: <span class="ident">PhantomData</span>
                     },
 
                     <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_volatile_pointers&quot;</span>))]</span>
@@ -1858,8 +2010,17 @@
                                 <span class="ident">strong</span>: <span class="number">1</span>,
                                 <span class="ident">weak</span>: <span class="number">1</span>,
         
-                                <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_log_rc&quot;</span>))]</span>
+                                <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">any</span>(
+                                    <span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_log_rc&quot;</span>,
+                                    <span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_pspd&quot;</span>,
+                                    <span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_vspd&quot;</span>
+                                )))]</span>
                                 <span class="ident">has_log</span>: <span class="number">0</span>,
+    
+                                <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">any</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_pspd&quot;</span>, <span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_vspd&quot;</span>))]</span>
+                                <span class="ident">temp</span>: <span class="ident">TCell</span>::<span class="ident">new_invalid</span>(<span class="prelude-val">None</span>),
+
+                                <span class="ident">phantom</span>: <span class="ident">PhantomData</span>
                             },
         
                             <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_volatile_pointers&quot;</span>))]</span>
@@ -1920,12 +2081,13 @@
     <span class="kw">fn</span> <span class="ident">drop</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>) {
         <span class="kw">unsafe</span> {
             <span class="kw">let</span> <span class="ident">journal</span> <span class="op">=</span> <span class="ident">Journal</span>::<span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>::<span class="ident">current</span>(<span class="bool-val">true</span>).<span class="ident">unwrap</span>();
-            <span class="self">self</span>.<span class="ident">dec_strong</span>(<span class="ident">journal</span>.<span class="number">0</span>);
+            <span class="kw">let</span> <span class="ident">j</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="kw-2">*</span><span class="ident">journal</span>.<span class="number">0</span>;
+            <span class="self">self</span>.<span class="ident">dec_strong</span>(<span class="ident">j</span>);
             <span class="kw">if</span> <span class="self">self</span>.<span class="ident">strong</span>() <span class="op">=</span><span class="op">=</span> <span class="number">0</span> { <span class="comment">// TODO: Add &quot;or it is unreachable from the root&quot;</span>
                 <span class="comment">// destroy the contained object</span>
                 <span class="ident">std</span>::<span class="ident">ptr</span>::<span class="ident">drop_in_place</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>.<span class="ident">ptr</span>.<span class="ident">as_mut</span>().<span class="ident">value</span>);
 
-                <span class="self">self</span>.<span class="ident">dec_weak</span>(<span class="ident">journal</span>.<span class="number">0</span>);
+                <span class="self">self</span>.<span class="ident">dec_weak</span>(<span class="ident">j</span>);
                 <span class="kw">if</span> <span class="self">self</span>.<span class="ident">weak</span>() <span class="op">=</span><span class="op">=</span> <span class="number">0</span> {
                     <span class="ident">A</span>::<span class="ident">free</span>(<span class="self">self</span>.<span class="ident">ptr</span>.<span class="ident">as_mut</span>());
 
@@ -2193,8 +2355,8 @@
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="ident">PSafe</span> <span class="op">+</span> <span class="question-mark">?</span><span class="ident">Sized</span>, <span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span> <span class="ident">Drop</span> <span class="kw">for</span> <span class="ident">Weak</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span> {
     <span class="kw">fn</span> <span class="ident">drop</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>) {
         <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">inner</span>) <span class="op">=</span> <span class="self">self</span>.<span class="ident">inner</span>() {
-            <span class="kw">let</span> <span class="ident">journal</span> <span class="op">=</span> <span class="ident">Journal</span>::<span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>::<span class="ident">current</span>(<span class="bool-val">true</span>).<span class="ident">unwrap</span>();
-            <span class="ident">inner</span>.<span class="ident">dec_weak</span>(<span class="ident">journal</span>.<span class="number">0</span>);
+            <span class="kw">let</span> <span class="ident">journal</span> <span class="op">=</span> <span class="kw">unsafe</span> { <span class="kw-2">&amp;</span><span class="kw-2">*</span><span class="ident">Journal</span>::<span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>::<span class="ident">current</span>(<span class="bool-val">true</span>).<span class="ident">unwrap</span>().<span class="number">0</span> };
+            <span class="ident">inner</span>.<span class="ident">dec_weak</span>(<span class="ident">journal</span>);
             <span class="kw">if</span> <span class="ident">inner</span>.<span class="ident">weak</span>() <span class="op">=</span><span class="op">=</span> <span class="number">0</span> {
                 <span class="kw">unsafe</span> {
                     <span class="ident">A</span>::<span class="ident">free</span>(<span class="self">self</span>.<span class="ident">ptr</span>.<span class="ident">as_mut</span>());
@@ -2231,7 +2393,7 @@
 
 <span class="kw">trait</span> <span class="ident">PrcBoxPtr</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="ident">PSafe</span> <span class="op">+</span> <span class="question-mark">?</span><span class="ident">Sized</span>, <span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span> {
     <span class="attribute">#[<span class="ident">allow</span>(<span class="ident">clippy</span>::<span class="ident">mut_from_ref</span>)]</span>
-    <span class="kw">fn</span> <span class="ident">count</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">Counter</span>;
+    <span class="kw">fn</span> <span class="ident">count</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">Counter</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>;
 
     <span class="attribute">#[<span class="ident">inline</span>]</span>
     <span class="kw">fn</span> <span class="ident">strong</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">usize</span> {
@@ -2240,36 +2402,59 @@
 
     <span class="attribute">#[<span class="ident">inline</span>]</span>
     <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_log_rc&quot;</span>))]</span>
-    <span class="kw">fn</span> <span class="ident">log_count</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">journal</span>: <span class="kw-2">*</span><span class="kw">const</span> <span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>) {
+    <span class="kw">fn</span> <span class="ident">log_count</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">journal</span>: <span class="kw-2">&amp;</span><span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>) {
         <span class="kw">let</span> <span class="ident">inner</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">count</span>();
-
-        <span class="kw">if</span> <span class="ident">inner</span>.<span class="ident">has_log</span> <span class="op">=</span><span class="op">=</span> <span class="number">0</span> {
-            <span class="kw">unsafe</span> {
-                <span class="ident">inner</span>.<span class="ident">take_log</span>(<span class="kw-2">&amp;</span><span class="kw-2">*</span><span class="ident">journal</span>, <span class="ident">Notifier</span>::<span class="ident">NonAtomic</span>(<span class="ident">Ptr</span>::<span class="ident">from_ref</span>(<span class="kw-2">&amp;</span><span class="ident">inner</span>.<span class="ident">has_log</span>)));
+        <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">any</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_pspd&quot;</span>, <span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_vspd&quot;</span>))]</span> {
+            <span class="kw">if</span> <span class="ident">inner</span>.<span class="ident">temp</span>.<span class="ident">is_none</span>() {
+                <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">p</span>) <span class="op">=</span> <span class="ident">journal</span>.<span class="ident">draft</span>(<span class="ident">inner</span>) {
+                    <span class="ident">inner</span>.<span class="ident">temp</span>.<span class="ident">replace</span>(<span class="ident">p</span>);
+                }
+            }
+        }
+        <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">any</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_pspd&quot;</span>, <span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_vspd&quot;</span>)))]</span> {
+            <span class="kw">if</span> <span class="ident">inner</span>.<span class="ident">has_log</span> <span class="op">=</span><span class="op">=</span> <span class="number">0</span> {
+                <span class="kw">unsafe</span> {
+                    <span class="ident">inner</span>.<span class="ident">take_log</span>(<span class="kw-2">&amp;</span><span class="kw-2">*</span><span class="ident">journal</span>, <span class="ident">Notifier</span>::<span class="ident">NonAtomic</span>(<span class="ident">Ptr</span>::<span class="ident">from_ref</span>(<span class="kw-2">&amp;</span><span class="ident">inner</span>.<span class="ident">has_log</span>)));
+                }
             }
         }
     }
 
     <span class="attribute">#[<span class="ident">inline</span>]</span>
-    <span class="kw">fn</span> <span class="ident">inc_strong</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">_journal</span>: <span class="kw-2">*</span><span class="kw">const</span> <span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>) {
+    <span class="kw">fn</span> <span class="ident">inc_strong</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">_journal</span>: <span class="kw-2">&amp;</span><span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>) {
         <span class="kw">let</span> <span class="ident">inner</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">count</span>();
         <span class="kw">let</span> <span class="ident">strong</span> <span class="op">=</span> <span class="ident">inner</span>.<span class="ident">strong</span>;
 
         <span class="kw">if</span> <span class="ident">strong</span> <span class="op">=</span><span class="op">=</span> <span class="number">0</span> <span class="op">|</span><span class="op">|</span> <span class="ident">strong</span> <span class="op">=</span><span class="op">=</span> <span class="ident">usize</span>::<span class="ident">max_value</span>() {
             <span class="ident">std</span>::<span class="ident">process</span>::<span class="ident">abort</span>();
         }
-        <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_log_rc&quot;</span>))]</span>
+        <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_log_rc&quot;</span>))]</span> 
         <span class="self">self</span>.<span class="ident">log_count</span>(<span class="ident">_journal</span>);
 
+        <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">any</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_pspd&quot;</span>, <span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_vspd&quot;</span>))]</span> <span class="kw">unsafe</span> {
+            <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">inner</span>) <span class="op">=</span> <span class="kw-2">*</span><span class="ident">inner</span>.<span class="ident">temp</span> {
+                (<span class="kw-2">*</span><span class="ident">inner</span>).<span class="ident">strong</span> <span class="op">+</span><span class="op">=</span> <span class="number">1</span>;
+                <span class="kw">return</span>;
+            }
+        }
         <span class="ident">inner</span>.<span class="ident">strong</span> <span class="op">+</span><span class="op">=</span> <span class="number">1</span>;
     }
 
     <span class="attribute">#[<span class="ident">inline</span>]</span>
-    <span class="kw">fn</span> <span class="ident">dec_strong</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">_journal</span>: <span class="kw-2">*</span><span class="kw">const</span> <span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>) {
+    <span class="kw">fn</span> <span class="ident">dec_strong</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">_journal</span>: <span class="kw-2">&amp;</span><span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>) {
+        <span class="kw">let</span> <span class="ident">inner</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">count</span>();
+
         <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_log_rc&quot;</span>))]</span>
         <span class="self">self</span>.<span class="ident">log_count</span>(<span class="ident">_journal</span>);
 
-        <span class="self">self</span>.<span class="ident">count</span>().<span class="ident">strong</span> <span class="op">-</span><span class="op">=</span> <span class="number">1</span>;
+        <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">any</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_pspd&quot;</span>, <span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_vspd&quot;</span>))]</span> <span class="kw">unsafe</span> {
+            <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">inner</span>) <span class="op">=</span> <span class="kw-2">*</span><span class="ident">inner</span>.<span class="ident">temp</span> {
+                (<span class="kw-2">*</span><span class="ident">inner</span>).<span class="ident">strong</span> <span class="op">-</span><span class="op">=</span> <span class="number">1</span>;
+                <span class="kw">return</span>;
+            }
+        }
+
+        <span class="ident">inner</span>.<span class="ident">strong</span> <span class="op">-</span><span class="op">=</span> <span class="number">1</span>;
     }
 
     <span class="attribute">#[<span class="ident">inline</span>]</span>
@@ -2278,7 +2463,8 @@
     }
 
     <span class="attribute">#[<span class="ident">inline</span>]</span>
-    <span class="kw">fn</span> <span class="ident">inc_weak</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">_journal</span>: <span class="kw-2">*</span><span class="kw">const</span> <span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>) {
+    <span class="kw">fn</span> <span class="ident">inc_weak</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">_journal</span>: <span class="kw-2">&amp;</span><span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>) {
+        <span class="kw">let</span> <span class="ident">inner</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">count</span>();
         <span class="kw">let</span> <span class="ident">weak</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">weak</span>();
 
         <span class="kw">if</span> <span class="ident">weak</span> <span class="op">=</span><span class="op">=</span> <span class="number">0</span> <span class="op">|</span><span class="op">|</span> <span class="ident">weak</span> <span class="op">=</span><span class="op">=</span> <span class="ident">usize</span>::<span class="ident">max_value</span>() {
@@ -2288,34 +2474,66 @@
         <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_log_rc&quot;</span>))]</span>
         <span class="self">self</span>.<span class="ident">log_count</span>(<span class="ident">_journal</span>);
 
-        <span class="self">self</span>.<span class="ident">count</span>().<span class="ident">weak</span> <span class="op">+</span><span class="op">=</span> <span class="number">1</span>;
+        <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">any</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_pspd&quot;</span>, <span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_vspd&quot;</span>))]</span> <span class="kw">unsafe</span> {
+            <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">inner</span>) <span class="op">=</span> <span class="kw-2">*</span><span class="ident">inner</span>.<span class="ident">temp</span> {
+                (<span class="kw-2">*</span><span class="ident">inner</span>).<span class="ident">weak</span> <span class="op">+</span><span class="op">=</span> <span class="number">1</span>;
+                <span class="kw">return</span>;
+            }
+        }
+
+        <span class="ident">inner</span>.<span class="ident">weak</span> <span class="op">+</span><span class="op">=</span> <span class="number">1</span>;
     }
 
     <span class="attribute">#[<span class="ident">inline</span>]</span>
-    <span class="kw">fn</span> <span class="ident">dec_weak</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">_journal</span>: <span class="kw-2">*</span><span class="kw">const</span> <span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>) {
+    <span class="kw">fn</span> <span class="ident">dec_weak</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">_journal</span>: <span class="kw-2">&amp;</span><span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>) {
+        <span class="kw">let</span> <span class="ident">inner</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">count</span>();
+
         <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;no_log_rc&quot;</span>))]</span>
         <span class="self">self</span>.<span class="ident">log_count</span>(<span class="ident">_journal</span>);
 
-        <span class="self">self</span>.<span class="ident">count</span>().<span class="ident">weak</span> <span class="op">-</span><span class="op">=</span> <span class="number">1</span>;
+        <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">any</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_pspd&quot;</span>, <span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_vspd&quot;</span>))]</span> <span class="kw">unsafe</span> {
+            <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">inner</span>) <span class="op">=</span> <span class="kw-2">*</span><span class="ident">inner</span>.<span class="ident">temp</span> {
+                (<span class="kw-2">*</span><span class="ident">inner</span>).<span class="ident">strong</span> <span class="op">-</span><span class="op">=</span> <span class="number">1</span>;
+                <span class="kw">return</span>;
+            }
+        }
+
+        <span class="ident">inner</span>.<span class="ident">weak</span> <span class="op">-</span><span class="op">=</span> <span class="number">1</span>;
     }
 }
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="ident">PSafe</span> <span class="op">+</span> <span class="question-mark">?</span><span class="ident">Sized</span>, <span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span> <span class="ident">PrcBoxPtr</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">Prc</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span> {
     <span class="attribute">#[<span class="ident">inline</span>(<span class="ident">always</span>)]</span>
-    <span class="kw">fn</span> <span class="ident">count</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">Counter</span> {
-        <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>.<span class="ident">ptr</span>.<span class="ident">get_mut</span>().<span class="ident">counter</span>
+    <span class="kw">fn</span> <span class="ident">count</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">Counter</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span> {
+        <span class="kw">let</span> <span class="ident">ret</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>.<span class="ident">ptr</span>.<span class="ident">get_mut</span>().<span class="ident">counter</span>;
+
+        <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">any</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_pspd&quot;</span>, <span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_vspd&quot;</span>))]</span> <span class="kw">unsafe</span> {
+            <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">inner</span>) <span class="op">=</span> <span class="kw-2">*</span><span class="ident">ret</span>.<span class="ident">temp</span> {
+                <span class="kw">return</span> <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="kw-2">*</span><span class="ident">inner</span>;
+            }
+        }
+
+        <span class="ident">ret</span>
     }
 }
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="ident">PSafe</span> <span class="op">+</span> <span class="question-mark">?</span><span class="ident">Sized</span>, <span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span> <span class="ident">PrcBoxPtr</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">PrcBox</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span> {
     <span class="attribute">#[<span class="ident">inline</span>(<span class="ident">always</span>)]</span>
-    <span class="kw">fn</span> <span class="ident">count</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">Counter</span> {
-        <span class="kw">unsafe</span> {
+    <span class="kw">fn</span> <span class="ident">count</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">Counter</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span> {
+        <span class="kw">let</span> <span class="ident">ret</span> <span class="op">=</span> <span class="kw">unsafe</span> {
             <span class="kw">let</span> <span class="ident">ptr</span>: <span class="kw-2">*</span><span class="kw">const</span> <span class="self">Self</span> <span class="op">=</span> <span class="self">self</span>;
             <span class="kw">let</span> <span class="ident">ptr</span>: <span class="kw-2">*</span><span class="kw-2">mut</span> <span class="self">Self</span> <span class="op">=</span> <span class="ident">ptr</span> <span class="kw">as</span> <span class="kw-2">*</span><span class="kw-2">mut</span> <span class="self">Self</span>;
             <span class="kw">let</span> <span class="ident">rcbox</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">Self</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="kw-2">*</span><span class="ident">ptr</span>;
             <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">rcbox</span>.<span class="ident">counter</span>
+        };
+
+        <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">any</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_pspd&quot;</span>, <span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_vspd&quot;</span>))]</span> <span class="kw">unsafe</span> {
+            <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">inner</span>) <span class="op">=</span> <span class="kw-2">*</span><span class="ident">ret</span>.<span class="ident">temp</span> {
+                <span class="kw">return</span> <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="kw-2">*</span><span class="ident">inner</span>;
+            }
         }
+
+        <span class="ident">ret</span>
     }
 }
 

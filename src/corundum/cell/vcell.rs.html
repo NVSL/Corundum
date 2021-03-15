@@ -195,6 +195,12 @@
 <span id="192">192</span>
 <span id="193">193</span>
 <span id="194">194</span>
+<span id="195">195</span>
+<span id="196">196</span>
+<span id="197">197</span>
+<span id="198">198</span>
+<span id="199">199</span>
+<span id="200">200</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">alloc</span>::<span class="ident">MemPool</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::{<span class="ident">PSafe</span>, <span class="ident">VSafe</span>, <span class="ident">utils</span>};
@@ -262,12 +268,18 @@
 
     <span class="attribute">#[<span class="ident">inline</span>]</span>
     <span class="doccomment">/// Create a new invalid cell to be used in const functions</span>
-    <span class="kw">pub</span> <span class="kw">const</span> <span class="kw">fn</span> <span class="ident">invalid</span>(<span class="ident">v</span>: <span class="ident">T</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
+    <span class="kw">pub</span> <span class="kw">const</span> <span class="kw">fn</span> <span class="ident">new_invalid</span>(<span class="ident">v</span>: <span class="ident">T</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
         <span class="self">Self</span> {
             <span class="ident">gen</span>: <span class="number">0</span>,
             <span class="ident">value</span>: <span class="ident">v</span>,
             <span class="ident">phantom</span>: <span class="ident">PhantomData</span>,
         }
+    }
+
+    <span class="attribute">#[<span class="ident">inline</span>]</span>
+    <span class="doccomment">/// Invalidates the underlying value</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">invalidate</span>(<span class="ident">this</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">Self</span>) {
+        <span class="ident">this</span>.<span class="ident">gen</span> <span class="op">=</span> <span class="number">0</span>;
     }
 
     <span class="kw">fn</span> <span class="ident">force</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">T</span> {

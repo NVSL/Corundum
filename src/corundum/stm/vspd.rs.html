@@ -133,6 +133,23 @@
 <span id="130">130</span>
 <span id="131">131</span>
 <span id="132">132</span>
+<span id="133">133</span>
+<span id="134">134</span>
+<span id="135">135</span>
+<span id="136">136</span>
+<span id="137">137</span>
+<span id="138">138</span>
+<span id="139">139</span>
+<span id="140">140</span>
+<span id="141">141</span>
+<span id="142">142</span>
+<span id="143">143</span>
+<span id="144">144</span>
+<span id="145">145</span>
+<span id="146">146</span>
+<span id="147">147</span>
+<span id="148">148</span>
+<span id="149">149</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! Volatile Scratchpad Memory</span>
 <span class="doccomment">//! </span>
@@ -216,14 +233,19 @@
             <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">cur</span> <span class="op">=</span> <span class="number">0</span>;
             <span class="kw">while</span> <span class="ident">cur</span> <span class="op">&lt;</span> <span class="self">self</span>.<span class="ident">len</span> <span class="kw">as</span> <span class="ident">u64</span> {
                 <span class="kw">let</span> <span class="ident">p</span> <span class="op">=</span> <span class="ident">utils</span>::<span class="ident">read_addr</span>::<span class="op">&lt;</span><span class="ident">u8</span><span class="op">&gt;</span>(<span class="ident">cur</span> <span class="op">+</span> <span class="self">self</span>.<span class="ident">off</span> <span class="op">+</span> <span class="ident">A</span>::<span class="ident">start</span>()) <span class="kw">as</span> <span class="kw-2">*</span><span class="kw-2">mut</span> <span class="ident">u8</span>;
+
+                <span class="comment">// First 8 bytes is org_off</span>
                 <span class="kw">let</span> <span class="ident">org_off</span> <span class="op">=</span> <span class="kw-2">*</span><span class="ident">utils</span>::<span class="ident">read</span>::<span class="op">&lt;</span><span class="ident">u64</span><span class="op">&gt;</span>(<span class="ident">p</span>);
     
+                <span class="comment">// Second 8 bytes is the relative distance</span>
                 <span class="kw">let</span> <span class="ident">p</span> <span class="op">=</span> <span class="ident">p</span>.<span class="ident">add</span>(<span class="number">8</span>);
                 <span class="kw">let</span> <span class="ident">dist</span> <span class="op">=</span> <span class="kw-2">*</span><span class="ident">utils</span>::<span class="ident">read</span>::<span class="op">&lt;</span><span class="ident">usize</span><span class="op">&gt;</span>(<span class="ident">p</span>);
     
+                <span class="comment">// The last bytes contain data</span>
                 <span class="kw">let</span> <span class="ident">p</span> <span class="op">=</span> <span class="ident">p</span>.<span class="ident">add</span>(<span class="number">8</span>);
                 <span class="kw">let</span> <span class="ident">len</span> <span class="op">=</span> <span class="ident">dist</span> <span class="op">-</span> <span class="number">16</span>;
                 <span class="kw">let</span> <span class="ident">org</span> <span class="op">=</span> <span class="ident">utils</span>::<span class="ident">read_addr</span>::<span class="op">&lt;</span><span class="ident">u8</span><span class="op">&gt;</span>(<span class="ident">org_off</span> <span class="op">+</span> <span class="ident">A</span>::<span class="ident">start</span>());
+
                 <span class="ident">ptr</span>::<span class="ident">copy_nonoverlapping</span>(<span class="ident">p</span>, <span class="ident">org</span>, <span class="ident">len</span>);
                 <span class="ident">ll</span>::<span class="ident">persist</span>(<span class="ident">org</span>, <span class="ident">len</span>, <span class="bool-val">false</span>);
     
@@ -264,6 +286,18 @@
             <span class="ident">A</span>::<span class="ident">perform</span>(<span class="ident">z</span>);
         }
         <span class="self">self</span>.<span class="ident">len</span> <span class="op">=</span> <span class="number">0</span>;
+    }
+}
+
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span> <span class="ident">Drop</span> <span class="kw">for</span> <span class="ident">Scratchpad</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">drop</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>) {
+        <span class="kw">unsafe</span> {
+            <span class="self">self</span>.<span class="ident">clear</span>();
+            <span class="kw">if</span> <span class="op">!</span><span class="self">self</span>.<span class="ident">base</span>.<span class="number">0</span>.<span class="ident">is_null</span>() {
+                <span class="ident">dealloc</span>(<span class="self">self</span>.<span class="ident">base</span>.<span class="number">0</span>, <span class="ident">Layout</span>::<span class="ident">from_size_align_unchecked</span>(<span class="self">self</span>.<span class="ident">cap</span>, <span class="number">2</span>));
+                <span class="ident">VCell</span>::<span class="ident">invalidate</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>.<span class="ident">base</span>);
+            }
+        }
     }
 }</pre></div>
 </section><section id="search" class="content hidden"></section><section class="footer"></section><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="corundum"></div>

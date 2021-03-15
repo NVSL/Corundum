@@ -212,6 +212,19 @@
 <span id="209">209</span>
 <span id="210">210</span>
 <span id="211">211</span>
+<span id="212">212</span>
+<span id="213">213</span>
+<span id="214">214</span>
+<span id="215">215</span>
+<span id="216">216</span>
+<span id="217">217</span>
+<span id="218">218</span>
+<span id="219">219</span>
+<span id="220">220</span>
+<span id="221">221</span>
+<span id="222">222</span>
+<span id="223">223</span>
+<span id="224">224</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">RootObj</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">stm</span>::<span class="ident">Journal</span>;
@@ -221,6 +234,7 @@
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">mem</span>::<span class="kw-2">*</span>;
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">marker</span>::<span class="ident">PhantomData</span>;
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">ops</span>::{<span class="ident">Deref</span>, <span class="ident">DerefMut</span>};
+<span class="kw">use</span> <span class="ident">std</span>::<span class="ident">fmt</span>::{<span class="self">self</span>,<span class="ident">Debug</span>};
 
 <span class="doccomment">/// A persistent memory location containing a volatile data valid during a</span>
 <span class="doccomment">/// single transaction</span>
@@ -274,6 +288,12 @@
 <span class="doccomment">/// Safe to be stored in persistent memory</span>
 <span class="kw">unsafe</span> <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="ident">Default</span> <span class="op">+</span> <span class="ident">VSafe</span> <span class="op">+</span> <span class="question-mark">?</span><span class="ident">Sized</span>, <span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span> <span class="ident">PSafe</span> <span class="kw">for</span> <span class="ident">TCell</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span> {}
 
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="ident">Default</span> <span class="op">+</span> <span class="ident">Debug</span> <span class="op">+</span> <span class="ident">VSafe</span> <span class="op">+</span> <span class="question-mark">?</span><span class="ident">Sized</span>, <span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span> <span class="ident">Debug</span> <span class="kw">for</span> <span class="ident">TCell</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">fmt</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">f</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">fmt</span>::<span class="ident">Formatter</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">fmt</span>::<span class="ident">Error</span><span class="op">&gt;</span> {
+        <span class="macro">write</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;{:?}&quot;</span>, <span class="self">self</span>.<span class="ident">deref</span>())
+    }
+}
+
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="ident">Default</span> <span class="op">+</span> <span class="ident">VSafe</span>, <span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span> <span class="ident">TCell</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span> {
     <span class="doccomment">/// Create a new valid cell</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">v</span>: <span class="ident">T</span>, <span class="ident">j</span>: <span class="kw-2">&amp;</span><span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
@@ -292,13 +312,19 @@
 
     <span class="attribute">#[<span class="ident">inline</span>]</span>
     <span class="doccomment">/// Create a new invalid cell to be used in const functions</span>
-    <span class="kw">pub</span> <span class="kw">const</span> <span class="kw">fn</span> <span class="ident">invalid</span>(<span class="ident">v</span>: <span class="ident">T</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
+    <span class="kw">pub</span> <span class="kw">const</span> <span class="kw">fn</span> <span class="ident">new_invalid</span>(<span class="ident">v</span>: <span class="ident">T</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
         <span class="self">Self</span> {
             <span class="ident">gen</span>: <span class="number">0</span>,
             <span class="ident">tx_gen</span>: <span class="number">0</span>,
             <span class="ident">value</span>: <span class="ident">v</span>,
             <span class="ident">phantom</span>: <span class="ident">PhantomData</span>,
         }
+    }
+
+    <span class="attribute">#[<span class="ident">inline</span>]</span>
+    <span class="doccomment">/// Invalidates the underlying value</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">invalidate</span>(<span class="ident">this</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">Self</span>) {
+        <span class="ident">this</span>.<span class="ident">gen</span> <span class="op">=</span> <span class="number">0</span>;
     }
 
     <span class="kw">fn</span> <span class="ident">force</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">T</span> {

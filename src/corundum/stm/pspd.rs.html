@@ -166,6 +166,18 @@
 <span id="163">163</span>
 <span id="164">164</span>
 <span id="165">165</span>
+<span id="166">166</span>
+<span id="167">167</span>
+<span id="168">168</span>
+<span id="169">169</span>
+<span id="170">170</span>
+<span id="171">171</span>
+<span id="172">172</span>
+<span id="173">173</span>
+<span id="174">174</span>
+<span id="175">175</span>
+<span id="176">176</span>
+<span id="177">177</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! Persistent Scratchpad Memory</span>
 <span class="doccomment">//! </span>
@@ -332,6 +344,17 @@
         }
     }
 }
-</pre></div>
+
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span> <span class="ident">Drop</span> <span class="kw">for</span> <span class="ident">Scratchpad</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">drop</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>) {
+        <span class="kw">unsafe</span> {
+            <span class="self">self</span>.<span class="ident">clear</span>();
+            <span class="kw">if</span> <span class="op">!</span><span class="self">self</span>.<span class="ident">pages</span>.<span class="ident">is_dangling</span>() {
+                <span class="kw">let</span> <span class="ident">next_off</span> <span class="op">=</span> <span class="ident">A</span>::<span class="ident">off_unchecked</span>(<span class="self">self</span>.<span class="ident">pages</span>.<span class="ident">off_mut</span>());
+                <span class="self">self</span>.<span class="ident">pages</span>.<span class="ident">release</span>(<span class="ident">next_off</span>);
+            }
+        }
+    }
+}</pre></div>
 </section><section id="search" class="content hidden"></section><section class="footer"></section><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="corundum"></div>
     <script src="../../../main.js"></script><script src="../../../source-script.js"></script><script src="../../../source-files.js"></script><script defer src="../../../search-index.js"></script></body></html>
