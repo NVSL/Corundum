@@ -1452,6 +1452,11 @@
 <span id="1449">1449</span>
 <span id="1450">1450</span>
 <span id="1451">1451</span>
+<span id="1452">1452</span>
+<span id="1453">1453</span>
+<span id="1454">1454</span>
+<span id="1455">1455</span>
+<span id="1456">1456</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">utils</span>::<span class="ident">SpinLock</span>;
 <span class="kw">use</span> <span class="ident">std</span>::<span class="ident">panic</span>::<span class="ident">RefUnwindSafe</span>;
@@ -1482,12 +1487,11 @@
 
 <span class="kw">unsafe</span> <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span> <span class="ident">PSafe</span> <span class="kw">for</span> <span class="ident">Counter</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span> {}
 
-<span class="doccomment">/// The [`Parc`]&#39;s inner data type</span>
+<span class="doccomment">/// The [`Parc`] inner data type</span>
 <span class="doccomment">/// </span>
 <span class="doccomment">/// It contains the atomic counters, a list of volatile references, and the</span>
 <span class="doccomment">/// actual value.</span>
 <span class="doccomment">/// </span>
-<span class="doccomment">/// [`Parc`]: #</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">ParcInner</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span>, <span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span> {
     <span class="ident">counter</span>: <span class="ident">Counter</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>,
 
@@ -1514,6 +1518,12 @@
 <span class="doccomment">/// [`pclone`], [`downgrade`], and [`upgrade`] require a [`Journal`] to operate. </span>
 <span class="doccomment">/// In other words, you need to wrap them in a [`transaction`]. The counters are</span>
 <span class="doccomment">/// atomic, so it is safe to share it in multiple threads.</span>
+<span class="doccomment">/// </span>
+<span class="doccomment">/// Since `Parc` uses reference counting for resource management, it inherits</span>
+<span class="doccomment">/// the cyclic references problem. Please visit [`this`] for the information on</span>
+<span class="doccomment">/// how [`Weak`] helps to resolve that issue.</span>
+<span class="doccomment">/// </span>
+<span class="doccomment">/// [`this`]: ../prc/index.html#cyclic-references</span>
 <span class="doccomment">/// </span>
 <span class="doccomment">/// Unlike [`Arc`], `Parc` does not implement [`Send`] to prevent memory leak. </span>
 <span class="doccomment">/// The reason is that if a `Parc` is created in a transaction without being</span>

@@ -10,31 +10,32 @@ available. The difference between <code>Mutex</code> and <a href="https://doc.ru
 is that it will hold the lock until the transaction commits. For example,
 consider the following code snippet in which a shared object is protected
 with <a href="https://doc.rust-lang.org/nightly/std/index.html"><code>std</code></a><code>::</code><a href="https://doc.rust-lang.org/nightly/std/sync/index.html"><code>sync</code></a><code>::</code><a href="https://doc.rust-lang.org/nightly/std/sync/mutex/struct.Mutex.html"><code>Mutex</code></a>. In this case, data might be lost.</p>
-<pre><code class="language-no_compile">use corundum::default::*;
-use std::sync::Mutex;
+
+<div class='information'><div class='tooltip compile_fail'>ⓘ</div></div><div class="example-wrap"><pre class="rust rust-example-rendered compile_fail">
+<span class="kw">use</span> <span class="ident">corundum</span>::<span class="ident">default</span>::<span class="kw-2">*</span>;
+<span class="kw">use</span> <span class="ident">std</span>::<span class="ident">sync</span>::<span class="ident">Mutex</span>;
  
-type P = BuddyAlloc;
+<span class="kw">type</span> <span class="ident">P</span> <span class="op">=</span> <span class="ident">BuddyAlloc</span>;
  
-let obj = P::open::&lt;Parc&lt;Mutex&lt;i32&gt;&gt;&gt;(&quot;foo.pool&quot;, O_CF).unwrap();
-//                       ^ std::sync::Mutex is not PSafe
+<span class="kw">let</span> <span class="ident">obj</span> <span class="op">=</span> <span class="ident">P</span>::<span class="ident">open</span>::<span class="op">&lt;</span><span class="ident">Parc</span><span class="op">&lt;</span><span class="ident">Mutex</span><span class="op">&lt;</span><span class="ident">i32</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>(<span class="string">&quot;foo.pool&quot;</span>, <span class="ident">O_CF</span>).<span class="ident">unwrap</span>();
+<span class="comment">//                       ^ std::sync::Mutex is not PSafe</span>
 
-transaction(|j| {
+<span class="ident">transaction</span>(<span class="op">|</span><span class="ident">j</span><span class="op">|</span> {
     {
-        let obj = obj.lock().unwrap();
-        // Some statements ...
-    } // &lt;-- release the lock here
+        <span class="kw">let</span> <span class="ident">obj</span> <span class="op">=</span> <span class="ident">obj</span>.<span class="ident">lock</span>().<span class="ident">unwrap</span>();
+        <span class="comment">// Some statements ...</span>
+    } <span class="comment">// &lt;-- release the lock here</span>
 
-    // Another thread can work with obj
+    <span class="comment">// Another thread can work with obj</span>
 
     {
-        let obj = obj.lock().unwrap();
-        // Some statements ...
-    } // &lt;-- release the lock here
+        <span class="kw">let</span> <span class="ident">obj</span> <span class="op">=</span> <span class="ident">obj</span>.<span class="ident">lock</span>().<span class="ident">unwrap</span>();
+        <span class="comment">// Some statements ...</span>
+    } <span class="comment">// &lt;-- release the lock here</span>
      
-    // A crash may happen here after another thread has used updated data
-    // which leads to an inconsistent state
-});
-</code></pre>
+    <span class="comment">// A crash may happen here after another thread has used updated data</span>
+    <span class="comment">// which leads to an inconsistent state</span>
+});</pre></div>
 <p>The safest way to have a shared object protected from both data-race and
 data-loss is to wrap it with a transaction-wide <code>Mutex</code> as in the following
 example:</p>

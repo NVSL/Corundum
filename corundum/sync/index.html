@@ -9,7 +9,7 @@ same thread is non-blocking. Any access to data is serialized. Borrow rules
 are checked dynamically to prevent multiple mutable dereferencing.</p>
 </td></tr><tr class="module-item"><td><a class="struct" href="struct.Parc.html" title="corundum::sync::Parc struct">Parc</a></td><td class="docblock-short"><p>A thread-safe reference-counting persistent pointer. 'Parc' stands for
 'Persistent Atomically Reference Counted'.</p>
-</td></tr><tr class="module-item"><td><a class="struct" href="struct.ParcInner.html" title="corundum::sync::ParcInner struct">ParcInner</a></td><td class="docblock-short"><p>The <a href="#"><code>Parc</code></a>'s inner data type</p>
+</td></tr><tr class="module-item"><td><a class="struct" href="struct.ParcInner.html" title="corundum::sync::ParcInner struct">ParcInner</a></td><td class="docblock-short"><p>The <a href="../../corundum/sync/struct.Parc.html" title="Parc"><code>Parc</code></a> inner data type</p>
 </td></tr><tr class="module-item"><td><a class="struct" href="struct.VWeak.html" title="corundum::sync::VWeak struct">VWeak</a></td><td class="docblock-short"><p><code>VWeak</code> is a version of <a href="../../corundum/sync/struct.Parc.html" title="Parc"><code>Parc</code></a> that holds a non-owning thread-safe 
 reference to the managed allocation in the volatile heap. The allocation is
 accessed by calling <a href="#method.upgrade"><code>upgrade</code></a> on the <code>VWeak</code> pointer, which returns an
