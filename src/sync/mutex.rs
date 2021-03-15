@@ -23,7 +23,7 @@ use std::{fmt, intrinsics};
 /// consider the following code snippet in which a shared object is protected
 /// with [`std`]`::`[`sync`]`::`[`Mutex`]. In this case, data might be lost.
 ///
-/// ```no_compile
+/// ```compile_fail
 /// use corundum::default::*;
 /// use std::sync::Mutex;
 /// 

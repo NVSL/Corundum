@@ -1,5 +1,150 @@
 //! Single-threaded reference-counting persistent pointers
-
+//!
+//! [`Prc`] is a persistent pointer sharing the underlying data between multiple
+//! owners. To create a new strong reference, you may use [`pclone`] function.
+//! When the last owner of data goes out of scope, the strong reference count
+//! becomes zero, and the owner drops the allocation.
+//! 
+//! # Cyclic References
+//! If there is a cycle in the chain of references, dropping the link may yield
+//! a memory leak. For example, assume that we have three nodes of `A`, `B`, and
+//! `C`, which are connected together like figure (a) below:
+//! 
+//! ```text
+//! Strong Refs:     1    2    1        1    1    1        1    1    1
+//!                  A -▷ B -▷ C        A    B -▷ C        A -▷ B -▷ C
+//!                       △    │             △    │             △    ┆
+//!                       └────┘             └────┘             └----┘
+//!                      (a)                (b)                (c)
+//! ```
+//! 
+//! In this topology, `B` has two strong references: `A` and `C`. Therefore,
+//! when the `A -▷ B` link drops, it loses only one strong references allowing
+//! the other strong reference to keep the cycle it in memory while the nodes
+//! are unreachable. The resulting network is shown in figure (b).
+//! 
+//! [`Weak`] is provided to fix this issue. Although it is not enforced, the
+//! programmer can take benefits out of it. A weak link does not increment the
+//! strong reference counter. Making `C -▷ B` weak, which is shown in figure (c),
+//! resolves this problem. Since `B`'s strong reference counter is 1, dropping
+//! `A -▷ B` makes it zero and `B`'s drop function gets called.
+//! 
+//! # Example
+//! 
+//! The following example does not use a weak pointer leading to a memory leak.
+//! It creates the following links: `A -> B`, `B -> C`, and `C -> B`. The last
+//! two links create a cycle. Therefore, when `A` goes of scope, it cannot drop
+//! `B` and `C` because the strong reference count for both of them is non-zero.
+//! Nodes `B` and `C` remain in memory forever.
+//! 
+//! ```
+//! use corundum::default::*;
+//! type P = BuddyAlloc;
+//! 
+//! struct Node {
+//!     val: char,
+//!     link: PRefCell<Option<Prc<Node>>>
+//! }
+//! 
+//! impl Node {
+//!     fn new(val: char) -> Self {
+//!         println!("{} is created", val);
+//!         Self { val, link: PRefCell::new(None) }
+//!     }
+//! }
+//! 
+//! impl Drop for Node {
+//!     fn drop(&mut self) {
+//!         println!("{} is dropped", self.val);
+//!     }
+//! }
+//! 
+//! let _pool = P::open_no_root("net.pool", O_CF).unwrap();
+//! 
+//! transaction(|j| {
+//!     let A = Prc::new(Node::new('A'), j);
+//!     let B = Prc::new(Node::new('B'), j);
+//!     let C = Prc::new(Node::new('C'), j);
+//!     let mut a_link = A.link.borrow_mut(j);
+//!     let mut b_link = B.link.borrow_mut(j);
+//!     let mut c_link = C.link.borrow_mut(j);
+//!     *a_link = Some(B.pclone(j));
+//!     *b_link = Some(C.pclone(j));
+//!     *c_link = Some(B.pclone(j));
+//! }).unwrap();
+//! ```
+//! 
+//! The output of the example above is as follows (`B` and `C` do not drop the
+//! allocation):
+//! 
+//! ```text
+//! A is created
+//! B is created
+//! C is created
+//! A is dropped
+//! ```
+//! 
+//! To prevent the memory leak, we can use a weak link. The following example
+//! shows how to manually prevent cycles. The `C -> B` link is weak, so the
+//! strong reference counter becomes zero when `A -> B` is eliminated.
+//! 
+//! ```
+//! use corundum::default::*;
+//! type P = BuddyAlloc;
+//! 
+//! enum Link<T: PSafe> {
+//!     Strong(Prc<T>),
+//!     Weak(prc::PWeak<T>),
+//!     Null
+//! }
+//! 
+//! struct Node {
+//!     val: char,
+//!     link: PRefCell<Link<Node>>
+//! }
+//! 
+//! impl Node {
+//!     fn new(val: char) -> Self {
+//!         println!("{} is created", val);
+//!         Self { val, link: PRefCell::new(Null) }
+//!     }
+//! }
+//! 
+//! impl Drop for Node {
+//!     fn drop(&mut self) {
+//!         println!("{} is dropped", self.val);
+//!     }
+//! }
+//! # use Link::*;
+//! 
+//! let _pool = P::open_no_root("net.pool", O_CF).unwrap();
+//! 
+//! transaction(|j| {
+//!     let A = Prc::new(Node::new('A'), j);
+//!     let B = Prc::new(Node::new('B'), j);
+//!     let C = Prc::new(Node::new('C'), j);
+//!     let mut a_link = A.link.borrow_mut(j);
+//!     let mut b_link = B.link.borrow_mut(j);
+//!     let mut c_link = C.link.borrow_mut(j);
+//!     *a_link = Strong(B.pclone(j));
+//!     *b_link = Strong(C.pclone(j));
+//!     *c_link = Weak(Prc::downgrade(&B, j));
+//! }).unwrap();
+//! ```
+//! 
+//! The output shows that no `Node` remains in memory.
+//! 
+//! ```text
+//! A is created
+//! B is created
+//! C is created
+//! A is dropped
+//! B is dropped
+//! C is dropped
+//! ```
+//! 
+//! [`pclone`]: ./struct.Prc.html#method.pclone
+//! 
 use std::panic::RefUnwindSafe;
 use std::panic::UnwindSafe;
 use crate::alloc::{MemPool, PmemUsage};
@@ -89,7 +234,9 @@ unsafe fn set_data_ptr<T: ?Sized, U>(mut ptr: *mut T, data: *mut U) -> *mut T {
 /// References to data can be strong (using [`pclone`]), weak (using [`downgrade`]),
 /// or volatile weak (using [`demote`]). The first two generate NV-to-NV
 /// pointers, while the last on is a V-to-NV pointer. Please see [`Weak`] and
-/// [`VWeak`] for more details on their implementation and safety.
+/// [`VWeak`] for more details on their implementation and safety. Please also
+/// visit the [module-level documentation](index.html) for the cyclic references
+/// issue.
 ///
 /// # Examples
 ///
@@ -1185,11 +1332,6 @@ fn data_offset_sized<T, A: MemPool>() -> isize {
 fn data_offset_align<A: MemPool>(align: usize) -> isize {
     let layout = std::alloc::Layout::new::<PrcBox<(), A>>();
     (layout.size() + layout.padding_needed_for(align)) as isize
-}
-
-pub fn ws<T: PSafe, A: MemPool>(ptr: &Prc<T, A>) -> (usize, usize) {
-    let i = ptr.inner();
-    (i.strong(), i.weak())
 }
 
 /// `VWeak` is a version of [`Prc`] that holds a non-owning reference to the

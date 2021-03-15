@@ -27,12 +27,11 @@ struct Counter<A: MemPool> {
 
 unsafe impl<A: MemPool> PSafe for Counter<A> {}
 
-/// The [`Parc`]'s inner data type
+/// The [`Parc`] inner data type
 /// 
 /// It contains the atomic counters, a list of volatile references, and the
 /// actual value.
 /// 
-/// [`Parc`]: #
 pub struct ParcInner<T: ?Sized, A: MemPool> {
     counter: Counter<A>,
 
@@ -59,6 +58,12 @@ unsafe fn set_data_ptr<T, U>(mut ptr: *mut T, data: *mut U) -> *mut T {
 /// [`pclone`], [`downgrade`], and [`upgrade`] require a [`Journal`] to operate. 
 /// In other words, you need to wrap them in a [`transaction`]. The counters are
 /// atomic, so it is safe to share it in multiple threads.
+/// 
+/// Since `Parc` uses reference counting for resource management, it inherits
+/// the cyclic references problem. Please visit [`this`] for the information on
+/// how [`Weak`] helps to resolve that issue.
+/// 
+/// [`this`]: ../prc/index.html#cyclic-references
 /// 
 /// Unlike [`Arc`], `Parc` does not implement [`Send`] to prevent memory leak. 
 /// The reason is that if a `Parc` is created in a transaction without being
