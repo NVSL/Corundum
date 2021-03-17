@@ -73,7 +73,7 @@ checking rules, Rust prevents referencing from one memory pool to another.</p>
 <p>To implement a new memory pool, you should define a new type with static
 values, that implements <code>MemPool</code>. You may redefine the default allocator as
 a new pool using <a href="./default/macro.pool.html"><code>pool!()</code></a> which creates a pool module and generates the
-necessary code segments of type <a href="./default/struct.BuddyAlloc.html"><code>BuddyAlloc</code></a>.</p>
+necessary code segments of type <a href="../default/struct.BuddyAlloc.html"><code>BuddyAlloc</code></a>.</p>
 <h1 id="examples" class="section-header"><a href="#examples">Examples</a></h1>
 <p>The following example shows how to use <code>MemPool</code> to track allocations of a
 single numerical object of type <code>i32</code>.</p>
