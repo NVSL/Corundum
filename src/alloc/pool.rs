@@ -188,7 +188,7 @@ macro_rules! static_inner {
 /// RAII. They internally use the unsafe methods.
 /// 
 /// [`pool!()`]: ./default/macro.pool.html
-/// [`BuddyAlloc`]: ./default/struct.BuddyAlloc.html
+/// [`BuddyAlloc`]: ../default/struct.BuddyAlloc.html
 pub unsafe trait MemPool
 where
     Self: 'static + Sized,
