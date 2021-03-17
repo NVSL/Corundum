@@ -112,10 +112,9 @@ macro_rules! static_inner {
 /// checking rules, Rust prevents referencing from one memory pool to another.
 ///
 /// To implement a new memory pool, you should define a new type with static
-/// values, that implements `MemPool`. You may use [`static_inner_object!()`]
-/// to statically define allocator's inner data, and [`static_inner!()`] to
-/// access it. You may also use the default allocator using [`pool!()`] which
-/// creates a pool module with a default allocator of type [`BuddyAlloc`].
+/// values, that implements `MemPool`. You may redefine the default allocator as
+/// a new pool using [`pool!()`] which creates a pool module and generates the
+/// necessary code segments of type [`BuddyAlloc`].
 ///
 /// # Examples
 /// The following example shows how to use `MemPool` to track allocations of a
@@ -151,6 +150,32 @@ macro_rules! static_inner {
 ///     TrackAlloc::dealloc(p, 1);
 /// }
 /// ```
+/// 
+/// The following example shows how to use [`pool!()`] to define a multiple
+/// pools.
+/// 
+/// ```
+/// # use corundum::alloc::*;
+/// # use corundum::*;
+/// // Declare p1 module
+/// pool!(p1);
+/// 
+/// // Declare p2 module
+/// pool!(p2);
+/// 
+/// let _pool1 = p1::BuddyAlloc::open_no_root("p1.pool", O_CF).unwrap();
+/// let _pool2 = p2::BuddyAlloc::open_no_root("p2.pool", O_CF).unwrap();
+/// 
+/// transaction(|j| {
+///     // Create a Pbox object in p1
+///     let b = p1::Pbox::new(10, j);
+/// }).unwrap();
+/// 
+/// transaction(|j| {
+///     // Create a Prc object in p2
+///     let p = p2::Prc::new(10, j);
+/// }).unwrap();
+/// ```
 ///
 /// # Safety
 ///
@@ -163,8 +188,6 @@ macro_rules! static_inner {
 /// RAII. They internally use the unsafe methods.
 /// 
 /// [`pool!()`]: ./default/macro.pool.html
-/// [`static_inner_object!()`]: ../macro.static_inner_object.html
-/// [`static_inner!()`]: ../macro.static_inner.html
 /// [`BuddyAlloc`]: ./default/struct.BuddyAlloc.html
 pub unsafe trait MemPool
 where
