@@ -1202,6 +1202,29 @@
 <span id="1199">1199</span>
 <span id="1200">1200</span>
 <span id="1201">1201</span>
+<span id="1202">1202</span>
+<span id="1203">1203</span>
+<span id="1204">1204</span>
+<span id="1205">1205</span>
+<span id="1206">1206</span>
+<span id="1207">1207</span>
+<span id="1208">1208</span>
+<span id="1209">1209</span>
+<span id="1210">1210</span>
+<span id="1211">1211</span>
+<span id="1212">1212</span>
+<span id="1213">1213</span>
+<span id="1214">1214</span>
+<span id="1215">1215</span>
+<span id="1216">1216</span>
+<span id="1217">1217</span>
+<span id="1218">1218</span>
+<span id="1219">1219</span>
+<span id="1220">1220</span>
+<span id="1221">1221</span>
+<span id="1222">1222</span>
+<span id="1223">1223</span>
+<span id="1224">1224</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">cell</span>::{<span class="ident">RootCell</span>, <span class="ident">RootObj</span>};
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">result</span>::<span class="prelude-ty">Result</span>;
@@ -1317,10 +1340,9 @@
 <span class="doccomment">/// checking rules, Rust prevents referencing from one memory pool to another.</span>
 <span class="doccomment">///</span>
 <span class="doccomment">/// To implement a new memory pool, you should define a new type with static</span>
-<span class="doccomment">/// values, that implements `MemPool`. You may use [`static_inner_object!()`]</span>
-<span class="doccomment">/// to statically define allocator&#39;s inner data, and [`static_inner!()`] to</span>
-<span class="doccomment">/// access it. You may also use the default allocator using [`pool!()`] which</span>
-<span class="doccomment">/// creates a pool module with a default allocator of type [`BuddyAlloc`].</span>
+<span class="doccomment">/// values, that implements `MemPool`. You may redefine the default allocator as</span>
+<span class="doccomment">/// a new pool using [`pool!()`] which creates a pool module and generates the</span>
+<span class="doccomment">/// necessary code segments of type [`BuddyAlloc`].</span>
 <span class="doccomment">///</span>
 <span class="doccomment">/// # Examples</span>
 <span class="doccomment">/// The following example shows how to use `MemPool` to track allocations of a</span>
@@ -1356,6 +1378,32 @@
 <span class="doccomment">///     TrackAlloc::dealloc(p, 1);</span>
 <span class="doccomment">/// }</span>
 <span class="doccomment">/// ```</span>
+<span class="doccomment">/// </span>
+<span class="doccomment">/// The following example shows how to use [`pool!()`] to define a multiple</span>
+<span class="doccomment">/// pools.</span>
+<span class="doccomment">/// </span>
+<span class="doccomment">/// ```</span>
+<span class="doccomment">/// # use corundum::alloc::*;</span>
+<span class="doccomment">/// # use corundum::*;</span>
+<span class="doccomment">/// // Declare p1 module</span>
+<span class="doccomment">/// pool!(p1);</span>
+<span class="doccomment">/// </span>
+<span class="doccomment">/// // Declare p2 module</span>
+<span class="doccomment">/// pool!(p2);</span>
+<span class="doccomment">/// </span>
+<span class="doccomment">/// let _pool1 = p1::BuddyAlloc::open_no_root(&quot;p1.pool&quot;, O_CF).unwrap();</span>
+<span class="doccomment">/// let _pool2 = p2::BuddyAlloc::open_no_root(&quot;p2.pool&quot;, O_CF).unwrap();</span>
+<span class="doccomment">/// </span>
+<span class="doccomment">/// transaction(|j| {</span>
+<span class="doccomment">///     // Create a Pbox object in p1</span>
+<span class="doccomment">///     let b = p1::Pbox::new(10, j);</span>
+<span class="doccomment">/// }).unwrap();</span>
+<span class="doccomment">/// </span>
+<span class="doccomment">/// transaction(|j| {</span>
+<span class="doccomment">///     // Create a Prc object in p2</span>
+<span class="doccomment">///     let p = p2::Prc::new(10, j);</span>
+<span class="doccomment">/// }).unwrap();</span>
+<span class="doccomment">/// ```</span>
 <span class="doccomment">///</span>
 <span class="doccomment">/// # Safety</span>
 <span class="doccomment">///</span>
@@ -1368,8 +1416,6 @@
 <span class="doccomment">/// RAII. They internally use the unsafe methods.</span>
 <span class="doccomment">/// </span>
 <span class="doccomment">/// [`pool!()`]: ./default/macro.pool.html</span>
-<span class="doccomment">/// [`static_inner_object!()`]: ../macro.static_inner_object.html</span>
-<span class="doccomment">/// [`static_inner!()`]: ../macro.static_inner.html</span>
 <span class="doccomment">/// [`BuddyAlloc`]: ./default/struct.BuddyAlloc.html</span>
 <span class="kw">pub</span> <span class="kw">unsafe</span> <span class="kw">trait</span> <span class="ident">MemPool</span>
 <span class="kw">where</span>

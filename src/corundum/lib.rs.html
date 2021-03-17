@@ -171,6 +171,7 @@
 <span id="168">168</span>
 <span id="169">169</span>
 <span id="170">170</span>
+<span id="171">171</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! *Corundum* is a crate with an idiomatic persistent memory programming</span>
 <span class="doccomment">//! interface and leverages Rust’s type system to statically avoid</span>
@@ -187,8 +188,9 @@
 <span class="doccomment">//! | Unlogged Updates    | An unrecoverable update to persistent data | Modifications are enforced to be inside atomic [`transaction`]s. | </span>
 <span class="doccomment">//! | Data Race           | Updating persistent data simultaneously in two threads | Mutable borrowing is limited to [`PMutex`] which uses a transaction-wide lock to provide both atomicity and isolation. |</span>
 <span class="doccomment">//! | Locked Mutex        | A persistent mutex remains locked on powerfail | [`PMutex`] uses [`VCell`] which resets at restart. |</span>
-<span class="doccomment">//! | Memory Leaks\*      | An allocated memory becomes unreachable | Persistent objects, except the root object, cannot cross transaction boundaries, and memory allocation is available only inside a transaction. Therefore, the allocation can survive only if there is a reference from the root object (or a decedent of it) to the data. &lt;br&gt;\* Cyclic references are not prevented in this version, which lead to a memory leak. |</span>
+<span class="doccomment">//! | Memory Leaks\*      | An allocated memory becomes unreachable | Persistent objects, except the root object, cannot cross transaction boundaries, and memory allocation is available only inside a transaction. Therefore, the allocation can survive only if there is a reference from the root object (or a decedent of it) to the data. &lt;br&gt;\* Cyclic references are not prevented in this version, which lead to a memory leak. Please visit [`this link`] for the information on how to manually resolve that issue. |</span>
 <span class="doccomment">//!</span>
+<span class="doccomment">//! [`this`]: ./prc/index.html#cyclic-references</span>
 <span class="doccomment">//! </span>
 <span class="doccomment">//! # Persistent Objects</span>
 <span class="doccomment">//!</span>
