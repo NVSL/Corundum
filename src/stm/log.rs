@@ -575,7 +575,7 @@ impl<A: MemPool> Log<A> {
 
                 #[cfg(all(not(feature = "no_flush_updates"), not(feature = "replace_with_log")))]
                 unsafe {
-                    persist::<u8>(A::get_mut_unchecked(*_src), *_len, true);
+                    persist::<u8>(A::get_mut_unchecked(*_src), *_len, false);
                 }
             }
             DropOnCommit(src, len) => {
