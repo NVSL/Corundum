@@ -382,7 +382,6 @@ impl<A: MemPool> Journal<A> {
         #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
             self.spd.commit();
         }
-        self.set(JOURNAL_COMMITTED);
         let mut curr = self.pages;
         while let Some(page) = curr.as_option() {
             page.notify();
@@ -393,6 +392,8 @@ impl<A: MemPool> Journal<A> {
             page.commit();
             curr = page.next;
         }
+        sfence();
+        self.set(JOURNAL_COMMITTED);
     }
 
     /// Reverts all changes
@@ -410,6 +411,7 @@ impl<A: MemPool> Journal<A> {
             page.rollback();
             curr = page.next;
         }
+        sfence();
         self.set(JOURNAL_COMMITTED);
     }
 
