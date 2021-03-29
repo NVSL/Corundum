@@ -75,6 +75,7 @@ rustup default nightly
 
 ls -1 $dir_path/inputs/wc/* > $dir_path/files.list
 mkdir -p $dir_path/outputs/wc
+mkdir -p $dir_path/outputs/perf
 
 rs=(1)
 cs=`seq 0 15`
@@ -95,8 +96,6 @@ fi
 ins=(INS CHK REM RAND)
 
 if $all || $pmdk; then
-    mkdir -p $dir_path/outputs/perf
-
     rm -f $pool
     echo "Running performance test (PMDK-BST:INS)..."
     CPMEM_NO_CLWB=1 PMEM_NO_CLFLUSHOPT=$nofopt PMEM_NO_MOVNT=1 PMEM_NO_FLUSH=0 perf stat -o $dir_path/outputs/perf/pmdk-bst-INS.out -d $dir_path/pmdk/btree $pool s 30000
