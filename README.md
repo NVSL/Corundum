@@ -199,7 +199,7 @@ $ docker run --security-opt \
 Alternatively, mount the pmem on the host or use `/dev/shm` to emulate it, and bind the directory using `-v` option:
 
 ```
-docker run -v /mnt/shm:/mnt/pmem0 -it mhz88/corundum:latest bin/bash
+docker run -v /dev/shm:/mnt/pmem0 -it mhz88/corundum:latest bin/bash
 ```
 
 ## Documentation
