@@ -126,6 +126,12 @@ pub unsafe auto trait LooseTxInUnsafe {}
 /// Any type is okay to be transferred to a transaction
 unsafe impl LooseTxInUnsafe for dyn std::any::Any {}
 
+/// Static objects are okay to be transferred to a transaction
+unsafe impl<T> LooseTxInUnsafe for &'static T {}
+
+/// Static objects are okay to be transferred to a transaction
+unsafe impl<T> LooseTxInUnsafe for &'static mut T {}
+
 /// A simple wrapper around a type to assert that it is safe to go in a
 /// transaction.
 ///
