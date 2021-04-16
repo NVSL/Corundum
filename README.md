@@ -196,6 +196,12 @@ $ docker run --security-opt \
     -it mhz88/corundum:latest bin/bash
 ```
 
+Alternatively, mount the pmem on the host or use `/dev/shm` to emulate it, and bind the directory using `-v` option:
+
+```
+docker run -v /dev/shm:/mnt/pmem0 -it mhz88/corundum:latest bin/bash
+```
+
 ## Documentation
 
 Please visit the [`Documentation`](https://nvsl.github.io/Corundum/) page for
