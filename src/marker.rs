@@ -123,9 +123,8 @@ pub unsafe auto trait TxInSafe {}
 )]
 pub unsafe auto trait LooseTxInUnsafe {}
 
-/// `Formatter` type uses `dyn Write` which is okay to be transferred to a
-/// transaction
-unsafe impl LooseTxInUnsafe for std::fmt::Formatter<'_> {}
+/// Any type is okay to be transferred to a transaction
+unsafe impl LooseTxInUnsafe for dyn std::any::Any {}
 
 /// A simple wrapper around a type to assert that it is safe to go in a
 /// transaction.
