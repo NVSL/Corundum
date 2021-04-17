@@ -1,5 +1,8 @@
 //! Corundum Markers
 //! 
+use std::stream::Stream;
+use crate::stm::Journal;
+use crate::alloc::MemPool;
 use std::task::Poll;
 use std::task::Context;
 use std::pin::Pin;
@@ -125,12 +128,7 @@ pub unsafe auto trait LooseTxInUnsafe {}
 
 /// Any type is okay to be transferred to a transaction
 unsafe impl LooseTxInUnsafe for dyn std::any::Any {}
-
-/// Static objects are okay to be transferred to a transaction
-unsafe impl<T> LooseTxInUnsafe for &'static T {}
-
-/// Static objects are okay to be transferred to a transaction
-unsafe impl<T> LooseTxInUnsafe for &'static mut T {}
+unsafe impl<'a, T> LooseTxInUnsafe for &'a mut T {}
 
 /// A simple wrapper around a type to assert that it is safe to go in a
 /// transaction.
@@ -172,7 +170,7 @@ unsafe impl<T> LooseTxInUnsafe for &'static mut T {}
 /// 
 /// [`transaction`]: ./stm/fn.transaction.html
 /// [`TxInSafe`]: ./trait.TxInSafe.html
-pub struct AssertTxInSafe<T: LooseTxInUnsafe>(pub T);
+pub struct AssertTxInSafe<T>(pub T);
 
 impl<T: ?Sized> !TxInSafe for *mut T {}
 impl<T: ?Sized> !TxInSafe for &mut T {}
@@ -195,18 +193,23 @@ impl<T: LooseTxInUnsafe> DerefMut for AssertTxInSafe<T> {
     }
 }
 
-impl<R, F: FnOnce() -> R> FnOnce<()> for AssertTxInSafe<F> 
-where F: LooseTxInUnsafe {
+impl<R, P: MemPool, F> FnOnce<(&'static Journal<P>,)> for AssertTxInSafe<F>
+where
+    R: TxOutSafe,
+    F: FnOnce(&'static Journal<P>) -> R
+{
     type Output = R;
 
-    extern "rust-call" fn call_once(self, _args: ()) -> R {
-        (self.0)()
+    #[inline]
+    extern "rust-call" fn call_once(self, args: (&'static Journal<P>,)) -> R  
+    {
+        (self.0)(args.0)
     }
 }
 
 impl<T: fmt::Debug + LooseTxInUnsafe> fmt::Debug for AssertTxInSafe<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("AssertUnwindSafe").field(&self.0).finish()
+        f.debug_tuple("AssertTxInSafe").field(&self.0).finish()
     }
 }
 
@@ -216,6 +219,18 @@ impl<F: Future + LooseTxInUnsafe> Future for AssertTxInSafe<F> {
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let pinned_field = unsafe { Pin::map_unchecked_mut(self, |x| &mut x.0) };
         F::poll(pinned_field, cx)
+    }
+}
+
+impl<S: Stream + LooseTxInUnsafe> Stream for AssertTxInSafe<S> {
+    type Item = S::Item;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<S::Item>> {
+        unsafe { self.map_unchecked_mut(|x| &mut x.0) }.poll_next(cx)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.0.size_hint()
     }
 }
 

@@ -1796,6 +1796,26 @@ pub(crate) mod test {
             *m = 20;
         }).unwrap();
     }
+
+    #[test]
+    fn assert_safe() {
+        use crate::default::*;
+
+        type P = BuddyAlloc;
+
+        struct Obj {
+            val: prc::VWeak<i32>
+        }
+
+        impl std::fmt::Display for Obj {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+                transaction(AssertTxInSafe(|j| {
+                    writeln!(f, "{:?}", self.val.promote(j))
+                })).unwrap()?;
+                Ok(())
+            }
+        }
+    }
 }
 
 #[cfg(test)]

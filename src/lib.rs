@@ -127,6 +127,8 @@
 #![feature(c_variadic)]
 #![feature(rustc_attrs)]
 #![feature(allocator_api)]
+#![feature(associated_type_bounds)]
+#![feature(async_stream)]
 
 #![allow(dead_code)]
 #![allow(incomplete_features)]

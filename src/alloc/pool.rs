@@ -1095,7 +1095,7 @@ where
     /// 
     #[inline]
     #[track_caller]
-    fn transaction<T, F: FnOnce(&Journal<Self>) -> T>(body: F) -> Result<T>
+    fn transaction<T, F: FnOnce(&'static Journal<Self>) -> T>(body: F) -> Result<T>
     where
         F: TxInSafe + UnwindSafe,
         T: TxOutSafe,

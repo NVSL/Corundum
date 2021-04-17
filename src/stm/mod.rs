@@ -19,7 +19,7 @@ pub use log::*;
 /// 
 /// See [`MemPool::transaction()`](../alloc/trait.MemPool.html#method.transaction)
 /// for more details.
-pub fn transaction<T, F: FnOnce(&Journal<A>) -> T, A: MemPool>(body: F) -> Result<T>
+pub fn transaction<T, F: FnOnce(&'static Journal<A>) -> T, A: MemPool>(body: F) -> Result<T>
 where
     F: TxInSafe + UnwindSafe,
     T: TxOutSafe,
