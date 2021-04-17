@@ -58,7 +58,7 @@ dependencies section:
 
 ```toml
 [dependencies]
-corundum = "0.3.2"
+corundum = "0.3.3"
 ```
 
 Or
