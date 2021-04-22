@@ -1,1 +1,1 @@
-initSidebarItems({"struct":[["IntoIteratorHelper","structure helper for consuming iterator."],["IterHelper","structure helper for non-consuming iterator."],["Vec","A contiguous growable persistent array type, written `Vec<T>` but pronounced 'vector'."]]});
+initSidebarItems({"struct":[["IntoIteratorHelper","structure helper for consuming iterator."],["IterHelper","structure helper for non-consuming iterator."],["Vec","A contiguous growable persistent array type, written `Vec<T>` but pronounced ‘vector’."]]});

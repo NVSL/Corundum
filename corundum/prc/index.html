@@ -1,7 +1,7 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="API documentation for the Rust `prc` mod in crate `corundum`."><meta name="keywords" content="rust, rustlang, rust-lang, prc"><title>corundum::prc - Rust</title><link rel="stylesheet" type="text/css" href="../../normalize.css"><link rel="stylesheet" type="text/css" href="../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../../light.css"  id="themeStyle"><link rel="stylesheet" type="text/css" href="../../dark.css" disabled ><link rel="stylesheet" type="text/css" href="../../ayu.css" disabled ><script id="default-settings"></script><script src="../../storage.js"></script><noscript><link rel="stylesheet" href="../../noscript.css"></noscript><link rel="icon" type="image/svg+xml" href="../../favicon.svg">
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Single-threaded reference-counting persistent pointers"><meta name="keywords" content="rust, rustlang, rust-lang, prc"><title>corundum::prc - Rust</title><link rel="stylesheet" type="text/css" href="../../normalize.css"><link rel="stylesheet" type="text/css" href="../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../../light.css"  id="themeStyle"><link rel="stylesheet" type="text/css" href="../../dark.css" disabled ><link rel="stylesheet" type="text/css" href="../../ayu.css" disabled ><script id="default-settings"></script><script src="../../storage.js"></script><script src="../../crates.js"></script><noscript><link rel="stylesheet" href="../../noscript.css"></noscript><link rel="icon" type="image/svg+xml" href="../../favicon.svg">
 <link rel="alternate icon" type="image/png" href="../../favicon-16x16.png">
-<link rel="alternate icon" type="image/png" href="../../favicon-32x32.png"><style type="text/css">#crate-search{background-image:url("../../down-arrow.svg");}</style></head><body class="rustdoc mod"><!--[if lte IE 8]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="sidebar-menu">&#9776;</div><a href='../../corundum/index.html'><div class='logo-container rust-logo'><img src='../../rust-logo.png' alt='logo'></div></a><p class="location">Module prc</p><div class="sidebar-elems"><div class="block items"><ul><li><a href="#structs">Structs</a></li></ul></div><p class="location"><a href="../index.html">corundum</a></p><div id="sidebar-vars" data-name="prc" data-ty="mod" data-relpath="../"></div><script defer src="../sidebar-items.js"></script></div></nav><div class="theme-picker"><button id="theme-picker" aria-label="Pick another theme!" aria-haspopup="menu"><img src="../../brush.svg" width="18" alt="Pick another theme!"></button><div id="theme-choices" role="menu"></div></div><script src="../../theme.js"></script><nav class="sub"><form class="search-form"><div class="search-container"><div><select id="crate-search"><option value="All crates">All crates</option></select><input class="search-input" name="search" disabled autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"></div><button type="button" class="help-button">?</button>
-                <a id="settings-menu" href="../../settings.html"><img src="../../wheel.svg" width="18" alt="Change settings"></a></div></form></nav><section id="main" class="content"><h1 class="fqn"><span class="in-band">Module <a href="../index.html">corundum</a>::<wbr><a class="mod" href="">prc</a></span><span class="out-of-band"><span id="render-detail"><a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">[<span class="inner">&#x2212;</span>]</a></span><a class="srclink" href="../../src/corundum/prc.rs.html#1-1516" title="goto source code">[src]</a></span></h1><div class="docblock"><p>Single-threaded reference-counting persistent pointers</p>
+<link rel="alternate icon" type="image/png" href="../../favicon-32x32.png"><style type="text/css">#crate-search{background-image:url("../../down-arrow.svg");}</style></head><body class="rustdoc mod"><!--[if lte IE 8]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="sidebar-menu" role="button">&#9776;</div><a href='../../corundum/index.html'><div class='logo-container rust-logo'><img src='../../rust-logo.png' alt='logo'></div></a><p class="location">Module prc</p><div class="sidebar-elems"><div class="block items"><ul><li><a href="#structs">Structs</a></li></ul></div><p class="location"><a href="../index.html">corundum</a></p><div id="sidebar-vars" data-name="prc" data-ty="mod" data-relpath="../"></div><script defer src="../sidebar-items.js"></script></div></nav><div class="theme-picker"><button id="theme-picker" aria-label="Pick another theme!" aria-haspopup="menu"><img src="../../brush.svg" width="18" height="18" alt="Pick another theme!"></button><div id="theme-choices" role="menu"></div></div><nav class="sub"><form class="search-form"><div class="search-container"><div><select id="crate-search"><option value="All crates">All crates</option></select><input class="search-input" name="search" disabled autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"></div><button type="button" class="help-button">?</button>
+                <a id="settings-menu" href="../../settings.html"><img src="../../wheel.svg" width="18" height="18" alt="Change settings"></a></div></form></nav><section id="main" class="content"><h1 class="fqn"><span class="in-band">Module <a href="../index.html">corundum</a>::<wbr><a class="mod" href="">prc</a><button id="copy-path" onclick="copy_path(this)">⎘</button></span><span class="out-of-band"><span id="render-detail"><a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">[<span class="inner">&#x2212;</span>]</a></span><a class="srclink" href="../../src/corundum/prc.rs.html#1-1516" title="goto source code">[src]</a></span></h1><div class="docblock"><p>Single-threaded reference-counting persistent pointers</p>
 <p><a href="../../corundum/prc/struct.Prc.html" title="Prc"><code>Prc</code></a> is a persistent pointer sharing the underlying data between multiple
 owners. To create a new strong reference, you may use <a href="./struct.Prc.html#method.pclone"><code>pclone</code></a> function.
 When the last owner of data goes out of scope, the strong reference count
@@ -23,8 +23,8 @@ are unreachable. The resulting network is shown in figure (b).</p>
 <p><a href="../../corundum/prc/struct.Weak.html" title="Weak"><code>Weak</code></a> is provided to fix this issue. Although it is not enforced, the
 programmer can take benefits out of it. A weak link does not increment the
 strong reference counter. Making <code>C -▷ B</code> weak, which is shown in figure (c),
-resolves this problem. Since <code>B</code>'s strong reference counter is 1, dropping
-<code>A -▷ B</code> makes it zero and <code>B</code>'s drop function gets called.</p>
+resolves this problem. Since <code>B</code>’s strong reference counter is 1, dropping
+<code>A -▷ B</code> makes it zero and <code>B</code>’s drop function gets called.</p>
 <h1 id="example" class="section-header"><a href="#example">Example</a></h1>
 <p>The following example does not use a weak pointer leading to a memory leak.
 It creates the following links: <code>A -&gt; B</code>, <code>B -&gt; C</code>, and <code>C -&gt; B</code>. The last
@@ -33,7 +33,7 @@ two links create a cycle. Therefore, when <code>A</code> goes of scope, it canno
 Nodes <code>B</code> and <code>C</code> remain in memory forever.</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered">
-<span class="kw">use</span> <span class="ident">corundum</span>::<span class="ident">default</span>::<span class="kw-2">*</span>;
+<span class="kw">use</span> <span class="ident">corundum::default</span>::<span class="kw-2">*</span>;
 <span class="kw">type</span> <span class="ident">P</span> <span class="op">=</span> <span class="ident">BuddyAlloc</span>;
  
 <span class="kw">struct</span> <span class="ident">Node</span> {
@@ -43,23 +43,23 @@ Nodes <code>B</code> and <code>C</code> remain in memory forever.</p>
  
 <span class="kw">impl</span> <span class="ident">Node</span> {
     <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">val</span>: <span class="ident">char</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
-        <span class="macro">println</span><span class="macro">!</span>(<span class="string">&quot;{} is created&quot;</span>, <span class="ident">val</span>);
-        <span class="self">Self</span> { <span class="ident">val</span>, <span class="ident">link</span>: <span class="ident">PRefCell</span>::<span class="ident">new</span>(<span class="prelude-val">None</span>) }
+        <span class="macro">println!</span>(<span class="string">&quot;{} is created&quot;</span>, <span class="ident">val</span>);
+        <span class="self">Self</span> { <span class="ident">val</span>, <span class="ident">link</span>: <span class="ident">PRefCell::new</span>(<span class="prelude-val">None</span>) }
     }
 }
  
 <span class="kw">impl</span> <span class="ident">Drop</span> <span class="kw">for</span> <span class="ident">Node</span> {
     <span class="kw">fn</span> <span class="ident">drop</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>) {
-        <span class="macro">println</span><span class="macro">!</span>(<span class="string">&quot;{} is dropped&quot;</span>, <span class="self">self</span>.<span class="ident">val</span>);
+        <span class="macro">println!</span>(<span class="string">&quot;{} is dropped&quot;</span>, <span class="self">self</span>.<span class="ident">val</span>);
     }
 }
  
-<span class="kw">let</span> <span class="ident">_pool</span> <span class="op">=</span> <span class="ident">P</span>::<span class="ident">open_no_root</span>(<span class="string">&quot;net.pool&quot;</span>, <span class="ident">O_CF</span>).<span class="ident">unwrap</span>();
+<span class="kw">let</span> <span class="ident">_pool</span> <span class="op">=</span> <span class="ident">P::open_no_root</span>(<span class="string">&quot;net.pool&quot;</span>, <span class="ident">O_CF</span>).<span class="ident">unwrap</span>();
  
 <span class="ident">transaction</span>(<span class="op">|</span><span class="ident">j</span><span class="op">|</span> {
-    <span class="kw">let</span> <span class="ident">A</span> <span class="op">=</span> <span class="ident">Prc</span>::<span class="ident">new</span>(<span class="ident">Node</span>::<span class="ident">new</span>(<span class="string">&#39;A&#39;</span>), <span class="ident">j</span>);
-    <span class="kw">let</span> <span class="ident">B</span> <span class="op">=</span> <span class="ident">Prc</span>::<span class="ident">new</span>(<span class="ident">Node</span>::<span class="ident">new</span>(<span class="string">&#39;B&#39;</span>), <span class="ident">j</span>);
-    <span class="kw">let</span> <span class="ident">C</span> <span class="op">=</span> <span class="ident">Prc</span>::<span class="ident">new</span>(<span class="ident">Node</span>::<span class="ident">new</span>(<span class="string">&#39;C&#39;</span>), <span class="ident">j</span>);
+    <span class="kw">let</span> <span class="ident">A</span> <span class="op">=</span> <span class="ident">Prc::new</span>(<span class="ident">Node::new</span>(<span class="string">&#39;A&#39;</span>), <span class="ident">j</span>);
+    <span class="kw">let</span> <span class="ident">B</span> <span class="op">=</span> <span class="ident">Prc::new</span>(<span class="ident">Node::new</span>(<span class="string">&#39;B&#39;</span>), <span class="ident">j</span>);
+    <span class="kw">let</span> <span class="ident">C</span> <span class="op">=</span> <span class="ident">Prc::new</span>(<span class="ident">Node::new</span>(<span class="string">&#39;C&#39;</span>), <span class="ident">j</span>);
     <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">a_link</span> <span class="op">=</span> <span class="ident">A</span>.<span class="ident">link</span>.<span class="ident">borrow_mut</span>(<span class="ident">j</span>);
     <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">b_link</span> <span class="op">=</span> <span class="ident">B</span>.<span class="ident">link</span>.<span class="ident">borrow_mut</span>(<span class="ident">j</span>);
     <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">c_link</span> <span class="op">=</span> <span class="ident">C</span>.<span class="ident">link</span>.<span class="ident">borrow_mut</span>(<span class="ident">j</span>);
@@ -79,12 +79,12 @@ shows how to manually prevent cycles. The <code>C -&gt; B</code> link is weak, s
 strong reference counter becomes zero when <code>A -&gt; B</code> is eliminated.</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered">
-<span class="kw">use</span> <span class="ident">corundum</span>::<span class="ident">default</span>::<span class="kw-2">*</span>;
+<span class="kw">use</span> <span class="ident">corundum::default</span>::<span class="kw-2">*</span>;
 <span class="kw">type</span> <span class="ident">P</span> <span class="op">=</span> <span class="ident">BuddyAlloc</span>;
  
 <span class="kw">enum</span> <span class="ident">Link</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="ident">PSafe</span><span class="op">&gt;</span> {
     <span class="ident">Strong</span>(<span class="ident">Prc</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>),
-    <span class="ident">Weak</span>(<span class="ident">prc</span>::<span class="ident">PWeak</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>),
+    <span class="ident">Weak</span>(<span class="ident">prc::PWeak</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>),
     <span class="ident">Null</span>
 }
  
@@ -95,29 +95,29 @@ strong reference counter becomes zero when <code>A -&gt; B</code> is eliminated.
  
 <span class="kw">impl</span> <span class="ident">Node</span> {
     <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">val</span>: <span class="ident">char</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
-        <span class="macro">println</span><span class="macro">!</span>(<span class="string">&quot;{} is created&quot;</span>, <span class="ident">val</span>);
-        <span class="self">Self</span> { <span class="ident">val</span>, <span class="ident">link</span>: <span class="ident">PRefCell</span>::<span class="ident">new</span>(<span class="ident">Null</span>) }
+        <span class="macro">println!</span>(<span class="string">&quot;{} is created&quot;</span>, <span class="ident">val</span>);
+        <span class="self">Self</span> { <span class="ident">val</span>, <span class="ident">link</span>: <span class="ident">PRefCell::new</span>(<span class="ident">Null</span>) }
     }
 }
  
 <span class="kw">impl</span> <span class="ident">Drop</span> <span class="kw">for</span> <span class="ident">Node</span> {
     <span class="kw">fn</span> <span class="ident">drop</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>) {
-        <span class="macro">println</span><span class="macro">!</span>(<span class="string">&quot;{} is dropped&quot;</span>, <span class="self">self</span>.<span class="ident">val</span>);
+        <span class="macro">println!</span>(<span class="string">&quot;{} is dropped&quot;</span>, <span class="self">self</span>.<span class="ident">val</span>);
     }
 }
  
-<span class="kw">let</span> <span class="ident">_pool</span> <span class="op">=</span> <span class="ident">P</span>::<span class="ident">open_no_root</span>(<span class="string">&quot;net.pool&quot;</span>, <span class="ident">O_CF</span>).<span class="ident">unwrap</span>();
+<span class="kw">let</span> <span class="ident">_pool</span> <span class="op">=</span> <span class="ident">P::open_no_root</span>(<span class="string">&quot;net.pool&quot;</span>, <span class="ident">O_CF</span>).<span class="ident">unwrap</span>();
  
 <span class="ident">transaction</span>(<span class="op">|</span><span class="ident">j</span><span class="op">|</span> {
-    <span class="kw">let</span> <span class="ident">A</span> <span class="op">=</span> <span class="ident">Prc</span>::<span class="ident">new</span>(<span class="ident">Node</span>::<span class="ident">new</span>(<span class="string">&#39;A&#39;</span>), <span class="ident">j</span>);
-    <span class="kw">let</span> <span class="ident">B</span> <span class="op">=</span> <span class="ident">Prc</span>::<span class="ident">new</span>(<span class="ident">Node</span>::<span class="ident">new</span>(<span class="string">&#39;B&#39;</span>), <span class="ident">j</span>);
-    <span class="kw">let</span> <span class="ident">C</span> <span class="op">=</span> <span class="ident">Prc</span>::<span class="ident">new</span>(<span class="ident">Node</span>::<span class="ident">new</span>(<span class="string">&#39;C&#39;</span>), <span class="ident">j</span>);
+    <span class="kw">let</span> <span class="ident">A</span> <span class="op">=</span> <span class="ident">Prc::new</span>(<span class="ident">Node::new</span>(<span class="string">&#39;A&#39;</span>), <span class="ident">j</span>);
+    <span class="kw">let</span> <span class="ident">B</span> <span class="op">=</span> <span class="ident">Prc::new</span>(<span class="ident">Node::new</span>(<span class="string">&#39;B&#39;</span>), <span class="ident">j</span>);
+    <span class="kw">let</span> <span class="ident">C</span> <span class="op">=</span> <span class="ident">Prc::new</span>(<span class="ident">Node::new</span>(<span class="string">&#39;C&#39;</span>), <span class="ident">j</span>);
     <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">a_link</span> <span class="op">=</span> <span class="ident">A</span>.<span class="ident">link</span>.<span class="ident">borrow_mut</span>(<span class="ident">j</span>);
     <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">b_link</span> <span class="op">=</span> <span class="ident">B</span>.<span class="ident">link</span>.<span class="ident">borrow_mut</span>(<span class="ident">j</span>);
     <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">c_link</span> <span class="op">=</span> <span class="ident">C</span>.<span class="ident">link</span>.<span class="ident">borrow_mut</span>(<span class="ident">j</span>);
     <span class="kw-2">*</span><span class="ident">a_link</span> <span class="op">=</span> <span class="ident">Strong</span>(<span class="ident">B</span>.<span class="ident">pclone</span>(<span class="ident">j</span>));
     <span class="kw-2">*</span><span class="ident">b_link</span> <span class="op">=</span> <span class="ident">Strong</span>(<span class="ident">C</span>.<span class="ident">pclone</span>(<span class="ident">j</span>));
-    <span class="kw-2">*</span><span class="ident">c_link</span> <span class="op">=</span> <span class="ident">Weak</span>(<span class="ident">Prc</span>::<span class="ident">downgrade</span>(<span class="kw-2">&amp;</span><span class="ident">B</span>, <span class="ident">j</span>));
+    <span class="kw-2">*</span><span class="ident">c_link</span> <span class="op">=</span> <span class="ident">Weak</span>(<span class="ident">Prc::downgrade</span>(<span class="kw-2">&amp;</span><span class="ident">B</span>, <span class="ident">j</span>));
 }).<span class="ident">unwrap</span>();</pre></div>
 <p>The output shows that no <code>Node</code> remains in memory.</p>
 <pre><code class="language-text">A is created
@@ -128,8 +128,8 @@ B is dropped
 C is dropped
 </code></pre>
 </div><h2 id="structs" class="section-header"><a href="#structs">Structs</a></h2>
-<table><tr class="module-item"><td><a class="struct" href="struct.Prc.html" title="corundum::prc::Prc struct">Prc</a></td><td class="docblock-short"><p>A single-thread reference-counting persistent pointer. 'Prc' stands for
-'Persistent Reference Counted'.</p>
+<table><tr class="module-item"><td><a class="struct" href="struct.Prc.html" title="corundum::prc::Prc struct">Prc</a></td><td class="docblock-short"><p>A single-thread reference-counting persistent pointer. ‘Prc’ stands for
+‘Persistent Reference Counted’.</p>
 </td></tr><tr class="module-item"><td><a class="struct" href="struct.PrcBox.html" title="corundum::prc::PrcBox struct">PrcBox</a></td><td class="docblock-short"></td></tr><tr class="module-item"><td><a class="struct" href="struct.VWeak.html" title="corundum::prc::VWeak struct">VWeak</a></td><td class="docblock-short"><p><code>VWeak</code> is a version of <a href="struct.Prc.html"><code>Prc</code></a> that holds a non-owning reference to the
 managed allocation in the volatile heap. The allocation is accessed by
 calling <a href="#method.promote"><code>promote</code></a> on the <code>VWeak</code> pointer, which returns an
@@ -137,5 +137,5 @@ calling <a href="#method.promote"><code>promote</code></a> on the <code>VWeak</c
 </td></tr><tr class="module-item"><td><a class="struct" href="struct.Weak.html" title="corundum::prc::Weak struct">Weak</a></td><td class="docblock-short"><p><code>Weak</code> is a version of <a href="struct.Prc.html"><code>Prc</code></a> that holds a non-owning reference to the
 managed allocation. The allocation is accessed by calling <a href="#method.upgrade"><code>upgrade</code></a> on the <code>Weak</code>
 pointer, which returns an <a href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html"><code>Option</code></a><code>&lt;</code><a href="struct.Prc.html"><code>Prc</code></a><code>&lt;T&gt;&gt;</code>.</p>
-</td></tr></table></section><section id="search" class="content hidden"></section><section class="footer"></section><div id="rustdoc-vars" data-root-path="../../" data-current-crate="corundum"></div>
-    <script src="../../main.js"></script><script defer src="../../search-index.js"></script></body></html>
+</td></tr></table></section><section id="search" class="content hidden"></section><section class="footer"></section><div id="rustdoc-vars" data-root-path="../../" data-current-crate="corundum" data-search-js="../../search-index.js"></div>
+    <script src="../../main.js"></script></body></html>

@@ -1,7 +1,7 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/stm/journal.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>journal.rs - source</title><link rel="stylesheet" type="text/css" href="../../../normalize.css"><link rel="stylesheet" type="text/css" href="../../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../../../light.css"  id="themeStyle"><link rel="stylesheet" type="text/css" href="../../../dark.css" disabled ><link rel="stylesheet" type="text/css" href="../../../ayu.css" disabled ><script id="default-settings"></script><script src="../../../storage.js"></script><noscript><link rel="stylesheet" href="../../../noscript.css"></noscript><link rel="icon" type="image/svg+xml" href="../../../favicon.svg">
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/stm/journal.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>journal.rs - source</title><link rel="stylesheet" type="text/css" href="../../../normalize.css"><link rel="stylesheet" type="text/css" href="../../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../../../light.css"  id="themeStyle"><link rel="stylesheet" type="text/css" href="../../../dark.css" disabled ><link rel="stylesheet" type="text/css" href="../../../ayu.css" disabled ><script id="default-settings"></script><script src="../../../storage.js"></script><script src="../../../crates.js"></script><noscript><link rel="stylesheet" href="../../../noscript.css"></noscript><link rel="icon" type="image/svg+xml" href="../../../favicon.svg">
 <link rel="alternate icon" type="image/png" href="../../../favicon-16x16.png">
-<link rel="alternate icon" type="image/png" href="../../../favicon-32x32.png"><style type="text/css">#crate-search{background-image:url("../../../down-arrow.svg");}</style></head><body class="rustdoc source"><!--[if lte IE 8]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="sidebar-menu">&#9776;</div><a href='../../../corundum/index.html'><div class='logo-container rust-logo'><img src='../../../rust-logo.png' alt='logo'></div></a></nav><div class="theme-picker"><button id="theme-picker" aria-label="Pick another theme!" aria-haspopup="menu"><img src="../../../brush.svg" width="18" alt="Pick another theme!"></button><div id="theme-choices" role="menu"></div></div><script src="../../../theme.js"></script><nav class="sub"><form class="search-form"><div class="search-container"><div><select id="crate-search"><option value="All crates">All crates</option></select><input class="search-input" name="search" disabled autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"></div><button type="button" class="help-button">?</button>
-                <a id="settings-menu" href="../../../settings.html"><img src="../../../wheel.svg" width="18" alt="Change settings"></a></div></form></nav><section id="main" class="content"><pre class="line-numbers"><span id="1">  1</span>
+<link rel="alternate icon" type="image/png" href="../../../favicon-32x32.png"><style type="text/css">#crate-search{background-image:url("../../../down-arrow.svg");}</style></head><body class="rustdoc source"><!--[if lte IE 8]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="sidebar-menu" role="button">&#9776;</div><a href='../../../corundum/index.html'><div class='logo-container rust-logo'><img src='../../../rust-logo.png' alt='logo'></div></a></nav><div class="theme-picker"><button id="theme-picker" aria-label="Pick another theme!" aria-haspopup="menu"><img src="../../../brush.svg" width="18" height="18" alt="Pick another theme!"></button><div id="theme-choices" role="menu"></div></div><nav class="sub"><form class="search-form"><div class="search-container"><div><select id="crate-search"><option value="All crates">All crates</option></select><input class="search-input" name="search" disabled autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"></div><button type="button" class="help-button">?</button>
+                <a id="settings-menu" href="../../../settings.html"><img src="../../../wheel.svg" width="18" height="18" alt="Change settings"></a></div></form></nav><section id="main" class="content"><pre class="line-numbers"><span id="1">  1</span>
 <span id="2">  2</span>
 <span id="3">  3</span>
 <span id="4">  4</span>
@@ -670,25 +670,27 @@
 <span id="667">667</span>
 <span id="668">668</span>
 <span id="669">669</span>
+<span id="670">670</span>
+<span id="671">671</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! The journal object for keeping logs</span>
-<span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">alloc</span>::<span class="ident">MemPool</span>;
-<span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">ll</span>::<span class="kw-2">*</span>;
-<span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">ptr</span>::<span class="ident">Ptr</span>;
-<span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">stm</span>::<span class="kw-2">*</span>;
+<span class="kw">use</span> <span class="kw">crate</span><span class="ident">::alloc::MemPool</span>;
+<span class="kw">use</span> <span class="kw">crate</span><span class="ident">::ll</span>::<span class="kw-2">*</span>;
+<span class="kw">use</span> <span class="kw">crate</span><span class="ident">::ptr::Ptr</span>;
+<span class="kw">use</span> <span class="kw">crate</span><span class="ident">::stm</span>::<span class="kw-2">*</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="kw-2">*</span>;
-<span class="kw">use</span> <span class="ident">std</span>::<span class="ident">collections</span>::<span class="ident">HashMap</span>;
-<span class="kw">use</span> <span class="ident">std</span>::<span class="ident">fmt</span>::{<span class="self">self</span>, <span class="ident">Debug</span>, <span class="ident">Formatter</span>};
+<span class="kw">use</span> <span class="ident">std::collections::HashMap</span>;
+<span class="kw">use</span> <span class="ident">std::fmt</span>::{<span class="self">self</span>, <span class="ident">Debug</span>, <span class="ident">Formatter</span>};
 
 
 <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">all</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_pspd&quot;</span>, <span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_vspd&quot;</span>))]</span>
-<span class="macro">compile_error</span><span class="macro">!</span>(<span class="string">&quot;Cannot use both volatile and persistent scratchpad&quot;</span>);
+<span class="macro">compile_error!</span>(<span class="string">&quot;Cannot use both volatile and persistent scratchpad&quot;</span>);
 
 <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">all</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_pspd&quot;</span>, <span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_vspd&quot;</span>)))]</span>
-<span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">stm</span>::<span class="ident">pspd</span>::<span class="ident">Scratchpad</span>;
+<span class="kw">use</span> <span class="kw">crate</span><span class="ident">::stm::pspd::Scratchpad</span>;
 
 <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">all</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_vspd&quot;</span>, <span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_pspd&quot;</span>)))]</span>
-<span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">stm</span>::<span class="ident">vspd</span>::<span class="ident">Scratchpad</span>;
+<span class="kw">use</span> <span class="kw">crate</span><span class="ident">::stm::vspd::Scratchpad</span>;
 
 <span class="doccomment">/// Determines that the changes are committed</span>
 <span class="kw">pub</span> <span class="kw">const</span> <span class="ident">JOURNAL_COMMITTED</span>: <span class="ident">u64</span> <span class="op">=</span> <span class="number">0x0000_0001</span>;
@@ -750,8 +752,8 @@
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span> <span class="op">!</span><span class="ident">TxOutSafe</span> <span class="kw">for</span> <span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span> {}
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span> <span class="op">!</span><span class="ident">TxInSafe</span> <span class="kw">for</span> <span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span> {}
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span> <span class="op">!</span><span class="ident">LooseTxInUnsafe</span> <span class="kw">for</span> <span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span> {}
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span> <span class="op">!</span><span class="ident">std</span>::<span class="ident">panic</span>::<span class="ident">RefUnwindSafe</span> <span class="kw">for</span> <span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span> {}
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span> <span class="op">!</span><span class="ident">std</span>::<span class="ident">panic</span>::<span class="ident">UnwindSafe</span> <span class="kw">for</span> <span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span> {}
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span> <span class="op">!</span><span class="ident">std::panic::RefUnwindSafe</span> <span class="kw">for</span> <span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span> {}
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span> <span class="op">!</span><span class="ident">std::panic::UnwindSafe</span> <span class="kw">for</span> <span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span> {}
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Copy</span>)]</span>
 <span class="kw">struct</span> <span class="ident">Page</span><span class="op">&lt;</span><span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span> {
@@ -766,14 +768,14 @@
     <span class="doccomment">/// Writes a new log to the journal</span>
     <span class="kw">fn</span> <span class="ident">write</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">log</span>: <span class="ident">LogEnum</span>, <span class="ident">notifier</span>: <span class="ident">Notifier</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Ptr</span><span class="op">&lt;</span><span class="ident">Log</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>, <span class="ident">A</span><span class="op">&gt;</span> {
         <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_ntstore&quot;</span>))]</span> {
-            <span class="self">self</span>.<span class="ident">logs</span>[<span class="self">self</span>.<span class="ident">len</span>] <span class="op">=</span> <span class="ident">Log</span>::<span class="ident">new</span>(<span class="ident">log</span>, <span class="ident">notifier</span>);
+            <span class="self">self</span>.<span class="ident">logs</span>[<span class="self">self</span>.<span class="ident">len</span>] <span class="op">=</span> <span class="ident">Log::new</span>(<span class="ident">log</span>, <span class="ident">notifier</span>);
         }
         <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_ntstore&quot;</span>)]</span> <span class="kw">unsafe</span> {
-            <span class="ident">std</span>::<span class="ident">intrinsics</span>::<span class="ident">nontemporal_store</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>.<span class="ident">logs</span>[<span class="self">self</span>.<span class="ident">len</span>], <span class="ident">Log</span>::<span class="ident">new</span>(<span class="ident">log</span>, <span class="ident">notifier</span>));
+            <span class="ident">std::intrinsics::nontemporal_store</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>.<span class="ident">logs</span>[<span class="self">self</span>.<span class="ident">len</span>], <span class="ident">Log::new</span>(<span class="ident">log</span>, <span class="ident">notifier</span>));
         }
-        <span class="ident">persist</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">logs</span>[<span class="self">self</span>.<span class="ident">len</span>], <span class="ident">std</span>::<span class="ident">mem</span>::<span class="ident">size_of</span>::<span class="op">&lt;</span><span class="ident">Log</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span><span class="op">&gt;</span>(), <span class="bool-val">false</span>);
+        <span class="ident">persist</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">logs</span>[<span class="self">self</span>.<span class="ident">len</span>], <span class="ident">std::mem::size_of</span>::<span class="op">&lt;</span><span class="ident">Log</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span><span class="op">&gt;</span>(), <span class="bool-val">false</span>);
 
-        <span class="kw">let</span> <span class="ident">log</span> <span class="op">=</span> <span class="kw">unsafe</span> { <span class="ident">Ptr</span>::<span class="ident">new_unchecked</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">logs</span>[<span class="self">self</span>.<span class="ident">len</span>]) };
+        <span class="kw">let</span> <span class="ident">log</span> <span class="op">=</span> <span class="kw">unsafe</span> { <span class="ident">Ptr::new_unchecked</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">logs</span>[<span class="self">self</span>.<span class="ident">len</span>]) };
         <span class="self">self</span>.<span class="ident">len</span> <span class="op">+</span><span class="op">=</span> <span class="number">1</span>;
         <span class="ident">log</span>
     }
@@ -810,7 +812,7 @@
     <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">ignore</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>) {
         <span class="self">self</span>.<span class="ident">len</span> <span class="op">=</span> <span class="number">0</span>;
         <span class="self">self</span>.<span class="ident">head</span> <span class="op">=</span> <span class="number">0</span>;
-        <span class="self">self</span>.<span class="ident">logs</span> <span class="op">=</span> [<span class="ident">Default</span>::<span class="ident">default</span>(); <span class="ident">PAGE_LOG_SLOTS</span>];
+        <span class="self">self</span>.<span class="ident">logs</span> <span class="op">=</span> [<span class="ident">Default::default</span>(); <span class="ident">PAGE_LOG_SLOTS</span>];
     }
 
     <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">clear</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>) {
@@ -826,16 +828,16 @@
         }
     }
 
-    <span class="kw">fn</span> <span class="ident">into_iter</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">std</span>::<span class="ident">vec</span>::<span class="ident">IntoIter</span><span class="op">&lt;</span><span class="ident">Log</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span><span class="op">&gt;</span> {
-        <span class="ident">Vec</span>::<span class="ident">from</span>(<span class="self">self</span>.<span class="ident">logs</span>).<span class="ident">into_iter</span>()
+    <span class="kw">fn</span> <span class="ident">into_iter</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">std::vec::IntoIter</span><span class="op">&lt;</span><span class="ident">Log</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+        <span class="ident">Vec::from</span>(<span class="self">self</span>.<span class="ident">logs</span>).<span class="ident">into_iter</span>()
     }
 }
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span> <span class="ident">Debug</span> <span class="kw">for</span> <span class="ident">Page</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span> {
-    <span class="kw">fn</span> <span class="ident">fmt</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">f</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">Formatter</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">fmt</span>::<span class="prelude-ty">Result</span> {
-        <span class="macro">writeln</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;LOGS:&quot;</span>)<span class="question-mark">?</span>;
+    <span class="kw">fn</span> <span class="ident">fmt</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">f</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">Formatter</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">fmt::Result</span> {
+        <span class="macro">writeln!</span>(<span class="ident">f</span>, <span class="string">&quot;LOGS:&quot;</span>)<span class="question-mark">?</span>;
         <span class="kw">for</span> <span class="ident">i</span> <span class="kw">in</span> <span class="number">0</span>..<span class="self">self</span>.<span class="ident">len</span> {
-            <span class="macro">writeln</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;    {:?}&quot;</span>, <span class="self">self</span>.<span class="ident">logs</span>[<span class="ident">i</span>])<span class="question-mark">?</span>;
+            <span class="macro">writeln!</span>(<span class="ident">f</span>, <span class="string">&quot;    {:?}&quot;</span>, <span class="self">self</span>.<span class="ident">logs</span>[<span class="ident">i</span>])<span class="question-mark">?</span>;
         }
         <span class="prelude-val">Ok</span>(())
     }
@@ -845,19 +847,19 @@
     <span class="doccomment">/// Create new `Journal` with default values</span>
     <span class="kw">pub</span> <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">gen</span>: <span class="ident">u32</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
         <span class="self">Self</span> {
-            <span class="ident">pages</span>: <span class="ident">Ptr</span>::<span class="ident">dangling</span>(),
+            <span class="ident">pages</span>: <span class="ident">Ptr::dangling</span>(),
 
             <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;pin_journals&quot;</span>)]</span>
-            <span class="ident">current</span>: <span class="ident">Ptr</span>::<span class="ident">dangling</span>(),
+            <span class="ident">current</span>: <span class="ident">Ptr::dangling</span>(),
 
             <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">any</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_pspd&quot;</span>, <span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_vspd&quot;</span>))]</span>
-            <span class="ident">spd</span>: <span class="ident">Scratchpad</span>::<span class="ident">new</span>(),
+            <span class="ident">spd</span>: <span class="ident">Scratchpad::new</span>(),
 
             <span class="ident">gen</span>,
             <span class="ident">flags</span>: <span class="number">0</span>,
             <span class="ident">sec_id</span>: <span class="number">0</span>,
-            <span class="ident">next_off</span>: <span class="ident">u64</span>::<span class="ident">MAX</span>,
-            <span class="ident">prev_off</span>: <span class="ident">u64</span>::<span class="ident">MAX</span>,
+            <span class="ident">next_off</span>: <span class="ident">u64::MAX</span>,
+            <span class="ident">prev_off</span>: <span class="ident">u64::MAX</span>,
             <span class="ident">chaperon</span>: [<span class="number">0</span>; <span class="number">64</span>],
         }
     }
@@ -890,12 +892,12 @@
 
     <span class="doccomment">/// Atomically enters into the list journals of the owner pool</span>
     <span class="kw">pub</span> <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">enter_into</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">head_off</span>: <span class="kw-2">&amp;</span><span class="ident">u64</span>, <span class="ident">zone</span>: <span class="ident">usize</span>) {
-        <span class="kw">let</span> <span class="ident">me</span> <span class="op">=</span> <span class="ident">A</span>::<span class="ident">off_unchecked</span>(<span class="self">self</span>);
+        <span class="kw">let</span> <span class="ident">me</span> <span class="op">=</span> <span class="ident">A::off_unchecked</span>(<span class="self">self</span>);
         <span class="self">self</span>.<span class="ident">next_off</span> <span class="op">=</span> <span class="kw-2">*</span><span class="ident">head_off</span>;
-        <span class="ident">A</span>::<span class="ident">log64</span>(<span class="ident">A</span>::<span class="ident">off_unchecked</span>(<span class="ident">head_off</span>), <span class="ident">me</span>, <span class="ident">zone</span>);
+        <span class="ident">A::log64</span>(<span class="ident">A::off_unchecked</span>(<span class="ident">head_off</span>), <span class="ident">me</span>, <span class="ident">zone</span>);
 
-        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Ok</span>(<span class="ident">j</span>) <span class="op">=</span> <span class="ident">A</span>::<span class="ident">deref_mut</span>::<span class="op">&lt;</span><span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span><span class="op">&gt;</span>(<span class="kw-2">*</span><span class="ident">head_off</span>) {
-            <span class="ident">A</span>::<span class="ident">log64</span>(<span class="ident">A</span>::<span class="ident">off_unchecked</span>(<span class="kw-2">&amp;</span><span class="ident">j</span>.<span class="ident">prev_off</span>), <span class="ident">me</span>, <span class="ident">zone</span>);
+        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Ok</span>(<span class="ident">j</span>) <span class="op">=</span> <span class="ident">A::deref_mut</span>::<span class="op">&lt;</span><span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span><span class="op">&gt;</span>(<span class="kw-2">*</span><span class="ident">head_off</span>) {
+            <span class="ident">A::log64</span>(<span class="ident">A::off_unchecked</span>(<span class="kw-2">&amp;</span><span class="ident">j</span>.<span class="ident">prev_off</span>), <span class="ident">me</span>, <span class="ident">zone</span>);
         }
     }
 
@@ -921,23 +923,23 @@
     <span class="attribute">#[<span class="ident">inline</span>]</span>
     <span class="kw">fn</span> <span class="ident">new_page</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Ptr</span><span class="op">&lt;</span><span class="ident">Page</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>, <span class="ident">A</span><span class="op">&gt;</span> {
         <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;stat_perf&quot;</span>)]</span>
-        <span class="kw">let</span> <span class="ident">_perf</span> <span class="op">=</span> <span class="kw">crate</span>::<span class="ident">stat</span>::<span class="ident">Measure</span>::<span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>::<span class="ident">NewPage</span>(<span class="ident">std</span>::<span class="ident">time</span>::<span class="ident">Instant</span>::<span class="ident">now</span>());
+        <span class="kw">let</span> <span class="ident">_perf</span> <span class="op">=</span> <span class="kw">crate</span><span class="ident">::stat::Measure</span>::<span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span><span class="ident">::NewPage</span>(<span class="ident">std::time::Instant::now</span>());
         <span class="kw">unsafe</span> {
             <span class="kw">let</span> <span class="ident">page</span> <span class="op">=</span> <span class="ident">Page</span>::<span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span> {
                 <span class="ident">len</span>: <span class="number">0</span>,
                 <span class="ident">head</span>: <span class="number">0</span>,
                 <span class="ident">next</span>: <span class="self">self</span>.<span class="ident">pages</span>,
-                <span class="ident">logs</span>: [<span class="ident">Default</span>::<span class="ident">default</span>(); <span class="ident">PAGE_LOG_SLOTS</span>]
+                <span class="ident">logs</span>: [<span class="ident">Default::default</span>(); <span class="ident">PAGE_LOG_SLOTS</span>]
             };
-            <span class="kw">let</span> (<span class="kw">_</span>, <span class="ident">off</span>, <span class="kw">_</span>, <span class="ident">z</span>) <span class="op">=</span> <span class="ident">A</span>::<span class="ident">atomic_new</span>(<span class="ident">page</span>);
-            <span class="ident">A</span>::<span class="ident">log64</span>(<span class="ident">A</span>::<span class="ident">off_unchecked</span>(<span class="self">self</span>.<span class="ident">pages</span>.<span class="ident">off_ref</span>()), <span class="ident">off</span>, <span class="ident">z</span>);
+            <span class="kw">let</span> (<span class="kw">_</span>, <span class="ident">off</span>, <span class="kw">_</span>, <span class="ident">z</span>) <span class="op">=</span> <span class="ident">A::atomic_new</span>(<span class="ident">page</span>);
+            <span class="ident">A::log64</span>(<span class="ident">A::off_unchecked</span>(<span class="self">self</span>.<span class="ident">pages</span>.<span class="ident">off_ref</span>()), <span class="ident">off</span>, <span class="ident">z</span>);
             
             <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;pin_journals&quot;</span>)]</span> {
-                <span class="ident">A</span>::<span class="ident">log64</span>(<span class="ident">A</span>::<span class="ident">off_unchecked</span>(<span class="self">self</span>.<span class="ident">current</span>.<span class="ident">off_ref</span>()), <span class="ident">off</span>, <span class="ident">z</span>);
+                <span class="ident">A::log64</span>(<span class="ident">A::off_unchecked</span>(<span class="self">self</span>.<span class="ident">current</span>.<span class="ident">off_ref</span>()), <span class="ident">off</span>, <span class="ident">z</span>);
                 <span class="comment">// eprintln!(&quot;new page for {:p} at {:x}&quot;, self as *const Self, off);</span>
             }
 
-            <span class="ident">A</span>::<span class="ident">perform</span>(<span class="ident">z</span>);
+            <span class="ident">A::perform</span>(<span class="ident">z</span>);
 
             <span class="self">self</span>.<span class="ident">pages</span>
         }
@@ -961,12 +963,12 @@
     <span class="kw">pub</span> <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">drop_pages</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>) {
         <span class="kw">while</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">page</span>) <span class="op">=</span> <span class="self">self</span>.<span class="ident">pages</span>.<span class="ident">clone</span>().<span class="ident">as_option</span>() {
             <span class="kw">let</span> <span class="ident">nxt</span> <span class="op">=</span> <span class="ident">page</span>.<span class="ident">next</span>;
-            <span class="kw">let</span> <span class="ident">z</span> <span class="op">=</span> <span class="ident">A</span>::<span class="ident">pre_dealloc</span>(<span class="ident">page</span>.<span class="ident">as_mut_ptr</span>() <span class="kw">as</span> <span class="kw-2">*</span><span class="kw-2">mut</span> <span class="ident">u8</span>, <span class="ident">std</span>::<span class="ident">mem</span>::<span class="ident">size_of</span>::<span class="op">&lt;</span><span class="ident">Page</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span><span class="op">&gt;</span>());
-            <span class="ident">A</span>::<span class="ident">log64</span>(<span class="ident">A</span>::<span class="ident">off_unchecked</span>(<span class="self">self</span>.<span class="ident">pages</span>.<span class="ident">off_ref</span>()), <span class="ident">nxt</span>.<span class="ident">off</span>(), <span class="ident">z</span>);
-            <span class="ident">A</span>::<span class="ident">perform</span>(<span class="ident">z</span>);
+            <span class="kw">let</span> <span class="ident">z</span> <span class="op">=</span> <span class="ident">A::pre_dealloc</span>(<span class="ident">page</span>.<span class="ident">as_mut_ptr</span>() <span class="kw">as</span> <span class="kw-2">*</span><span class="kw-2">mut</span> <span class="ident">u8</span>, <span class="ident">std::mem::size_of</span>::<span class="op">&lt;</span><span class="ident">Page</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span><span class="op">&gt;</span>());
+            <span class="ident">A::log64</span>(<span class="ident">A::off_unchecked</span>(<span class="self">self</span>.<span class="ident">pages</span>.<span class="ident">off_ref</span>()), <span class="ident">nxt</span>.<span class="ident">off</span>(), <span class="ident">z</span>);
+            <span class="ident">A::perform</span>(<span class="ident">z</span>);
         }
-        <span class="self">self</span>.<span class="ident">current</span> <span class="op">=</span> <span class="ident">Ptr</span>::<span class="ident">dangling</span>();
-        <span class="self">self</span>.<span class="ident">pages</span> <span class="op">=</span> <span class="ident">Ptr</span>::<span class="ident">dangling</span>();
+        <span class="self">self</span>.<span class="ident">current</span> <span class="op">=</span> <span class="ident">Ptr::dangling</span>();
+        <span class="self">self</span>.<span class="ident">pages</span> <span class="op">=</span> <span class="ident">Ptr::dangling</span>();
     }
 
     <span class="doccomment">/// Writes a new log to the journal</span>
@@ -974,8 +976,8 @@
     <span class="attribute">#[<span class="ident">inline</span>]</span>
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn</span> <span class="ident">draft</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">val</span>: <span class="kw-2">&amp;</span><span class="ident">T</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="kw-2">*</span><span class="kw-2">mut</span> <span class="ident">T</span><span class="op">&gt;</span> {
         <span class="kw">unsafe</span> {
-            <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Ok</span>(<span class="ident">off</span>) <span class="op">=</span> <span class="ident">A</span>::<span class="ident">off</span>(<span class="ident">val</span>) {
-                <span class="prelude-val">Some</span>(<span class="ident">utils</span>::<span class="ident">as_mut</span>(<span class="self">self</span>).<span class="ident">spd</span>.<span class="ident">write</span>(<span class="ident">val</span>, <span class="ident">off</span>))
+            <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Ok</span>(<span class="ident">off</span>) <span class="op">=</span> <span class="ident">A::off</span>(<span class="ident">val</span>) {
+                <span class="prelude-val">Some</span>(<span class="ident">utils::as_mut</span>(<span class="self">self</span>).<span class="ident">spd</span>.<span class="ident">write</span>(<span class="ident">val</span>, <span class="ident">off</span>))
             } <span class="kw">else</span> {
                 <span class="prelude-val">None</span>
             }
@@ -986,12 +988,12 @@
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">recovery_info</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">info_level</span>: <span class="ident">u32</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">String</span> {
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">i</span> <span class="op">=</span> <span class="number">1</span>;
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">_cidx</span> <span class="op">=</span> <span class="number">1</span>;
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">log_cnt</span> <span class="op">=</span> <span class="ident">HashMap</span>::<span class="op">&lt;</span><span class="ident">String</span>, <span class="ident">u64</span><span class="op">&gt;</span>::<span class="ident">new</span>();
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">log_cnt</span> <span class="op">=</span> <span class="ident">HashMap</span>::<span class="op">&lt;</span><span class="ident">String</span>, <span class="ident">u64</span><span class="op">&gt;</span><span class="ident">::new</span>();
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">curr</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">pages</span>;
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">pgs</span> <span class="op">=</span> <span class="macro">vec</span><span class="macro">!</span>[];
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">pgs</span> <span class="op">=</span> <span class="macro">vec!</span>[];
         <span class="kw">while</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">page</span>) <span class="op">=</span> <span class="ident">curr</span>.<span class="ident">as_option</span>() {
             <span class="kw">if</span> <span class="ident">info_level</span> <span class="op">&gt;</span> <span class="number">2</span> {
-                <span class="ident">pgs</span>.<span class="ident">push</span>(<span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;  page {:&lt;3} at offset {:x} (len = {}, full = {})&quot;</span>, <span class="ident">i</span>, <span class="ident">page</span>.<span class="ident">off</span>(), <span class="ident">page</span>.<span class="ident">len</span>, <span class="ident">page</span>.<span class="ident">is_full</span>()));
+                <span class="ident">pgs</span>.<span class="ident">push</span>(<span class="macro">format!</span>(<span class="string">&quot;  page {:&lt;3} at offset {:x} (len = {}, full = {})&quot;</span>, <span class="ident">i</span>, <span class="ident">page</span>.<span class="ident">off</span>(), <span class="ident">page</span>.<span class="ident">len</span>, <span class="ident">page</span>.<span class="ident">is_full</span>()));
             }
 
             <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;pin_journals&quot;</span>)]</span> {
@@ -1003,8 +1005,8 @@
             <span class="kw">for</span> <span class="ident">log</span> <span class="kw">in</span> <span class="ident">page</span>.<span class="ident">into_iter</span>() {
                 <span class="kw">let</span> <span class="ident">entry</span> <span class="op">=</span> <span class="ident">log_cnt</span>.<span class="ident">entry</span>(<span class="ident">log</span>.<span class="ident">kind</span>()).<span class="ident">or_default</span>();
                 <span class="kw-2">*</span><span class="ident">entry</span> <span class="op">+</span><span class="op">=</span> <span class="number">1</span>;
-                <span class="kw">if</span> <span class="ident">info_level</span> <span class="op">&gt;</span> <span class="number">3</span> <span class="op">&amp;&amp;</span> <span class="ident">log</span> <span class="op">!</span><span class="op">=</span> <span class="ident">LogEnum</span>::<span class="prelude-val">None</span> {
-                    <span class="ident">pgs</span>.<span class="ident">push</span>(<span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;    {:?}&quot;</span>, <span class="ident">log</span>));
+                <span class="kw">if</span> <span class="ident">info_level</span> <span class="op">&gt;</span> <span class="number">3</span> <span class="op">&amp;&amp;</span> <span class="ident">log</span> <span class="op">!</span><span class="op">=</span> <span class="ident">LogEnum::None</span> {
+                    <span class="ident">pgs</span>.<span class="ident">push</span>(<span class="macro">format!</span>(<span class="string">&quot;    {:?}&quot;</span>, <span class="ident">log</span>));
                 }
             }
 
@@ -1013,37 +1015,37 @@
         }
 
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">total_logs</span> <span class="op">=</span> <span class="number">0</span>;
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">logs_indv</span> <span class="op">=</span> <span class="macro">vec</span><span class="macro">!</span>[];
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">logs_indv</span> <span class="op">=</span> <span class="macro">vec!</span>[];
         <span class="kw">for</span> (<span class="ident">kind</span>, <span class="ident">count</span>) <span class="kw">in</span> <span class="ident">log_cnt</span> {
             <span class="kw">if</span> <span class="ident">kind</span> <span class="op">!</span><span class="op">=</span> <span class="string">&quot;None&quot;</span> {
                 <span class="ident">total_logs</span> <span class="op">+</span><span class="op">=</span> <span class="ident">count</span>;
             }
             <span class="kw">if</span> <span class="ident">info_level</span> <span class="op">&gt;</span> <span class="number">1</span> {
-                <span class="ident">logs_indv</span>.<span class="ident">push</span>(<span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;  {:&lt;16} {}&quot;</span>, <span class="ident">kind</span>, <span class="ident">count</span>));
+                <span class="ident">logs_indv</span>.<span class="ident">push</span>(<span class="macro">format!</span>(<span class="string">&quot;  {:&lt;16} {}&quot;</span>, <span class="ident">kind</span>, <span class="ident">count</span>));
             }
         }
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">res</span> <span class="op">=</span> <span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;Committed: {}\n&quot;</span>, 
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">res</span> <span class="op">=</span> <span class="macro">format!</span>(<span class="string">&quot;Committed: {}\n&quot;</span>, 
             <span class="kw">if</span> <span class="self">self</span>.<span class="ident">is_committed</span>() { <span class="string">&quot;Yes&quot;</span> } <span class="kw">else</span> { <span class="string">&quot;No&quot;</span> });
-        <span class="ident">res</span> <span class="op">+</span><span class="op">=</span> <span class="kw-2">&amp;</span><span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;Chaperoned session id: {}\n&quot;</span>, <span class="self">self</span>.<span class="ident">sec_id</span>);
-        <span class="ident">res</span> <span class="op">+</span><span class="op">=</span> <span class="kw-2">&amp;</span><span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;Chaperone file: {}\n&quot;</span>, <span class="ident">String</span>::<span class="ident">from_utf8</span>(<span class="self">self</span>.<span class="ident">chaperon</span>.<span class="ident">to_vec</span>()).<span class="ident">unwrap_or</span>(<span class="string">&quot;&quot;</span>.<span class="ident">to_string</span>()));
-        <span class="ident">res</span> <span class="op">+</span><span class="op">=</span> <span class="kw-2">&amp;</span><span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;Number of pages: {}\n&quot;</span>, <span class="ident">i</span><span class="op">-</span><span class="number">1</span>);
+        <span class="ident">res</span> <span class="op">+</span><span class="op">=</span> <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;Chaperoned session id: {}\n&quot;</span>, <span class="self">self</span>.<span class="ident">sec_id</span>);
+        <span class="ident">res</span> <span class="op">+</span><span class="op">=</span> <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;Chaperone file: {}\n&quot;</span>, <span class="ident">String::from_utf8</span>(<span class="self">self</span>.<span class="ident">chaperon</span>.<span class="ident">to_vec</span>()).<span class="ident">unwrap_or</span>(<span class="string">&quot;&quot;</span>.<span class="ident">to_string</span>()));
+        <span class="ident">res</span> <span class="op">+</span><span class="op">=</span> <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;Number of pages: {}\n&quot;</span>, <span class="ident">i</span><span class="op">-</span><span class="number">1</span>);
 
         <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;pin_journals&quot;</span>)]</span> {
-            <span class="ident">res</span> <span class="op">+</span><span class="op">=</span> <span class="kw-2">&amp;</span><span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;current page at offset {:x} (index = {})&quot;</span>, <span class="self">self</span>.<span class="ident">current</span>.<span class="ident">off</span>(), <span class="ident">_cidx</span>);
+            <span class="ident">res</span> <span class="op">+</span><span class="op">=</span> <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;current page at offset {:x} (index = {})&quot;</span>, <span class="self">self</span>.<span class="ident">current</span>.<span class="ident">off</span>(), <span class="ident">_cidx</span>);
         }
 
-        <span class="ident">res</span> <span class="op">+</span><span class="op">=</span> <span class="kw-2">&amp;</span><span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;Number of logs: {}\n&quot;</span>, <span class="ident">total_logs</span>);
+        <span class="ident">res</span> <span class="op">+</span><span class="op">=</span> <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;Number of logs: {}\n&quot;</span>, <span class="ident">total_logs</span>);
         <span class="kw">if</span> <span class="ident">info_level</span> <span class="op">&gt;</span> <span class="number">1</span> {
             <span class="kw">for</span> <span class="ident">ln</span> <span class="kw">in</span> <span class="ident">logs_indv</span> {
-                <span class="ident">res</span> <span class="op">+</span><span class="op">=</span> <span class="kw-2">&amp;</span><span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;{}\n&quot;</span>, <span class="ident">ln</span>);
+                <span class="ident">res</span> <span class="op">+</span><span class="op">=</span> <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;{}\n&quot;</span>, <span class="ident">ln</span>);
             }
         }
 
         <span class="kw">if</span> <span class="ident">info_level</span> <span class="op">&gt;</span> <span class="number">2</span> {
             <span class="ident">res</span> <span class="op">+</span><span class="op">=</span> <span class="string">&quot;Contents:\n&quot;</span>;
             <span class="kw">for</span> <span class="ident">ln</span> <span class="kw">in</span> <span class="ident">pgs</span> {
-                <span class="ident">res</span> <span class="op">+</span><span class="op">=</span> <span class="kw-2">&amp;</span><span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;{}\n&quot;</span>, <span class="ident">ln</span>);
+                <span class="ident">res</span> <span class="op">+</span><span class="op">=</span> <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;{}\n&quot;</span>, <span class="ident">ln</span>);
             }
         }
 
@@ -1055,7 +1057,6 @@
         <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">any</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_pspd&quot;</span>, <span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;use_vspd&quot;</span>))]</span> {
             <span class="self">self</span>.<span class="ident">spd</span>.<span class="ident">commit</span>();
         }
-        <span class="self">self</span>.<span class="ident">set</span>(<span class="ident">JOURNAL_COMMITTED</span>);
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">curr</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">pages</span>;
         <span class="kw">while</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">page</span>) <span class="op">=</span> <span class="ident">curr</span>.<span class="ident">as_option</span>() {
             <span class="ident">page</span>.<span class="ident">notify</span>();
@@ -1066,6 +1067,8 @@
             <span class="ident">page</span>.<span class="ident">commit</span>();
             <span class="ident">curr</span> <span class="op">=</span> <span class="ident">page</span>.<span class="ident">next</span>;
         }
+        <span class="ident">sfence</span>();
+        <span class="self">self</span>.<span class="ident">set</span>(<span class="ident">JOURNAL_COMMITTED</span>);
     }
 
     <span class="doccomment">/// Reverts all changes</span>
@@ -1083,6 +1086,7 @@
             <span class="ident">page</span>.<span class="ident">rollback</span>();
             <span class="ident">curr</span> <span class="op">=</span> <span class="ident">page</span>.<span class="ident">next</span>;
         }
+        <span class="ident">sfence</span>();
         <span class="self">self</span>.<span class="ident">set</span>(<span class="ident">JOURNAL_COMMITTED</span>);
     }
 
@@ -1131,9 +1135,9 @@
             <span class="kw">while</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">page</span>) <span class="op">=</span> <span class="self">self</span>.<span class="ident">pages</span>.<span class="ident">clone</span>().<span class="ident">as_option</span>() {
                 <span class="kw">let</span> <span class="ident">nxt</span> <span class="op">=</span> <span class="ident">page</span>.<span class="ident">next</span>;
                 <span class="ident">page</span>.<span class="ident">clear</span>();
-                <span class="kw">let</span> <span class="ident">z</span> <span class="op">=</span> <span class="ident">A</span>::<span class="ident">pre_dealloc</span>(<span class="ident">page</span>.<span class="ident">as_mut_ptr</span>() <span class="kw">as</span> <span class="kw-2">*</span><span class="kw-2">mut</span> <span class="ident">u8</span>, <span class="ident">std</span>::<span class="ident">mem</span>::<span class="ident">size_of</span>::<span class="op">&lt;</span><span class="ident">Page</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span><span class="op">&gt;</span>());
-                <span class="ident">A</span>::<span class="ident">log64</span>(<span class="ident">A</span>::<span class="ident">off_unchecked</span>(<span class="self">self</span>.<span class="ident">pages</span>.<span class="ident">off_ref</span>()), <span class="ident">nxt</span>.<span class="ident">off</span>(), <span class="ident">z</span>);
-                <span class="ident">A</span>::<span class="ident">perform</span>(<span class="ident">z</span>);
+                <span class="kw">let</span> <span class="ident">z</span> <span class="op">=</span> <span class="ident">A::pre_dealloc</span>(<span class="ident">page</span>.<span class="ident">as_mut_ptr</span>() <span class="kw">as</span> <span class="kw-2">*</span><span class="kw-2">mut</span> <span class="ident">u8</span>, <span class="ident">std::mem::size_of</span>::<span class="op">&lt;</span><span class="ident">Page</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span><span class="op">&gt;</span>());
+                <span class="ident">A::log64</span>(<span class="ident">A::off_unchecked</span>(<span class="self">self</span>.<span class="ident">pages</span>.<span class="ident">off_ref</span>()), <span class="ident">nxt</span>.<span class="ident">off</span>(), <span class="ident">z</span>);
+                <span class="ident">A::perform</span>(<span class="ident">z</span>);
             }
         }
         <span class="comment">// if let Ok(prev) = A::deref_mut::&lt;Self&gt;(self.prev_off) {</span>
@@ -1145,9 +1149,9 @@
         <span class="self">self</span>.<span class="ident">complete</span>();
 
         <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;pin_journals&quot;</span>))]</span> {
-            <span class="ident">A</span>::<span class="ident">drop_journal</span>(<span class="self">self</span>);
-            <span class="ident">A</span>::<span class="ident">journals</span>(<span class="op">|</span><span class="ident">journals</span><span class="op">|</span> {
-                <span class="ident">journals</span>.<span class="ident">remove</span>(<span class="kw-2">&amp;</span><span class="ident">std</span>::<span class="ident">thread</span>::<span class="ident">current</span>().<span class="ident">id</span>());
+            <span class="ident">A::drop_journal</span>(<span class="self">self</span>);
+            <span class="ident">A::journals</span>(<span class="op">|</span><span class="ident">journals</span><span class="op">|</span> {
+                <span class="ident">journals</span>.<span class="ident">remove</span>(<span class="kw-2">&amp;</span><span class="ident">std::thread::current</span>().<span class="ident">id</span>());
             });
         }
     }
@@ -1182,9 +1186,9 @@
             <span class="bool-val">false</span>
         } <span class="kw">else</span> {
             <span class="kw">if</span> <span class="self">self</span>.<span class="ident">sec_id</span> <span class="op">!</span><span class="op">=</span> <span class="number">0</span> <span class="op">&amp;&amp;</span> <span class="op">!</span><span class="self">self</span>.<span class="ident">chaperon</span>.<span class="ident">is_empty</span>() {
-                <span class="kw">let</span> <span class="ident">s</span> <span class="op">=</span> <span class="ident">String</span>::<span class="ident">from_utf8</span>(<span class="self">self</span>.<span class="ident">chaperon</span>.<span class="ident">to_vec</span>()).<span class="ident">unwrap</span>();
-                <span class="kw">let</span> <span class="ident">c</span> <span class="op">=</span> <span class="kw">unsafe</span> { <span class="ident">Chaperon</span>::<span class="ident">load</span>(<span class="kw-2">&amp;</span><span class="ident">s</span>)
-                    .<span class="ident">expect</span>(<span class="kw-2">&amp;</span><span class="macro">format</span><span class="macro">!</span>(<span class="string">&quot;Missing chaperon file `{}`&quot;</span>, <span class="ident">s</span>)) };
+                <span class="kw">let</span> <span class="ident">s</span> <span class="op">=</span> <span class="ident">String::from_utf8</span>(<span class="self">self</span>.<span class="ident">chaperon</span>.<span class="ident">to_vec</span>()).<span class="ident">unwrap</span>();
+                <span class="kw">let</span> <span class="ident">c</span> <span class="op">=</span> <span class="kw">unsafe</span> { <span class="ident">Chaperon::load</span>(<span class="kw-2">&amp;</span><span class="ident">s</span>)
+                    .<span class="ident">expect</span>(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;Missing chaperon file `{}`&quot;</span>, <span class="ident">s</span>)) };
                 <span class="kw">if</span> <span class="ident">c</span>.<span class="ident">completed</span>() {
                     <span class="bool-val">true</span>
                 } <span class="kw">else</span> {
@@ -1199,12 +1203,12 @@
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn</span> <span class="ident">start_session</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">chaperon</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">Chaperon</span>) {
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">filename</span> <span class="op">=</span> [<span class="number">0u8</span>; <span class="number">64</span>]; 
         <span class="kw">let</span> <span class="ident">s</span> <span class="op">=</span> <span class="ident">chaperon</span>.<span class="ident">filename</span>().<span class="ident">as_bytes</span>();
-        <span class="kw">for</span> <span class="ident">i</span> <span class="kw">in</span> <span class="number">0</span>..<span class="ident">usize</span>::<span class="ident">min</span>(<span class="number">64</span>,<span class="ident">s</span>.<span class="ident">len</span>()) {
+        <span class="kw">for</span> <span class="ident">i</span> <span class="kw">in</span> <span class="number">0</span>..<span class="ident">usize::min</span>(<span class="number">64</span>,<span class="ident">s</span>.<span class="ident">len</span>()) {
             <span class="ident">filename</span>[<span class="ident">i</span>] <span class="op">=</span> <span class="ident">s</span>[<span class="ident">i</span>];
         }
         <span class="kw">if</span> <span class="self">self</span>.<span class="ident">sec_id</span> <span class="op">!</span><span class="op">=</span> <span class="number">0</span> {
             <span class="kw">if</span> <span class="self">self</span>.<span class="ident">chaperon</span> <span class="op">!</span><span class="op">=</span> <span class="ident">filename</span> {
-                <span class="macro">panic</span><span class="macro">!</span>(<span class="string">&quot;Cannot attach to another chaperoned session&quot;</span>);
+                <span class="macro">panic!</span>(<span class="string">&quot;Cannot attach to another chaperoned session&quot;</span>);
             }
             <span class="kw">return</span>;
         }
@@ -1215,8 +1219,8 @@
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn</span> <span class="ident">complete</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>) {
         <span class="kw">if</span> <span class="self">self</span>.<span class="ident">sec_id</span> <span class="op">!</span><span class="op">=</span> <span class="number">0</span> <span class="op">&amp;&amp;</span> <span class="op">!</span><span class="self">self</span>.<span class="ident">chaperon</span>.<span class="ident">is_empty</span>() {
             <span class="kw">unsafe</span> {
-                <span class="kw">let</span> <span class="ident">s</span> <span class="op">=</span> <span class="ident">String</span>::<span class="ident">from_utf8</span>(<span class="self">self</span>.<span class="ident">chaperon</span>.<span class="ident">to_vec</span>()).<span class="ident">unwrap</span>();
-                <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Ok</span>(<span class="ident">c</span>) <span class="op">=</span> <span class="ident">Chaperon</span>::<span class="ident">load</span>(<span class="kw-2">&amp;</span><span class="ident">s</span>) {
+                <span class="kw">let</span> <span class="ident">s</span> <span class="op">=</span> <span class="ident">String::from_utf8</span>(<span class="self">self</span>.<span class="ident">chaperon</span>.<span class="ident">to_vec</span>()).<span class="ident">unwrap</span>();
+                <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Ok</span>(<span class="ident">c</span>) <span class="op">=</span> <span class="ident">Chaperon::load</span>(<span class="kw-2">&amp;</span><span class="ident">s</span>) {
                     <span class="comment">// If file not exists, it is on the normal path on the first</span>
                     <span class="comment">// execution. The existence of the file is already checked</span>
                     <span class="comment">// earlier in the recovery procedure.</span>
@@ -1235,7 +1239,7 @@
 
     <span class="doccomment">/// Returns the next journal for another transaction</span>
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn</span> <span class="ident">next</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Ptr</span><span class="op">&lt;</span><span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>, <span class="ident">A</span><span class="op">&gt;</span> {
-        <span class="kw">unsafe</span> { <span class="ident">Ptr</span>::<span class="ident">from_off_unchecked</span>(<span class="self">self</span>.<span class="ident">next_off</span>) }
+        <span class="kw">unsafe</span> { <span class="ident">Ptr::from_off_unchecked</span>(<span class="self">self</span>.<span class="ident">next_off</span>) }
     }
 
     <span class="doccomment">/// Returns the offset of the next journal, if any. Otherwise, returns `u64::MAX`</span>
@@ -1265,19 +1269,19 @@
         <span class="self">Self</span>: <span class="ident">Sized</span>,
     {
         <span class="kw">unsafe</span> {
-            <span class="kw">let</span> <span class="ident">tid</span> <span class="op">=</span> <span class="ident">std</span>::<span class="ident">thread</span>::<span class="ident">current</span>().<span class="ident">id</span>();
-            <span class="ident">A</span>::<span class="ident">journals</span>(<span class="op">|</span><span class="ident">journals</span><span class="op">|</span> {
+            <span class="kw">let</span> <span class="ident">tid</span> <span class="op">=</span> <span class="ident">std::thread::current</span>().<span class="ident">id</span>();
+            <span class="ident">A::journals</span>(<span class="op">|</span><span class="ident">journals</span><span class="op">|</span> {
                 <span class="kw">if</span> <span class="op">!</span><span class="ident">journals</span>.<span class="ident">contains_key</span>(<span class="kw-2">&amp;</span><span class="ident">tid</span>) <span class="op">&amp;&amp;</span> <span class="ident">create</span> {
                     <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;stat_perf&quot;</span>)]</span>
-                    <span class="kw">let</span> <span class="ident">_perf</span> <span class="op">=</span> <span class="kw">crate</span>::<span class="ident">stat</span>::<span class="ident">Measure</span>::<span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>::<span class="ident">NewJournal</span>(<span class="ident">std</span>::<span class="ident">time</span>::<span class="ident">Instant</span>::<span class="ident">now</span>());
+                    <span class="kw">let</span> <span class="ident">_perf</span> <span class="op">=</span> <span class="kw">crate</span><span class="ident">::stat::Measure</span>::<span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span><span class="ident">::NewJournal</span>(<span class="ident">std::time::Instant::now</span>());
 
-                    <span class="kw">let</span> (<span class="ident">journal</span>, <span class="ident">offset</span>, <span class="kw">_</span>, <span class="ident">z</span>) <span class="op">=</span> <span class="ident">A</span>::<span class="ident">atomic_new</span>(<span class="ident">Journal</span>::<span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span>::<span class="ident">new</span>(<span class="ident">A</span>::<span class="ident">tx_gen</span>()));
-                    <span class="ident">journal</span>.<span class="ident">enter_into</span>(<span class="ident">A</span>::<span class="ident">journals_head</span>(), <span class="ident">z</span>);
-                    <span class="ident">A</span>::<span class="ident">perform</span>(<span class="ident">z</span>);
+                    <span class="kw">let</span> (<span class="ident">journal</span>, <span class="ident">offset</span>, <span class="kw">_</span>, <span class="ident">z</span>) <span class="op">=</span> <span class="ident">A::atomic_new</span>(<span class="ident">Journal</span>::<span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span><span class="ident">::new</span>(<span class="ident">A::tx_gen</span>()));
+                    <span class="ident">journal</span>.<span class="ident">enter_into</span>(<span class="ident">A::journals_head</span>(), <span class="ident">z</span>);
+                    <span class="ident">A::perform</span>(<span class="ident">z</span>);
                     <span class="ident">journals</span>.<span class="ident">insert</span>(<span class="ident">tid</span>, (<span class="ident">offset</span>, <span class="number">0</span>));
                 }
                 <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>((<span class="ident">j</span>, <span class="ident">c</span>)) <span class="op">=</span> <span class="ident">journals</span>.<span class="ident">get_mut</span>(<span class="kw-2">&amp;</span><span class="ident">tid</span>) {
-                    <span class="prelude-val">Some</span>((<span class="ident">Ptr</span>::<span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">A</span><span class="op">&gt;</span>::<span class="ident">from_off_unchecked</span>(<span class="kw-2">*</span><span class="ident">j</span>).<span class="ident">as_ptr</span>(), <span class="ident">c</span> <span class="kw">as</span> <span class="kw-2">*</span><span class="kw-2">mut</span> <span class="ident">i32</span>))
+                    <span class="prelude-val">Some</span>((<span class="ident">Ptr</span>::<span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">A</span><span class="op">&gt;</span><span class="ident">::from_off_unchecked</span>(<span class="kw-2">*</span><span class="ident">j</span>).<span class="ident">as_ptr</span>(), <span class="ident">c</span> <span class="kw">as</span> <span class="kw-2">*</span><span class="kw-2">mut</span> <span class="ident">i32</span>))
                 } <span class="kw">else</span> {
                     <span class="prelude-val">None</span>
                 }
@@ -1287,7 +1291,7 @@
 
     <span class="doccomment">/// Returns true if there is a running transaction on the current thread</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">is_running</span>() <span class="op">-</span><span class="op">&gt;</span> <span class="ident">bool</span> {
-        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>((<span class="kw">_</span>, <span class="ident">cnt</span>)) <span class="op">=</span> <span class="self">Self</span>::<span class="ident">try_current</span>() {
+        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>((<span class="kw">_</span>, <span class="ident">cnt</span>)) <span class="op">=</span> <span class="self">Self</span><span class="ident">::try_current</span>() {
             <span class="kw">unsafe</span> {<span class="kw-2">*</span><span class="ident">cnt</span> <span class="op">!</span><span class="op">=</span> <span class="number">0</span>}
         } <span class="kw">else</span> {
             <span class="bool-val">false</span>
@@ -1302,13 +1306,13 @@
         <span class="self">Self</span>: <span class="ident">Sized</span>,
     {
         <span class="kw">unsafe</span> {
-            <span class="kw">let</span> <span class="ident">tid</span> <span class="op">=</span> <span class="ident">std</span>::<span class="ident">thread</span>::<span class="ident">current</span>().<span class="ident">id</span>();
-            <span class="ident">A</span>::<span class="ident">journals</span>(<span class="op">|</span><span class="ident">journals</span><span class="op">|</span> {
+            <span class="kw">let</span> <span class="ident">tid</span> <span class="op">=</span> <span class="ident">std::thread::current</span>().<span class="ident">id</span>();
+            <span class="ident">A::journals</span>(<span class="op">|</span><span class="ident">journals</span><span class="op">|</span> {
                 <span class="kw">if</span> <span class="op">!</span><span class="ident">journals</span>.<span class="ident">contains_key</span>(<span class="kw-2">&amp;</span><span class="ident">tid</span>) {
                     <span class="prelude-val">None</span>
                 } <span class="kw">else</span> {
                     <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>((<span class="ident">j</span>, <span class="ident">c</span>)) <span class="op">=</span> <span class="ident">journals</span>.<span class="ident">get_mut</span>(<span class="kw-2">&amp;</span><span class="ident">tid</span>) {
-                        <span class="prelude-val">Some</span>((<span class="ident">Ptr</span>::<span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">A</span><span class="op">&gt;</span>::<span class="ident">from_off_unchecked</span>(<span class="kw-2">*</span><span class="ident">j</span>).<span class="ident">as_ptr</span>(), <span class="ident">c</span> <span class="kw">as</span> <span class="kw-2">*</span><span class="kw-2">mut</span> <span class="ident">i32</span>))
+                        <span class="prelude-val">Some</span>((<span class="ident">Ptr</span>::<span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">A</span><span class="op">&gt;</span><span class="ident">::from_off_unchecked</span>(<span class="kw-2">*</span><span class="ident">j</span>).<span class="ident">as_ptr</span>(), <span class="ident">c</span> <span class="kw">as</span> <span class="kw-2">*</span><span class="kw-2">mut</span> <span class="ident">i32</span>))
                     } <span class="kw">else</span> {
                         <span class="prelude-val">None</span>
                     }
@@ -1321,7 +1325,7 @@
     <span class="doccomment">/// </span>
     <span class="doccomment">/// This function is only for measuring some properties such as log latency.</span>
     <span class="kw">pub</span> <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">ignore</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">page</span> <span class="op">=</span> <span class="ident">utils</span>::<span class="ident">as_mut</span>(<span class="self">self</span>).<span class="ident">pages</span>.<span class="ident">as_option</span>();
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">page</span> <span class="op">=</span> <span class="ident">utils::as_mut</span>(<span class="self">self</span>).<span class="ident">pages</span>.<span class="ident">as_option</span>();
         <span class="kw">while</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">p</span>) <span class="op">=</span> <span class="ident">page</span> {
             <span class="ident">p</span>.<span class="ident">ignore</span>();
             <span class="ident">page</span> <span class="op">=</span> <span class="ident">p</span>.<span class="ident">next</span>.<span class="ident">as_option</span>();
@@ -1330,8 +1334,8 @@
 }
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">A</span>: <span class="ident">MemPool</span><span class="op">&gt;</span> <span class="ident">Debug</span> <span class="kw">for</span> <span class="ident">Journal</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span> {
-    <span class="kw">fn</span> <span class="ident">fmt</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">f</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">Formatter</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">fmt</span>::<span class="prelude-ty">Result</span> {
-        <span class="macro">writeln</span><span class="macro">!</span>(<span class="ident">f</span>, <span class="string">&quot;LOGS:&quot;</span>)<span class="question-mark">?</span>;
+    <span class="kw">fn</span> <span class="ident">fmt</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">f</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">Formatter</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">fmt::Result</span> {
+        <span class="macro">writeln!</span>(<span class="ident">f</span>, <span class="string">&quot;LOGS:&quot;</span>)<span class="question-mark">?</span>;
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">curr</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">pages</span>.<span class="ident">clone</span>();
         <span class="kw">while</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">page</span>) <span class="op">=</span> <span class="ident">curr</span>.<span class="ident">as_option</span>() {
             <span class="ident">page</span>.<span class="ident">fmt</span>(<span class="ident">f</span>)<span class="question-mark">?</span>;
@@ -1340,5 +1344,5 @@
         <span class="prelude-val">Ok</span>(())
     }
 }</pre></div>
-</section><section id="search" class="content hidden"></section><section class="footer"></section><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="corundum"></div>
-    <script src="../../../main.js"></script><script src="../../../source-script.js"></script><script src="../../../source-files.js"></script><script defer src="../../../search-index.js"></script></body></html>
+</section><section id="search" class="content hidden"></section><section class="footer"></section><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="corundum" data-search-js="../../../search-index.js"></div>
+    <script src="../../../main.js"></script><script src="../../../source-script.js"></script><script src="../../../source-files.js"></script></body></html>

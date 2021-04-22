@@ -1,7 +1,7 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/ptr/slice.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>slice.rs - source</title><link rel="stylesheet" type="text/css" href="../../../normalize.css"><link rel="stylesheet" type="text/css" href="../../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../../../light.css"  id="themeStyle"><link rel="stylesheet" type="text/css" href="../../../dark.css" disabled ><link rel="stylesheet" type="text/css" href="../../../ayu.css" disabled ><script id="default-settings"></script><script src="../../../storage.js"></script><noscript><link rel="stylesheet" href="../../../noscript.css"></noscript><link rel="icon" type="image/svg+xml" href="../../../favicon.svg">
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/ptr/slice.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>slice.rs - source</title><link rel="stylesheet" type="text/css" href="../../../normalize.css"><link rel="stylesheet" type="text/css" href="../../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../../../light.css"  id="themeStyle"><link rel="stylesheet" type="text/css" href="../../../dark.css" disabled ><link rel="stylesheet" type="text/css" href="../../../ayu.css" disabled ><script id="default-settings"></script><script src="../../../storage.js"></script><script src="../../../crates.js"></script><noscript><link rel="stylesheet" href="../../../noscript.css"></noscript><link rel="icon" type="image/svg+xml" href="../../../favicon.svg">
 <link rel="alternate icon" type="image/png" href="../../../favicon-16x16.png">
-<link rel="alternate icon" type="image/png" href="../../../favicon-32x32.png"><style type="text/css">#crate-search{background-image:url("../../../down-arrow.svg");}</style></head><body class="rustdoc source"><!--[if lte IE 8]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="sidebar-menu">&#9776;</div><a href='../../../corundum/index.html'><div class='logo-container rust-logo'><img src='../../../rust-logo.png' alt='logo'></div></a></nav><div class="theme-picker"><button id="theme-picker" aria-label="Pick another theme!" aria-haspopup="menu"><img src="../../../brush.svg" width="18" alt="Pick another theme!"></button><div id="theme-choices" role="menu"></div></div><script src="../../../theme.js"></script><nav class="sub"><form class="search-form"><div class="search-container"><div><select id="crate-search"><option value="All crates">All crates</option></select><input class="search-input" name="search" disabled autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"></div><button type="button" class="help-button">?</button>
-                <a id="settings-menu" href="../../../settings.html"><img src="../../../wheel.svg" width="18" alt="Change settings"></a></div></form></nav><section id="main" class="content"><pre class="line-numbers"><span id="1">  1</span>
+<link rel="alternate icon" type="image/png" href="../../../favicon-32x32.png"><style type="text/css">#crate-search{background-image:url("../../../down-arrow.svg");}</style></head><body class="rustdoc source"><!--[if lte IE 8]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="sidebar-menu" role="button">&#9776;</div><a href='../../../corundum/index.html'><div class='logo-container rust-logo'><img src='../../../rust-logo.png' alt='logo'></div></a></nav><div class="theme-picker"><button id="theme-picker" aria-label="Pick another theme!" aria-haspopup="menu"><img src="../../../brush.svg" width="18" height="18" alt="Pick another theme!"></button><div id="theme-choices" role="menu"></div></div><nav class="sub"><form class="search-form"><div class="search-container"><div><select id="crate-search"><option value="All crates">All crates</option></select><input class="search-input" name="search" disabled autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"></div><button type="button" class="help-button">?</button>
+                <a id="settings-menu" href="../../../settings.html"><img src="../../../wheel.svg" width="18" height="18" alt="Change settings"></a></div></form></nav><section id="main" class="content"><pre class="line-numbers"><span id="1">  1</span>
 <span id="2">  2</span>
 <span id="3">  3</span>
 <span id="4">  4</span>
@@ -252,12 +252,12 @@
 <span id="249">249</span>
 <span id="250">250</span>
 </pre><div class="example-wrap"><pre class="rust ">
-<span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">alloc</span>::<span class="ident">MemPool</span>;
-<span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">alloc</span>::<span class="ident">PmemUsage</span>;
-<span class="kw">use</span> <span class="kw">crate</span>::<span class="ident">ll</span>::<span class="kw-2">*</span>;
+<span class="kw">use</span> <span class="kw">crate</span><span class="ident">::alloc::MemPool</span>;
+<span class="kw">use</span> <span class="kw">crate</span><span class="ident">::alloc::PmemUsage</span>;
+<span class="kw">use</span> <span class="kw">crate</span><span class="ident">::ll</span>::<span class="kw-2">*</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::<span class="kw-2">*</span>;
-<span class="kw">use</span> <span class="ident">std</span>::<span class="ident">marker</span>::<span class="ident">PhantomData</span>;
-<span class="kw">use</span> <span class="ident">std</span>::<span class="ident">ops</span>::<span class="ident">Index</span>;
+<span class="kw">use</span> <span class="ident">std::marker::PhantomData</span>;
+<span class="kw">use</span> <span class="ident">std::ops::Index</span>;
 
 <span class="doccomment">/// A persistent fat pointer with offset and capacity</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Eq</span>)]</span>
@@ -284,15 +284,15 @@
     <span class="doccomment">/// Creates a new fat pointer given a slice</span>
     <span class="kw">pub</span> <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">x</span>: <span class="kw-2">&amp;</span>[<span class="ident">T</span>]) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
         <span class="kw">if</span> <span class="ident">x</span>.<span class="ident">len</span>() <span class="op">=</span><span class="op">=</span> <span class="number">0</span> {
-            <span class="self">Self</span>::<span class="ident">from_off_cap</span>(<span class="ident">u64</span>::<span class="ident">MAX</span>, <span class="number">0</span>)
+            <span class="self">Self</span><span class="ident">::from_off_cap</span>(<span class="ident">u64::MAX</span>, <span class="number">0</span>)
         } <span class="kw">else</span> {
-            <span class="self">Self</span>::<span class="ident">from_off_cap</span>(<span class="ident">A</span>::<span class="ident">off_unchecked</span>(<span class="ident">x</span>), <span class="ident">x</span>.<span class="ident">len</span>())
+            <span class="self">Self</span><span class="ident">::from_off_cap</span>(<span class="ident">A::off_unchecked</span>(<span class="ident">x</span>), <span class="ident">x</span>.<span class="ident">len</span>())
         }
     }
 
     <span class="doccomment">/// Sets the capacity to zero</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">empty</span>() <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
-        <span class="self">Self</span>::<span class="ident">from_off_cap</span>(<span class="ident">u64</span>::<span class="ident">MAX</span>, <span class="number">0</span>)
+        <span class="self">Self</span><span class="ident">::from_off_cap</span>(<span class="ident">u64::MAX</span>, <span class="number">0</span>)
     }
 
     <span class="doccomment">/// Returns true if the capacity is zero</span>
@@ -314,18 +314,18 @@
     <span class="doccomment">/// Returns a reference to the object at index `i`</span>
     <span class="attribute">#[<span class="ident">inline</span>]</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">get</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">i</span>: <span class="ident">usize</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="ident">T</span> {
-        <span class="macro">assert</span><span class="macro">!</span>(<span class="ident">i</span> <span class="op">&lt;</span> <span class="self">self</span>.<span class="ident">cap</span>, <span class="string">&quot;index out of range&quot;</span>);
+        <span class="macro">assert!</span>(<span class="ident">i</span> <span class="op">&lt;</span> <span class="self">self</span>.<span class="ident">cap</span>, <span class="string">&quot;index out of range&quot;</span>);
         <span class="kw">unsafe</span> {
-            <span class="ident">A</span>::<span class="ident">deref_mut</span>(<span class="self">self</span>.<span class="ident">off</span> <span class="op">+</span> <span class="ident">i</span> <span class="kw">as</span> <span class="ident">u64</span> <span class="op">*</span> <span class="ident">std</span>::<span class="ident">mem</span>::<span class="ident">size_of</span>::<span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>() <span class="kw">as</span> <span class="ident">u64</span>).<span class="ident">unwrap</span>()
+            <span class="ident">A::deref_mut</span>(<span class="self">self</span>.<span class="ident">off</span> <span class="op">+</span> <span class="ident">i</span> <span class="kw">as</span> <span class="ident">u64</span> <span class="op">*</span> <span class="ident">std::mem::size_of</span>::<span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>() <span class="kw">as</span> <span class="ident">u64</span>).<span class="ident">unwrap</span>()
         }
     }
 
     <span class="doccomment">/// Returns a mutable reference to the object at index `i`</span>
     <span class="attribute">#[<span class="ident">inline</span>]</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">get_mut</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">i</span>: <span class="ident">usize</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">T</span> {
-        <span class="macro">assert</span><span class="macro">!</span>(<span class="ident">i</span> <span class="op">&lt;</span> <span class="self">self</span>.<span class="ident">cap</span>, <span class="string">&quot;index out of range&quot;</span>);
+        <span class="macro">assert!</span>(<span class="ident">i</span> <span class="op">&lt;</span> <span class="self">self</span>.<span class="ident">cap</span>, <span class="string">&quot;index out of range&quot;</span>);
         <span class="kw">unsafe</span> {
-            <span class="ident">A</span>::<span class="ident">deref_mut</span>(<span class="self">self</span>.<span class="ident">off</span> <span class="op">+</span> <span class="ident">i</span> <span class="kw">as</span> <span class="ident">u64</span> <span class="op">*</span> <span class="ident">std</span>::<span class="ident">mem</span>::<span class="ident">size_of</span>::<span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>() <span class="kw">as</span> <span class="ident">u64</span>).<span class="ident">unwrap</span>()
+            <span class="ident">A::deref_mut</span>(<span class="self">self</span>.<span class="ident">off</span> <span class="op">+</span> <span class="ident">i</span> <span class="kw">as</span> <span class="ident">u64</span> <span class="op">*</span> <span class="ident">std::mem::size_of</span>::<span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>() <span class="kw">as</span> <span class="ident">u64</span>).<span class="ident">unwrap</span>()
         }
     }
 
@@ -333,7 +333,7 @@
     <span class="doccomment">/// the boundaries</span>
     <span class="attribute">#[<span class="ident">inline</span>]</span>
     <span class="kw">pub</span> <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">get_unchecked</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">i</span>: <span class="ident">usize</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">T</span> {
-        <span class="ident">A</span>::<span class="ident">get_mut_unchecked</span>(<span class="self">self</span>.<span class="ident">off</span> <span class="op">+</span> <span class="ident">i</span> <span class="kw">as</span> <span class="ident">u64</span> <span class="op">*</span> <span class="ident">std</span>::<span class="ident">mem</span>::<span class="ident">size_of</span>::<span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>() <span class="kw">as</span> <span class="ident">u64</span>)
+        <span class="ident">A::get_mut_unchecked</span>(<span class="self">self</span>.<span class="ident">off</span> <span class="op">+</span> <span class="ident">i</span> <span class="kw">as</span> <span class="ident">u64</span> <span class="op">*</span> <span class="ident">std::mem::size_of</span>::<span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>() <span class="kw">as</span> <span class="ident">u64</span>)
     }
 
     <span class="doccomment">/// Returns the offset</span>
@@ -351,31 +351,31 @@
     <span class="attribute">#[<span class="ident">inline</span>]</span>
     <span class="doccomment">/// Returns the mutable reference of the value</span>
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn</span> <span class="ident">as_mut</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">T</span> {
-        <span class="kw">unsafe</span> { <span class="ident">A</span>::<span class="ident">get_mut_unchecked</span>(<span class="self">self</span>.<span class="ident">off</span>) }
+        <span class="kw">unsafe</span> { <span class="ident">A::get_mut_unchecked</span>(<span class="self">self</span>.<span class="ident">off</span>) }
     }
 
     <span class="attribute">#[<span class="ident">inline</span>]</span>
     <span class="doccomment">/// Returns the reference of the value</span>
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn</span> <span class="ident">as_ref</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="ident">T</span> {
-        <span class="kw">unsafe</span> { <span class="ident">A</span>::<span class="ident">get_unchecked</span>(<span class="self">self</span>.<span class="ident">off</span>) }
+        <span class="kw">unsafe</span> { <span class="ident">A::get_unchecked</span>(<span class="self">self</span>.<span class="ident">off</span>) }
     }
 
     <span class="attribute">#[<span class="ident">inline</span>]</span>
     <span class="doccomment">/// Returns the mutable raw pointer of the value</span>
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn</span> <span class="ident">as_mut_ptr</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">*</span><span class="kw-2">mut</span> <span class="ident">T</span> {
-        <span class="kw">unsafe</span> { <span class="ident">A</span>::<span class="ident">get_mut_unchecked</span>(<span class="self">self</span>.<span class="ident">off</span>) }
+        <span class="kw">unsafe</span> { <span class="ident">A::get_mut_unchecked</span>(<span class="self">self</span>.<span class="ident">off</span>) }
     }
 
     <span class="attribute">#[<span class="ident">inline</span>]</span>
     <span class="doccomment">/// Returns the mutable raw pointer of the value</span>
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn</span> <span class="ident">as_ptr</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">*</span><span class="kw">const</span> <span class="ident">T</span> {
-        <span class="kw">unsafe</span> { <span class="ident">A</span>::<span class="ident">get_mut_unchecked</span>(<span class="self">self</span>.<span class="ident">off</span>) }
+        <span class="kw">unsafe</span> { <span class="ident">A::get_mut_unchecked</span>(<span class="self">self</span>.<span class="ident">off</span>) }
     }
 
     <span class="doccomment">/// Converts the fat pointer into a slice of type `&amp;[T]`</span>
     <span class="attribute">#[<span class="ident">inline</span>]</span>
     <span class="kw">pub</span> <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">as_slice</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span>[<span class="ident">T</span>] {
-        <span class="self">Self</span>::<span class="ident">to_slice</span>(<span class="self">self</span>.<span class="ident">off</span>, <span class="self">self</span>.<span class="ident">cap</span>)
+        <span class="self">Self</span><span class="ident">::to_slice</span>(<span class="self">self</span>.<span class="ident">off</span>, <span class="self">self</span>.<span class="ident">cap</span>)
     }
 
     <span class="attribute">#[<span class="ident">inline</span>]</span>
@@ -383,7 +383,7 @@
         <span class="kw">if</span> <span class="ident">len</span> <span class="op">=</span><span class="op">=</span> <span class="number">0</span> {
             <span class="kw-2">&amp;</span><span class="kw-2">mut</span> []
         } <span class="kw">else</span> {
-            <span class="kw">unsafe</span> { <span class="ident">A</span>::<span class="ident">deref_slice_unchecked</span>(<span class="ident">off</span>, <span class="ident">len</span>) }
+            <span class="kw">unsafe</span> { <span class="ident">A::deref_slice_unchecked</span>(<span class="ident">off</span>, <span class="ident">len</span>) }
         }
     }
 
@@ -392,7 +392,7 @@
         <span class="kw">if</span> <span class="self">self</span>.<span class="ident">cap</span> <span class="op">=</span><span class="op">=</span> <span class="number">0</span> {
             <span class="kw-2">&amp;</span><span class="kw-2">mut</span> []
         } <span class="kw">else</span> {
-            <span class="kw">unsafe</span> { <span class="ident">A</span>::<span class="ident">deref_slice_unchecked_mut</span>(<span class="self">self</span>.<span class="ident">off</span>, <span class="self">self</span>.<span class="ident">cap</span>) }
+            <span class="kw">unsafe</span> { <span class="ident">A::deref_slice_unchecked_mut</span>(<span class="self">self</span>.<span class="ident">off</span>, <span class="self">self</span>.<span class="ident">cap</span>) }
         }
     }
 
@@ -442,15 +442,15 @@
     <span class="doccomment">/// inner value. Instead, it just copies the memory.</span>
     <span class="doccomment">/// </span>
     <span class="kw">pub</span> <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">dup</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">len</span>: <span class="ident">usize</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Slice</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span> {
-        <span class="macro">assert</span><span class="macro">!</span>(<span class="ident">len</span> <span class="op">&lt;</span><span class="op">=</span> <span class="self">self</span>.<span class="ident">cap</span>);
+        <span class="macro">assert!</span>(<span class="ident">len</span> <span class="op">&lt;</span><span class="op">=</span> <span class="self">self</span>.<span class="ident">cap</span>);
         <span class="kw">if</span> <span class="self">self</span>.<span class="ident">is_empty</span>() {
-            <span class="self">Self</span>::<span class="ident">empty</span>()
+            <span class="self">Self</span><span class="ident">::empty</span>()
         } <span class="kw">else</span> {
             <span class="kw">let</span> <span class="ident">slice</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">as_slice</span>();
-            <span class="kw">let</span> (<span class="ident">dst</span>, <span class="ident">off</span>, <span class="kw">_</span>, <span class="ident">z</span>) <span class="op">=</span> <span class="ident">A</span>::<span class="ident">atomic_new_slice</span>(<span class="ident">slice</span>);
-            <span class="ident">A</span>::<span class="ident">perform</span>(<span class="ident">z</span>);
+            <span class="kw">let</span> (<span class="ident">dst</span>, <span class="ident">off</span>, <span class="kw">_</span>, <span class="ident">z</span>) <span class="op">=</span> <span class="ident">A::atomic_new_slice</span>(<span class="ident">slice</span>);
+            <span class="ident">A::perform</span>(<span class="ident">z</span>);
             <span class="ident">persist</span>(<span class="ident">dst</span>, <span class="self">self</span>.<span class="ident">cap</span>, <span class="bool-val">true</span>);
-            <span class="self">Self</span>::<span class="ident">from_off_cap</span>(<span class="ident">off</span>, <span class="ident">len</span>)
+            <span class="self">Self</span><span class="ident">::from_off_cap</span>(<span class="ident">off</span>, <span class="ident">len</span>)
         }
     }
 }
@@ -465,14 +465,14 @@
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">A</span>: <span class="ident">MemPool</span>, <span class="ident">T</span>: <span class="ident">PSafe</span><span class="op">&gt;</span> <span class="ident">From</span><span class="op">&lt;</span><span class="kw-2">&amp;</span>[<span class="ident">T</span>]<span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">Slice</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span> {
     <span class="attribute">#[<span class="ident">inline</span>]</span>
     <span class="kw">fn</span> <span class="ident">from</span>(<span class="ident">other</span>: <span class="kw-2">&amp;</span>[<span class="ident">T</span>]) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
-        <span class="self">Self</span>::<span class="ident">from_off_cap</span>(<span class="ident">A</span>::<span class="ident">off</span>(<span class="ident">other</span>).<span class="ident">unwrap</span>(), <span class="ident">other</span>.<span class="ident">len</span>())
+        <span class="self">Self</span><span class="ident">::from_off_cap</span>(<span class="ident">A::off</span>(<span class="ident">other</span>).<span class="ident">unwrap</span>(), <span class="ident">other</span>.<span class="ident">len</span>())
     }
 }
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">A</span>: <span class="ident">MemPool</span>, <span class="ident">T</span>: <span class="ident">PSafe</span><span class="op">&gt;</span> <span class="ident">From</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="kw-2">mut</span> [<span class="ident">T</span>]<span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">Slice</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span> {
     <span class="attribute">#[<span class="ident">inline</span>]</span>
     <span class="kw">fn</span> <span class="ident">from</span>(<span class="ident">other</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> [<span class="ident">T</span>]) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
-        <span class="self">Self</span>::<span class="ident">from_off_cap</span>(<span class="ident">A</span>::<span class="ident">off</span>(<span class="ident">other</span>).<span class="ident">unwrap</span>(), <span class="ident">other</span>.<span class="ident">len</span>())
+        <span class="self">Self</span><span class="ident">::from_off_cap</span>(<span class="ident">A::off</span>(<span class="ident">other</span>).<span class="ident">unwrap</span>(), <span class="ident">other</span>.<span class="ident">len</span>())
     }
 }
 
@@ -480,19 +480,19 @@
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">A</span>: <span class="ident">MemPool</span>, <span class="ident">T</span>: <span class="ident">PSafe</span><span class="op">&gt;</span> <span class="ident">Clone</span> <span class="kw">for</span> <span class="ident">Slice</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span> {
     <span class="kw">fn</span> <span class="ident">clone</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
-        <span class="self">Self</span>::<span class="ident">from_off_cap</span>(<span class="self">self</span>.<span class="ident">off</span>, <span class="self">self</span>.<span class="ident">cap</span>)
+        <span class="self">Self</span><span class="ident">::from_off_cap</span>(<span class="self">self</span>.<span class="ident">off</span>, <span class="self">self</span>.<span class="ident">cap</span>)
     }
 }
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">A</span>: <span class="ident">MemPool</span>, <span class="ident">T</span>: <span class="ident">PSafe</span><span class="op">&gt;</span> <span class="ident">PmemUsage</span> <span class="kw">for</span> <span class="ident">Slice</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span> {
     <span class="kw">fn</span> <span class="ident">size_of</span>() <span class="op">-</span><span class="op">&gt;</span> <span class="ident">usize</span> {
-        <span class="ident">std</span>::<span class="ident">mem</span>::<span class="ident">size_of</span>::<span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>() <span class="op">+</span> <span class="ident">std</span>::<span class="ident">mem</span>::<span class="ident">size_of</span>::<span class="op">&lt;</span><span class="self">Self</span><span class="op">&gt;</span>()
+        <span class="ident">std::mem::size_of</span>::<span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>() <span class="op">+</span> <span class="ident">std::mem::size_of</span>::<span class="op">&lt;</span><span class="self">Self</span><span class="op">&gt;</span>()
     }
 }
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">A</span>: <span class="ident">MemPool</span>, <span class="ident">T</span>: <span class="ident">PSafe</span><span class="op">&gt;</span> <span class="ident">Default</span> <span class="kw">for</span> <span class="ident">Slice</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">A</span><span class="op">&gt;</span> {
     <span class="kw">fn</span> <span class="ident">default</span>() <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
-        <span class="ident">Slice</span>::<span class="ident">empty</span>()
+        <span class="ident">Slice::empty</span>()
     }
 }
 
@@ -503,5 +503,5 @@
     }
 }
 </pre></div>
-</section><section id="search" class="content hidden"></section><section class="footer"></section><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="corundum"></div>
-    <script src="../../../main.js"></script><script src="../../../source-script.js"></script><script src="../../../source-files.js"></script><script defer src="../../../search-index.js"></script></body></html>
+</section><section id="search" class="content hidden"></section><section class="footer"></section><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="corundum" data-search-js="../../../search-index.js"></div>
+    <script src="../../../main.js"></script><script src="../../../source-script.js"></script><script src="../../../source-files.js"></script></body></html>
