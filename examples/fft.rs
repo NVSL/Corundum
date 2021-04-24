@@ -137,7 +137,7 @@ pub fn fft_persistent(filename: &str) -> Vec<Complex<f64>> {
                     let c = self.c.borrow();
                     c[k].set(self.s.get(), j);
                     self.s.set(Complex::new(0.0, 0.0), j);
-                    self.k.add(1, j);
+                    self.k.update(|x| x+1, j);
                     self.x.set(0, j);
                     return false;
                 }
@@ -150,7 +150,7 @@ pub fn fft_persistent(filename: &str) -> Vec<Complex<f64>> {
                     self.s.get() + (I * PI * 2.0 * (is as f64) / (n as f64)).exp() * a[x].get(),
                     j,
                 );
-                self.x.add(1, j);
+                self.x.update(|x| x+1, j);
 
                 false
             })

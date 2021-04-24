@@ -15,7 +15,12 @@
 //! | Locked Mutex        | A persistent mutex remains locked on powerfail | [`PMutex`] uses [`VCell`] which resets at restart. |
 //! | Memory Leaks\*      | An allocated memory becomes unreachable | Persistent objects, except the root object, cannot cross transaction boundaries, and memory allocation is available only inside a transaction. Therefore, the allocation can survive only if there is a reference from the root object (or a decedent of it) to the data. <br>\* Cyclic references are not prevented in this version, which lead to a memory leak. Please visit [`this link`] for the information on how to manually resolve that issue. |
 //!
-//! [`this`]: ./prc/index.html#cyclic-references
+//! For more technical details on the implementation, please refer to Corundum's
+//! academic [paper] and/or watch the [presentation] 📺.
+//! 
+//! [presentation]: https://www.youtube.com/watch?v=yTk7e_3ZEzk
+//! [paper]: http://cseweb.ucsd.edu/~mhoseinzadeh/hoseinzadeh-corundum-asplos21.pdf
+//! [`this link`]: ./prc/index.html#cyclic-references
 //! 
 //! # Persistent Objects
 //!
@@ -49,8 +54,8 @@
 //! * [`PMutex<T,P>`] (or [`PMutex<T>`]): A mutual exclusion primitive useful for
 //! protecting shared persistent data of type `T` in pool `P`.
 //! 
-//! The following example creates a pool file for a linked-list-based stack,
-//! obtains a root object of type `Node`.
+//! The following example creates a pool file for a linked-list-based stack, and
+//! obtains the root object of type `Node`.
 //! 
 //! ```
 //! use corundum::default::*;

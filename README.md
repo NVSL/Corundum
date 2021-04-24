@@ -7,18 +7,16 @@
 
 Corundum provides persistent memory support for Rust applications. This
 is useful for developing safe persistent memory applications without concerning
-much about crash consistency and data loss. More details of its design and implementation
-will be available in our ASPLOS 2021 paper (Please read the
-[extended abstract](https://asplos-conference.org/abstracts/asplos21-paper171-extended_abstract.pdf)
-for a brief overview on Corundum).
+about crash consistency and data loss. More details of its design and implementation
+is available in our ASPLOS 2021 academic [paper](http://cseweb.ucsd.edu/~mhoseinzadeh/hoseinzadeh-corundum-asplos21.pdf)
+(visit this [viedo](https://www.youtube.com/watch?v=yTk7e_3ZEzk) for the presentation).
 
 Carefully using Rust's strict type checking rules and borrowing mechanism,
 Corundum guarantees that the implementation is free of common persistent memory
 related bugs. Corundum leaves the software implementation with zero persistent
 memory related problems of the following types:
 
-* A persistent pointer pointing to the volatile heap,
-* Cross pool pointers,
+* Wild persistent pointers,
 * Unrecoverable modification to data,
 * Data inconsistency due to power-failure,
 * plus All memory-related issues that Rust handles.
@@ -36,21 +34,6 @@ them to allocate persistent memory safely.
 * [`Parc<T>`](src/sync/parc.rs#L159): a thread-safe reference-counted pointer for
     shared persistent objects.
 
-## Dependencies
-
-Corundum depends on some unstable features of Rust. Therefore, it requires
-nightly Rust compiler [1.50.0-nightly](https://github.com/rust-lang/rust).
-Please run the following commands to download the latest version of Rust (See
-<https://www.rust-lang.org/tools/install> for more details).
-
-```shell
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-rustup default nightly
-```
-
-Corundum is also partially dependent on a few 3rd party crates which are listed
-in [`Cargo.toml`](Cargo.toml#L34-L45).
-
 ## Usage
 
 Use either of the following instructions to add Corundum in your `Cargo.toml`
@@ -58,7 +41,7 @@ dependencies section:
 
 ```toml
 [dependencies]
-corundum = "0.3.3"
+corundum = "0.3.4"
 ```
 
 Or
@@ -73,7 +56,7 @@ If you wish to enable a feature like `pin_journals`, please add it to the
 
 ```toml
 [dependencies]
-corundum = { version="0.3.2", features=["pin_journals", "no_pthread"] }
+corundum = { version="0.3.4", features=["pin_journals", "no_pthread"] }
 ```
 
 ### Memory Pools
@@ -180,28 +163,6 @@ transaction(|j| {
 })
 ```
 
-## Running Experiments on Docker
-
-We provide a [docker image](https://hub.docker.com/r/mhz88/corundum) for running
-performance tests and compare Corundum with a bunch of other persistent memory
-libraries. The following commands pulls the docker image and runs a container with
-all dependencies and opponent libraries pre-installed.
-
-```sh
-$ sudo sysctl -w kernel.perf_event_paranoid=-1
-$ wget https://raw.githubusercontent.com/NVSL/Corundum/main/eval/docker-default.json
-$ docker run --security-opt \
-    seccomp=./docker-default.json \
-    --mount type=tmpfs,destination=/mnt/pmem0 \
-    -it mhz88/corundum:latest bin/bash
-```
-
-Alternatively, mount the pmem on the host or use `/dev/shm` to emulate it, and bind the directory using `-v` option:
-
-```
-docker run -v /dev/shm:/mnt/pmem0 -it mhz88/corundum:latest bin/bash
-```
-
 ## Documentation
 
 Please visit the [`Documentation`](https://nvsl.github.io/Corundum/) page for
@@ -214,7 +175,7 @@ Please feel free to report any bug using GitHub issues.
 If you have other questions or suggestions, you can contact us
 at cse-nvsl-discuss@eng.ucsd.edu.
 
-### License
+## License
 
 Corundum crate is licensed under Apache License, Version 2.0,
 (<http://www.apache.org/licenses/LICENSE-2.0>).

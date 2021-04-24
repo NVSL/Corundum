@@ -277,56 +277,6 @@ impl<T: PSafe, A: MemPool> PCell<T, A> {
     fn self_mut(&self) -> &mut Self {
         unsafe { &mut *(self as *const Self as *mut Self) }
     }
-
-    /// Increments the contained value by `val`.
-    #[inline]
-    pub fn add(&self, val: T, journal: &Journal<A>)
-    where
-        T: std::ops::AddAssign,
-    {
-        let v = self.self_mut().get_mut(journal);
-        *v += val;
-    }
-
-    /// Subtracts the contained value by `val`.
-    #[inline]
-    pub fn sub(&self, val: T, journal: &Journal<A>)
-    where
-        T: std::ops::SubAssign,
-    {
-        let v = self.self_mut().get_mut(journal);
-        *v -= val;
-    }
-
-    /// Multiplies the contained value with `val`.
-    #[inline]
-    pub fn mul(&self, val: T, journal: &Journal<A>)
-    where
-        T: std::ops::MulAssign,
-    {
-        let v = self.self_mut().get_mut(journal);
-        *v *= val;
-    }
-
-    /// Divides the contained value with `val`.
-    #[inline]
-    pub fn div(&self, val: T, journal: &Journal<A>)
-    where
-        T: std::ops::DivAssign,
-    {
-        let v = self.self_mut().get_mut(journal);
-        *v /= val;
-    }
-
-    /// Divides the contained value with `val` and keeps the reminding.
-    #[inline]
-    pub fn rem(&self, val: T, journal: &Journal<A>)
-    where
-        T: std::ops::RemAssign,
-    {
-        let v = self.self_mut().get_mut(journal);
-        *v %= val;
-    }
 }
 
 impl<T: PSafe, A: MemPool> PCell<T, A> {
@@ -364,24 +314,6 @@ impl<T: PSafe, A: MemPool> PCell<T, A> {
         }
     }
 
-    #[inline(always)]
-    pub fn get_ref(&self) -> &T {
-        // SAFETY: This can cause data races if called from a separate thread,
-        // but `PCell` is `!Sync` so this won't happen.
-
-        #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] unsafe {
-            if let Some(tmp) = *self.temp {
-                &*tmp
-            } else {
-                &*self.value.get()
-            }
-        }
-
-        #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))] {
-            unsafe { &(*self.value.get()).1 }
-        }
-    }
-
     /// Updates the contained value using a function and returns the new value.
     ///
     /// # Examples
@@ -394,14 +326,14 @@ impl<T: PSafe, A: MemPool> PCell<T, A> {
     ///
     /// Heap::transaction(|j| {
     ///     let c = Pbox::new(PCell::new(5), j);
-    ///     let new = c.update(j, |x| x + 1);
+    ///     let new = c.update(|x| x + 1, j);
     ///
     ///     assert_eq!(new, 6);
     ///     assert_eq!(c.get(), 6);
     /// }).unwrap();
     /// ```
     #[inline]
-    pub fn update<F>(&self, journal: &Journal<A>, f: F) -> T
+    pub fn update<F>(&self, f: F, journal: &Journal<A>) -> T
     where
         F: FnOnce(T) -> T,
         T: Copy
@@ -410,55 +342,6 @@ impl<T: PSafe, A: MemPool> PCell<T, A> {
         let new = f(old);
         self.set(new, journal);
         new
-    }
-
-    /// Updates the contained value using an updater function with an immutable
-    /// reference to the inner value
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use corundum::alloc::heap::*;
-    /// use corundum::boxed::Pbox;
-    ///
-    /// Heap::transaction(|j| {
-    ///     let c = Pbox::new(PCell::new(PCell::new(5)), j);
-    ///     c.update_inplace(|x| x.set(6, j));
-    ///
-    ///     assert_eq!(c.get_ref().get(), 6);
-    /// }).unwrap();
-    /// ```
-    pub fn update_inplace<F>(&self, f: F) 
-    where
-        F: FnOnce(&T)
-    {
-        f(self.get_ref())
-    }
-
-    /// Updates the contained value using an updater function with a mutable
-    /// reference to the inner value.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// #![feature(cell_update)]
-    ///
-    /// use corundum::alloc::heap::*;
-    /// use corundum::boxed::Pbox;
-    ///
-    /// Heap::transaction(|j| {
-    ///     let c = Pbox::new(PCell::new(5), j);
-    ///     c.update_inplace_mut(j, |x| { *x = 6 });
-    ///
-    ///     assert_eq!(c.get(), 6);
-    /// }).unwrap();
-    /// ```
-    pub fn update_inplace_mut<F>(&self, journal: &Journal<A>, f: F) 
-    where
-        F: FnOnce(&mut T)
-    {
-        self.take_log(journal);
-        f(unsafe { self.as_mut() })
     }
 }
 
@@ -588,7 +471,7 @@ impl<T: PSafe + Default, A: MemPool> PCell<T, A> {
     }
 }
 
-impl<T: fmt::Debug + PSafe, A: MemPool> fmt::Debug for PCell<T, A> {
+impl<T: fmt::Debug + PSafe + Copy, A: MemPool> fmt::Debug for PCell<T, A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
             unsafe { (*self.value.get()).fmt(f) }
@@ -613,7 +496,7 @@ impl<T: PSafe + Logger<A> + Copy, A: MemPool> PClone<A> for PCell<T, A> {
     }
 }
 
-impl<T: PSafe + Logger<A> + Clone, A: MemPool> Clone for PCell<T, A> {
+impl<T: PSafe + Logger<A> + Copy, A: MemPool> Clone for PCell<T, A> {
     #[inline]
     fn clone(&self) -> PCell<T, A> {
         #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
