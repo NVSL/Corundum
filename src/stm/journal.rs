@@ -457,7 +457,7 @@ impl<A: MemPool> Journal<A> {
         }
 
         #[cfg(not(feature = "pin_journals"))] {
-            while let Some(page) = self.pages.clone().as_option() {
+            while let Some(page) = self.pages.as_option() {
                 let nxt = page.next;
                 page.clear();
                 let z = A::pre_dealloc(page.as_mut_ptr() as *mut u8, std::mem::size_of::<Page<A>>());

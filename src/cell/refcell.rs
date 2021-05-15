@@ -326,11 +326,9 @@ impl<T: PSafe + ?Sized, A: MemPool> PRefCell<T, A> {
     /// ```
     #[track_caller]
     pub fn borrow(&self) -> Ref<'_, T, A> {
-        unsafe {
-            let borrow = &self.borrow as *const VCell<i8, A> as *mut VCell<i8, A>;
-            assert!(**borrow <= 0, "Value was already mutably borrowed");
-            **borrow = -1;
-        }
+        let borrow = self.borrow.as_mut();
+        assert!(*borrow <= 0, "Value was already mutably borrowed");
+        *borrow = -1;
         Ref { value: self, phantom: PhantomData }
     }
 
