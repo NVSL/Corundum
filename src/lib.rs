@@ -103,7 +103,7 @@
 
 #![feature(auto_traits)]
 #![feature(untagged_unions)]
-#![feature(const_fn)]
+#![feature(const_fn_trait_bound)]
 #![feature(specialization)]
 #![feature(concat_idents)]
 #![feature(llvm_asm)]
