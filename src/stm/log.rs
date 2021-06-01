@@ -1,3 +1,4 @@
+use crate::ptr::Slice;
 use crate::alloc::MemPool;
 use crate::ll::*;
 use crate::ptr::Ptr;
@@ -369,6 +370,39 @@ impl<A: MemPool> Log<A> {
         }
     }
 
+    /// Takes a log of `&[x]` into `journal` and notifies the owner that log is
+    /// taken if `notifier` is specified.
+    pub fn take_slice<T: PSafe>(
+        x: &[T],
+        journal: &Journal<A>,
+        mut notifier: Notifier<A>,
+    ) -> Ptr<Log<A>, A> {
+        #[cfg(feature = "stat_perf")]
+        let _perf = crate::stat::Measure::<A>::DataLog(std::time::Instant::now());
+
+        let len = std::mem::size_of_val(x);
+        if len == 0 {
+            notifier.update(1);
+            Ptr::dangling()
+        } else {
+            let slice = unsafe { Slice::<T, A>::new(x) };
+
+            log!(A, Yellow, "LOG", "FOR:         ({:>6}:{:<6}) = {:<6} DataLog  TYPE: {}",
+                offset_to_str(slice.off()), offset_to_str((slice.off() as usize + (len - 1)) as u64),
+                len, std::any::type_name_of_val(x)
+            );
+            #[cfg(feature = "verbose")] {
+                dump_data::<A>("DATA", slice.off(), len);
+            }
+
+            let log = unsafe { slice.dup(slice.capacity()) };
+
+                crate::ll::persist_obj(log.as_ref(), false);
+                Self::take_impl(slice.off(), log.off(), len, journal, notifier)
+            // }
+        }
+    }
+
     /// Writes a `log` on a given `journal` and notifies the owner, if specified
     fn write_on_journal(
         log: LogEnum,
@@ -659,7 +693,13 @@ pub trait Logger<A: MemPool> {
 }
 
 impl<T: PSafe + ?Sized, A: MemPool> Logger<A> for T {
-    unsafe fn take_log(&self, journal: &Journal<A>, notifier: Notifier<A>) -> Ptr<Log<A>, A> {
+    default unsafe fn take_log(&self, journal: &Journal<A>, notifier: Notifier<A>) -> Ptr<Log<A>, A> {
         Log::take(self, journal, notifier)
+    }
+}
+
+impl<T: PSafe, A: MemPool> Logger<A> for [T] {
+    unsafe fn take_log(&self, journal: &Journal<A>, notifier: Notifier<A>) -> Ptr<Log<A>, A> {
+        Log::take_slice(self, journal, notifier)
     }
 }

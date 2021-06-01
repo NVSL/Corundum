@@ -858,7 +858,7 @@ impl<A: MemPool> String<A> {
         unsafe {
             ptr::copy(
                 self.vec.as_ptr().add(next),
-                self.vec.as_slice_mut().as_mut_ptr().add(idx),
+                self.vec.to_slice_mut().as_mut_ptr().add(idx),
                 len - next,
             );
             self.vec.set_len(len - (next - idx));
@@ -926,7 +926,7 @@ impl<A: MemPool> String<A> {
                 unsafe {
                     ptr::copy(
                         self.vec.as_ptr().add(idx),
-                        self.vec.as_slice_mut().as_mut_ptr().add(idx - del_bytes),
+                        self.vec.to_slice_mut().as_mut_ptr().add(idx - del_bytes),
                         ch_len,
                     );
                 }
@@ -986,12 +986,12 @@ impl<A: MemPool> String<A> {
 
         ptr::copy(
             self.vec.as_ptr().add(idx),
-            self.vec.as_slice_mut().as_mut_ptr().add(idx + amt),
+            self.vec.to_slice_mut().as_mut_ptr().add(idx + amt),
             len - idx,
         );
         ptr::copy(
             bytes.as_ptr(),
-            self.vec.as_slice_mut().as_mut_ptr().add(idx),
+            self.vec.to_slice_mut().as_mut_ptr().add(idx),
             amt,
         );
         self.vec.set_len(len + amt);
@@ -1182,7 +1182,7 @@ impl<A: MemPool> String<A> {
         if s.len() > self.len() {
             self.vec.reserve(s.len()-self.len(), j);
         }
-        let slice: &mut [u8] = self.vec.as_slice_mut();
+        let slice: &mut [u8] = self.vec.to_slice_mut();
         unsafe {
             ptr::copy_nonoverlapping(
                 s.as_bytes() as *const _ as *const u8, 
@@ -1545,7 +1545,7 @@ impl<A: MemPool> ops::IndexMut<ops::RangeFrom<usize>> for String<A> {
 impl<A: MemPool> ops::IndexMut<ops::RangeFull> for String<A> {
     #[inline]
     fn index_mut(&mut self, _index: ops::RangeFull) -> &mut str {
-        unsafe { str::from_utf8_unchecked_mut(self.vec.as_slice_mut()) }
+        unsafe { str::from_utf8_unchecked_mut(self.vec.to_slice_mut()) }
     }
 }
 
@@ -1575,7 +1575,7 @@ impl<A: MemPool> ops::Deref for String<A> {
 impl<A: MemPool> ops::DerefMut for String<A> {
     #[inline]
     fn deref_mut(&mut self) -> &mut str {
-        unsafe { str::from_utf8_unchecked_mut(self.vec.as_slice_mut()) }
+        unsafe { str::from_utf8_unchecked_mut(self.vec.to_slice_mut()) }
     }
 }
 

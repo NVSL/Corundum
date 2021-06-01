@@ -51,6 +51,7 @@ use std::{mem, ptr, slice};
 pub struct Vec<T: PSafe, A: MemPool> {
     buf: Slice<T, A>,
     len: usize,
+    has_log: u8,
     marker: PhantomData<[T]>,
 }
 
@@ -206,6 +207,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
         Self {
             buf: Slice::<T,A>::from_off_cap(off, capacity),
             len: length,
+            has_log: 0,
             marker: PhantomData
         }
     }
@@ -270,7 +272,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
 
             ptr::copy_nonoverlapping(
                 self.as_ptr().add(at),
-                other.as_slice_mut().as_mut_ptr(),
+                other.to_slice_mut().as_mut_ptr(),
                 other.len(),
             );
         }
@@ -283,6 +285,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
         Self {
             buf: Slice::from_off_cap(offset, capacity),
             len: length,
+            has_log: 0,
             marker: PhantomData,
         }
     }
@@ -361,8 +364,31 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     }
 
     #[inline]
-    pub(crate) fn as_slice_mut(&mut self) -> &mut [T] {
-        Self::to_slice_mut(self.off(), self.len)
+    /// Consumes the vector and converts it into a slice.
+    /// Since we should create a log of the context, this function is transactional
+    /// 
+    /// # Examples
+    /// 
+    /// ```
+    /// # use corundum::vec::Vec;
+    /// # use corundum::alloc::heap::*;
+    /// Heap::transaction(|j| {
+    ///     let mut vec = Vec::from_slice(&[1,2,3], j);
+    ///     let s = vec.as_slice_mut(j);
+    ///     s[1] = 0;
+    ///     assert_eq!(s,   [1, 0, 3]);
+    ///     assert_eq!(vec, [1, 0, 3]);
+    /// }).unwrap();
+    /// ```
+    /// 
+    pub fn as_slice_mut(&mut self, j: &Journal<A>) -> &mut [T] {
+        let res = Self::__to_slice_mut(self.off(), self.len());
+        if self.has_log == 0 {
+            unsafe {
+                res.take_log(j, Notifier::NonAtomic(Ptr::from_ref(&self.has_log)));
+            }
+        }
+        self.to_slice_mut()
     }
 
     #[inline]
@@ -381,12 +407,17 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     }
 
     #[inline]
-    fn to_slice_mut<'a>(off: u64, len: usize) -> &'a mut [T] {
+    fn __to_slice_mut<'a>(off: u64, len: usize) -> &'a mut [T] {
         if len == 0 || off == u64::MAX {
             &mut []
         } else {
             unsafe { A::deref_slice_unchecked_mut(off, len) }
         }
+    }
+
+    #[inline]
+    pub(crate) fn to_slice_mut(&mut self) -> &mut [T] {
+        Self::__to_slice_mut(self.off(), self.len())
     }
 
     /// Copy all the elements of `other` into `Self`
@@ -429,7 +460,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
         let new_cap = new_cap.max(self.len);
         if get_idx(new_cap * mem::size_of::<T>()) != get_idx(cap * mem::size_of::<T>()) {
             unsafe {
-                let buf = self.as_slice_mut();
+                let buf = self.to_slice_mut();
                 let (rem, left) = buf.split_at_mut(buf.len().min(new_cap));
                 if !left.is_empty() {
                     ptr::drop_in_place(left);
@@ -502,11 +533,11 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
             self.buf.set_cap(new_cap);
         } else {
             unsafe {
-                let old = self.as_slice_mut();
+                let old = self.to_slice_mut();
                 let layout = Layout::array::<T>(new_cap).unwrap();
                 let new = A::new_uninit_for_layout(layout.size(), j).cast();
                 ptr::copy(old.as_ptr(), new, len);
-                A::free_slice(Self::to_slice_mut(self.off(), self.capacity()));
+                A::free_slice(Self::__to_slice_mut(self.off(), self.capacity()));
                 self.buf = Slice::new(slice::from_raw_parts(new, new_cap));
             }
         }
@@ -585,7 +616,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
                 return;
             }
 
-            let s = &mut self.as_slice_mut()[len..];
+            let s = &mut self.to_slice_mut()[len..];
             ptr::drop_in_place(s);
         }
         self.len = len;
@@ -622,7 +653,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
             // We replace self[index] with the last element. Note that if the
             // bounds check on hole succeeds there must be a last element (which
             // can be self[index] itself).
-            let hole: *mut T = &mut self.as_slice_mut()[index];
+            let hole: *mut T = &mut self.to_slice_mut()[index];
             let last = ptr::read(self.buf.get_unchecked(self.len - 1));
             self.len -= 1;
             ptr::replace(hole, last)
@@ -751,7 +782,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
         let len = self.len();
         let mut del = 0;
         {
-            let v = self.as_slice_mut();
+            let v = self.to_slice_mut();
 
             for i in 0..len {
                 if !f(&v[i]) {
@@ -938,7 +969,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     #[inline]
     pub(crate) unsafe fn free_nolog(&mut self) {
         if A::valid(self) && self.capacity() > 0 {
-            A::free_nolog(Self::to_slice_mut(self.off(), self.capacity()));
+            A::free_nolog(Self::__to_slice_mut(self.off(), self.capacity()));
         }
         self.buf.set_cap(0);
         self.len = 0;
@@ -956,7 +987,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
 impl<T: PSafe, A: MemPool> Drop for Vec<T, A> {
     fn drop(&mut self) {
         unsafe {
-            let s = self.as_slice_mut();
+            let s = self.to_slice_mut();
             ptr::drop_in_place(s);
             A::free_slice(self.buf.as_slice_mut());
         }

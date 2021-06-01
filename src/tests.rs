@@ -7,6 +7,19 @@ pub(crate) mod problems {
     use crate::stm::Journal;
 
     #[test]
+    fn vec_to_slice_test() {
+        use crate::vec::Vec;
+        use crate::alloc::heap::*;
+        Heap::transaction(|j| {
+            let mut vec = Vec::from_slice(&[1,2,3], j);
+            let s = vec.as_slice_mut(j);
+            s[1] = 0;
+            assert_eq!(s,   [1, 0, 3]);
+            assert_eq!(vec, [1, 0, 3]);
+        }).unwrap();
+    }
+
+    #[test]
     #[ignore]
     fn challenge_mt() {
         use crate::sync::*;
