@@ -111,7 +111,7 @@ impl<T: Default + VSafe, A: MemPool> Deref for VCell<T, A> {
 
     #[inline]
     fn deref(&self) -> &T {
-        utils::as_mut(self).force()
+        unsafe { utils::as_mut(self).force() }
     }
 }
 

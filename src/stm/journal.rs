@@ -200,13 +200,13 @@ impl<A: MemPool> Journal<A> {
     }
 
     /// Sets a flag
-    pub(crate) fn set(&mut self, flag: u64) {
+    pub unsafe fn set(&mut self, flag: u64) {
         self.flags |= flag;
         persist_obj(&self.flags, true);
     }
 
     /// Resets a flag
-    pub(crate) fn unset(&mut self, flag: u64) {
+    pub unsafe fn unset(&mut self, flag: u64) {
         self.flags &= !flag;
     }
 
@@ -589,29 +589,27 @@ impl<A: MemPool> Journal<A> {
     /// object for the running thread, it may create a new journal and returns
     /// its mutable reference. Each thread may have only one journal.
     #[track_caller]
-    pub(crate) fn current(create: bool) -> Option<(*const Journal<A>, *mut i32)>
+    pub unsafe fn current(create: bool) -> Option<(*const Journal<A>, *mut i32)>
     where
         Self: Sized,
     {
-        unsafe {
-            let tid = std::thread::current().id();
-            A::journals(|journals| {
-                if !journals.contains_key(&tid) && create {
-                    #[cfg(feature = "stat_perf")]
-                    let _perf = crate::stat::Measure::<A>::NewJournal(std::time::Instant::now());
+        let tid = std::thread::current().id();
+        A::journals(|journals| {
+            if !journals.contains_key(&tid) && create {
+                #[cfg(feature = "stat_perf")]
+                let _perf = crate::stat::Measure::<A>::NewJournal(std::time::Instant::now());
 
-                    let (journal, offset, _, z) = A::atomic_new(Journal::<A>::new(A::tx_gen()));
-                    journal.enter_into(A::journals_head(), z);
-                    A::perform(z);
-                    journals.insert(tid, (offset, 0));
-                }
-                if let Some((j, c)) = journals.get_mut(&tid) {
-                    Some((Ptr::<Self, A>::from_off_unchecked(*j).as_ptr(), c as *mut i32))
-                } else {
-                    None
-                }
-            })
-        }
+                let (journal, offset, _, z) = A::atomic_new(Journal::<A>::new(A::tx_gen()));
+                journal.enter_into(A::journals_head(), z);
+                A::perform(z);
+                journals.insert(tid, (offset, 0));
+            }
+            if let Some((j, c)) = journals.get_mut(&tid) {
+                Some((Ptr::<Self, A>::from_off_unchecked(*j).as_ptr(), c as *mut i32))
+            } else {
+                None
+            }
+        })
     }
 
     /// Returns true if there is a running transaction on the current thread

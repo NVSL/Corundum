@@ -101,8 +101,8 @@ impl<T: Default + VSafe, A: MemPool> TCell<T, A> {
 
     fn force(&mut self) -> &mut T {
         let gen = A::gen();
-        if let Some((j, _)) = Journal::<A>::current(false) {
-            unsafe {
+        unsafe {
+            if let Some((j, _)) = Journal::<A>::current(false) {
                 let j = &*j;
                 let tx_gen = j.gen();
                 if self.gen != gen || self.tx_gen != tx_gen {
@@ -110,10 +110,10 @@ impl<T: Default + VSafe, A: MemPool> TCell<T, A> {
                     self.gen = gen;
                     self.tx_gen = tx_gen;
                 }
+            } else {
+                forget(replace(&mut self.value, T::default()));
+                self.gen = gen;
             }
-        } else {
-            forget(replace(&mut self.value, T::default()));
-            self.gen = gen;
         }
         &mut self.value
     }
@@ -135,7 +135,7 @@ impl<T: Default + VSafe, A: MemPool> Deref for TCell<T, A> {
 
     #[inline]
     fn deref(&self) -> &T {
-        utils::as_mut(self).force()
+        unsafe { utils::as_mut(self).force() }
     }
 }
 

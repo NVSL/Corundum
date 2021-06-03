@@ -1134,8 +1134,8 @@ where
                     #[cfg(feature = "stat_perf")]
                     let _perf = crate::stat::Measure::<Self>::Logging(std::time::Instant::now());
 
-                    let j = Journal::<Self>::current(true).unwrap();
                     unsafe {
+                        let j = Journal::<Self>::current(true).unwrap();
                         *j.1 += 1;
                         utils::as_mut(j.0).unset(JOURNAL_COMMITTED);
                         &*j.0
