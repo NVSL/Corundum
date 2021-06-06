@@ -252,7 +252,7 @@ impl<T: PSafe + ?Sized, A: MemPool> PRefCell<T, A> {
     }
 
     #[inline]
-    /// Returns a mutable reference to the underlying data without taking a log
+    /// Returns a mutable reference to the underlying data without logging
     ///
     /// # Safety
     /// 
@@ -290,10 +290,8 @@ impl<T: PSafe + ?Sized, A: MemPool> PRefCell<T, A> {
     }
 
     #[inline]
-    #[allow(clippy::mut_from_ref)]
-    #[inline]
     /// Returns an immutable reference of the inner value
-    pub(crate) fn as_ref(&self) -> &T {
+    pub fn as_ref(&self) -> &T {
         unsafe {
             #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
                 if let Some(tmp) = *self.temp {

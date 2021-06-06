@@ -1005,14 +1005,15 @@ where
     #[inline]
     /// Discards all changes and clears the logs
     ///
-    /// If the transaction is nested, it propagates the panic upto the top most
-    /// transaction to make all of them tainted.
+    /// If the transaction is nested, it propagates the panic up to the top most
+    /// transaction to make all of them tainted. It returns true if it runs the
+    /// rollback procedure; otherwise false.
     ///
     /// # Safety
     ///
     /// This function is for internal use and should not be called elsewhere.
     ///
-    unsafe fn rollback() {
+    unsafe fn rollback() -> bool {
         // Self::discard(crate::ll::cpu());
         if let Some(journal) = Journal::<Self>::current(false) {
             *journal.1 -= 1;
@@ -1023,11 +1024,13 @@ where
                 let journal = as_mut(journal.0);
                 journal.rollback();
                 journal.clear();
+                return true;
             } else {
                 // Propagate the panic to the upper transactions
                 panic!("Unsuccessful nested transaction");
             }
         }
+        false
     }
 
     #[inline]

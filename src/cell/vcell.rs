@@ -35,8 +35,8 @@ use std::ops::{Deref, DerefMut};
 /// [`Default`]: std::default::Default
 /// [`VSafe`]: ../trait.VSafe.html
 pub struct VCell<T: Default + VSafe + ?Sized, A: MemPool> {
-    gen: u32,
     phantom: PhantomData<(A, T)>,
+    gen: u32,
     value: T,
 }
 

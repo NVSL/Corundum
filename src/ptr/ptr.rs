@@ -271,7 +271,7 @@ impl<A: MemPool, T: PSafe> PmemUsage for Ptr<T, A> {
 impl<A: MemPool, T: ?Sized> Ptr<T, A> {    
     #[inline]
     #[track_caller]
-    pub(crate) fn from_raw(other: *const T) -> Self {
+    pub unsafe fn from_raw(other: *const T) -> Self {
         let off = if !other.is_null() {
             A::off(other).unwrap()
         } else {

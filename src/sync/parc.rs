@@ -1335,7 +1335,7 @@ impl<T: PSafe + ?Sized, A: MemPool> VWeak<T, A> {
         }
 
         lock_free_fetch_inc(&mut inner.counter.strong, j);
-        Some(Parc::from_inner(Ptr::from_raw(self.ptr)))
+        Some(Parc::from_inner(unsafe { Ptr::from_raw(self.ptr) }))
     }
 
     #[inline]
