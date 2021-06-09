@@ -41,7 +41,7 @@ dependencies section:
 
 ```toml
 [dependencies]
-corundum = "0.3.4"
+corundum = "0.3.5"
 ```
 
 Or
@@ -56,7 +56,7 @@ If you wish to enable a feature like `pin_journals`, please add it to the
 
 ```toml
 [dependencies]
-corundum = { version="0.3.4", features=["pin_journals", "no_pthread"] }
+corundum = { version="0.3.5", features=["pin_journals", "no_pthread"] }
 ```
 
 ### Memory Pools
@@ -174,6 +174,10 @@ Please feel free to report any bug using GitHub issues.
 
 If you have other questions or suggestions, you can contact us
 at cse-nvsl-discuss@eng.ucsd.edu.
+
+## Disclaimer
+
+The presented library is not tested for industrial use.
 
 ## License
 
