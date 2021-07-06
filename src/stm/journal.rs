@@ -126,6 +126,9 @@ impl<A: MemPool> Page<A> {
         for i in 0..self.len {
             self.logs[i].rollback();
         }
+        for i in 0..self.len {
+            self.logs[i].rollback_drop_on_abort();
+        }
     }
 
     unsafe fn recover(&mut self, rollback: bool) {

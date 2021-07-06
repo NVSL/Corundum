@@ -19,6 +19,26 @@ pub(crate) mod problems {
         }).unwrap();
     }
 
+
+    #[test]
+    fn abort_txn_test() {
+        use crate::default::*;
+        type P = BuddyAlloc;
+
+        let vec = P::open::<PRefCell<PVec<i32>>>("abort_txn.pool", O_CFNE).unwrap();
+        let _ = P::transaction(|j| {
+            let mut vec = vec.borrow_mut(j);
+            println!("OLD: {:?}", vec);
+            for i in 0..100 {
+                vec.push(i, j);
+            }
+            println!("TMP: {:?}", vec);
+            panic!("abort");
+        });
+        println!("NEW: {:?}", vec);
+        P::print_info();
+    }
+
     #[test]
     #[ignore]
     fn challenge_mt() {

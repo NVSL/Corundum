@@ -751,12 +751,12 @@ impl<T: RootObj<A> + PSafe, A: MemPool> RootObj<A> for Parc<T, A> {
     }
 }
 
-impl<T: Default + PSafe + ?Sized, A: MemPool> RootObj<A> for Parc<T, A> {
-    #[inline]
-    default fn init(journal: &Journal<A>) -> Parc<T, A> {
-        Parc::new(T::default(), journal)
-    }
-}
+// impl<T: Default + PSafe + ?Sized, A: MemPool> RootObj<A> for Parc<T, A> {
+//     #[inline]
+//     default fn init(journal: &Journal<A>) -> Parc<T, A> {
+//         Parc::new(T::default(), journal)
+//     }
+// }
 
 trait RcEqIdent<T: PartialEq + PSafe + ?Sized, A: MemPool> {
     fn eq(&self, other: &Parc<T, A>) -> bool;

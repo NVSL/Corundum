@@ -716,8 +716,8 @@ mod test {
         struct Root {
             vec: PRefCell<PVec<Parc<(i32, PMutex<PString>)>>>
         }
-        impl Default for Root {
-            fn default() -> Self {
+        impl RootObj<P> for Root {
+            fn init(_: &Journal) -> Self {
                 Root {
                     vec: PRefCell::new(PVec::new())
                 }
@@ -994,7 +994,7 @@ macro_rules! pool {
                 /// [`BuddyAlloc`](#) if success. The pool remains open as long
                 /// as the instance lives.
                 #[track_caller]
-                pub fn open_impl(filename: &str) -> Result<Self> {
+                pub fn open_impl(filename: &str, no_check: bool) -> Result<Self> {
                     let metadata = std::fs::metadata(filename);
                     if let Err(e) = &metadata {
                         Err(format!("{}", e))
@@ -1025,10 +1025,12 @@ macro_rules! pool {
                             let inner = unsafe {
                                 read::<BuddyAllocInner>(raw_offset)
                             };
-                            assert_eq!(
-                                inner.magic_number, id,
-                                "Invalid magic number for the pool image file"
-                            );
+                            if !no_check {
+                                assert_eq!(
+                                    inner.magic_number, id,
+                                    "Invalid magic number for the pool image file"
+                                );
+                            }
 
                             let base = raw_offset as *mut _ as u64;
                             unsafe {
@@ -1413,8 +1415,10 @@ macro_rules! pool {
                     unsafe {
                         while OPEN.compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed).is_err() {}
                         if !Self::running_transaction() {
-                            if let Ok(_) = Self::apply_flags(path, flags) {
-                                let res = Self::open_impl(path);
+                            if flags == open_flags::O_READINFO {
+                                Self::open_impl(path, true)
+                            } else if let Ok(_) = Self::apply_flags(path, flags) {
+                                let res = Self::open_impl(path, false);
                                 if res.is_ok() {
                                     Self::recover();
                                 }
@@ -1425,7 +1429,7 @@ macro_rules! pool {
                             }
                         } else {
                             OPEN.store(false, Ordering::Release);
-                            Err("Could not open a pool inside a transaction of its own kind"
+                            Err("An uncommitted transaction exists in the pool"
                                 .to_string())
                         }
                     }

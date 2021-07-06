@@ -141,7 +141,7 @@ impl<A: MemPool> Notifier<A> {
 /// to provide data consistency. Logs reside in the persistent region and their
 /// durability is ensured by flushing the cache lines after each log.
 /// 
-/// The default mechanism of taking logs is copy-on-write which takes a log when
+/// The default mechanism of taking logs is copy-on-write which creates a log when
 /// the object is mutably dereferenced. This requires two `clflush`es: one for
 /// the log, and one for the update to the original data.
 /// 
@@ -186,7 +186,7 @@ impl<A: MemPool> Log<A> {
     /// This function is used for low-level atomic allocation. The algorithm is
     /// as follows:
     /// 
-    /// 1. Take a neutral drop log (`off = u64::MAX`) in a log slot in the [`Journal`]
+    /// 1. Create a neutral drop log (`off = u64::MAX`) in a log slot in the [`Journal`]
     /// 2. Prepare allocation using [`pre_alloc()`]
     /// 3. Add a low-level log for updating the `off` and `len` of the drop log
     /// using `set` function
@@ -316,7 +316,7 @@ impl<A: MemPool> Log<A> {
     }
 
     #[inline]
-    fn take_impl(
+    fn create_impl(
         off: u64,
         log: u64,
         len: usize,
@@ -327,9 +327,9 @@ impl<A: MemPool> Log<A> {
         Self::write_on_journal(DataLog(off, log, len), journal, notifier)
     }
 
-    /// Takes a log of `x` into `journal` and notifies the owner that log is
-    /// taken if `notifier` is specified.
-    pub fn take<T: ?Sized>(
+    /// Creates a log of `x` into `journal` and notifies the owner that log is
+    /// created if `notifier` is specified.
+    pub fn create<T: ?Sized>(
         x: &T,
         journal: &Journal<A>,
         mut notifier: Notifier<A>,
@@ -352,7 +352,7 @@ impl<A: MemPool> Log<A> {
                 dump_data::<A>("DATA", pointer.off(), len);
             }
 
-            let log = unsafe { pointer.dup() };
+            let log = unsafe { pointer.dup(journal) };
 
             // if cfg!(feature = "replace_with_log") {
             //     pointer.replace(log.replace(pointer.off()));
@@ -362,17 +362,17 @@ impl<A: MemPool> Log<A> {
             //         crate::utils::as_slice(log.as_ref()),
             //         "Log is not the same as the original data");
 
-            //     Self::take_impl(log.off(), pointer.off(), len, journal, notifier)
+            //     Self::create_impl(log.off(), pointer.off(), len, journal, notifier)
             // } else {
                 crate::ll::persist_obj(log.as_ref(), false);
-                Self::take_impl(pointer.off(), log.off(), len, journal, notifier)
+                Self::create_impl(pointer.off(), log.off(), len, journal, notifier)
             // }
         }
     }
 
-    /// Takes a log of `&[x]` into `journal` and notifies the owner that log is
-    /// taken if `notifier` is specified.
-    pub fn take_slice<T: PSafe>(
+    /// Creates a log of `&[x]` into `journal` and notifies the owner that log is
+    /// created if `notifier` is specified.
+    pub fn create_slice<T: PSafe>(
         x: &[T],
         journal: &Journal<A>,
         mut notifier: Notifier<A>,
@@ -395,10 +395,10 @@ impl<A: MemPool> Log<A> {
                 dump_data::<A>("DATA", slice.off(), len);
             }
 
-            let log = unsafe { slice.dup(slice.capacity()) };
+            let log = unsafe { slice.dup(journal) };
 
                 crate::ll::persist_obj(log.as_ref(), false);
-                Self::take_impl(slice.off(), log.off(), len, journal, notifier)
+                Self::create_impl(slice.off(), log.off(), len, journal, notifier)
             // }
         }
     }
@@ -520,7 +520,7 @@ impl<A: MemPool> Log<A> {
             #[cfg(feature = "verbose")] {
                 dump_data::<A>(" ORG", *src, *len);
                 dump_data::<A>(" LOG", *log, *len);
-            }
+            } 
             unsafe {
                 let src = A::get_mut_unchecked::<u8>(*src);
                 let log = A::get_mut_unchecked::<u8>(*log);
@@ -540,6 +540,15 @@ impl<A: MemPool> Log<A> {
                 self.notify(0);
                 self.1 = Notifier::None;
             }
+            _ => {}
+        }
+    }
+
+    pub(crate) unsafe fn rollback_drop_on_abort(&mut self) {
+        #[cfg(feature = "stat_perf")]
+        let _perf = crate::stat::Measure::<A>::RollbackLog(std::time::Instant::now());
+
+        match &mut self.0 {
             DropOnAbort(src, len) => {
                 if *src != u64::MAX {
                     let z = A::pre_dealloc(A::get_mut_unchecked(*src), *len);
@@ -675,7 +684,7 @@ impl<A: MemPool> Log<A> {
         }
     }
 
-    /// Notify the owner that the log is taken/cleared according to `v`
+    /// Notify the owner that the log is created/cleared according to `v`
     #[inline]
     pub unsafe fn notify(&mut self, v: u8) {
         if let DataLog(src, _, _) = self.0 {
@@ -688,18 +697,18 @@ impl<A: MemPool> Log<A> {
 
 /// A generic trait for taking a log of any type
 pub trait Logger<A: MemPool> {
-    /// Takes a log of `self` and update the log flag if specified in `notifier`
-    unsafe fn take_log(&self, journal: &Journal<A>, notifier: Notifier<A>) -> Ptr<Log<A>, A>;
+    /// Creates a log of `self` and update the log flag if specified in `notifier`
+    unsafe fn create_log(&self, journal: &Journal<A>, notifier: Notifier<A>) -> Ptr<Log<A>, A>;
 }
 
 impl<T: PSafe + ?Sized, A: MemPool> Logger<A> for T {
-    default unsafe fn take_log(&self, journal: &Journal<A>, notifier: Notifier<A>) -> Ptr<Log<A>, A> {
-        Log::take(self, journal, notifier)
+    default unsafe fn create_log(&self, journal: &Journal<A>, notifier: Notifier<A>) -> Ptr<Log<A>, A> {
+        Log::create(self, journal, notifier)
     }
 }
 
 impl<T: PSafe, A: MemPool> Logger<A> for [T] {
-    unsafe fn take_log(&self, journal: &Journal<A>, notifier: Notifier<A>) -> Ptr<Log<A>, A> {
-        Log::take_slice(self, journal, notifier)
+    unsafe fn create_log(&self, journal: &Journal<A>, notifier: Notifier<A>) -> Ptr<Log<A>, A> {
+        Log::create_slice(self, journal, notifier)
     }
 }

@@ -385,7 +385,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
         let res = Self::__to_slice_mut(self.off(), self.len());
         if self.has_log == 0 {
             unsafe {
-                res.take_log(j, Notifier::NonAtomic(Ptr::from_ref(&self.has_log)));
+                res.create_log(j, Notifier::NonAtomic(Ptr::from_ref(&self.has_log)));
             }
         }
         self.to_slice_mut()
@@ -1122,6 +1122,12 @@ impl<A: MemPool, T: PSafe + Ord> Ord for Vec<T, A> {
 
 impl<T: PSafe, A: MemPool> Default for Vec<T, A> {
     fn default() -> Self {
+        Vec::empty()
+    }
+}
+
+impl<T: PSafe, A: MemPool> RootObj<A> for Vec<T, A> {
+    fn init(_: &Journal<A>) -> Self {
         Vec::empty()
     }
 }

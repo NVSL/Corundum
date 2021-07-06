@@ -117,3 +117,18 @@ impl<T: RootObj<A>, A: MemPool> RootObj<A> for &[T] {
         <&[T]>::init(journal)
     }
 }
+
+// impl<T: RootObj<A>, Q: RootObj<A>, A: MemPool> RootObj<A> for (T, Q) {
+//     fn init(j: &Journal<A>) -> Self {
+//         (T::init(j), Q::init(j))
+//     }
+// }
+
+// use impl_trait_for_tuples::*;
+
+// #[impl_for_tuples(32)]
+// impl<A: MemPool> RootObj<A> for Tuple {
+//     default fn init(j: &Journal<A>) -> Self {
+//         for_tuples!( ( #( Tuple::init(j) ),* ) )
+//     }
+// }

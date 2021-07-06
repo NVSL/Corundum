@@ -173,7 +173,7 @@ impl<T: PSafe, A: MemPool> PMutex<T, A> {
             let inner = &mut *self.data.get();
             if inner.0 == 0 {
                 assert!(A::valid(inner), "The object is not in the pool's valid range");
-                inner.1.take_log(journal, Notifier::NonAtomic(Ptr::from_ref(&inner.0)));
+                inner.1.create_log(journal, Notifier::NonAtomic(Ptr::from_ref(&inner.0)));
             }
             &mut inner.1
         }

@@ -13,6 +13,6 @@ fn main() {
         return;
     }
 
-    let _pool = P::open_no_root(&args[1], 0).unwrap();
+    let _pool = P::open_no_root(&args[1], O_READINFO).unwrap();
     P::print_info();
 }

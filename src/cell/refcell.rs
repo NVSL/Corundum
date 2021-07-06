@@ -236,7 +236,7 @@ impl<T: PSafe + ?Sized, A: MemPool> PRefCell<T, A> {
     /// ```
     pub fn get_mut(&mut self, journal: &Journal<A>) -> &mut T {
         let inner = unsafe { &mut *self.value.get() };
-        self.take_log(journal);
+        self.create_log(journal);
 
         #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] unsafe {
             if let Some(tmp) = *self.temp {
@@ -353,7 +353,7 @@ impl<T: PSafe + ?Sized, A: MemPool> PRefCell<T, A> {
 
     #[inline]
     #[track_caller]
-    pub(crate) fn take_log(&self, journal: &Journal<A>) {
+    pub(crate) fn create_log(&self, journal: &Journal<A>) {
         unsafe {
             let inner = &mut *self.value.get();
             #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
@@ -370,7 +370,7 @@ impl<T: PSafe + ?Sized, A: MemPool> PRefCell<T, A> {
                 use crate::stm::{Notifier, Logger};
                 if inner.0 == 0 {
                     assert!(A::valid(inner), "The object is not in the pool's valid range");
-                    inner.1.take_log(journal, Notifier::NonAtomic(Ptr::from_ref(&inner.0)));
+                    inner.1.create_log(journal, Notifier::NonAtomic(Ptr::from_ref(&inner.0)));
                 }
             }
         }

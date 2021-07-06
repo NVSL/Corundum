@@ -907,12 +907,12 @@ impl<T: RootObj<A> + PSafe, A: MemPool> RootObj<A> for Prc<T, A> {
     }
 }
 
-impl<T: Default + PSafe + ?Sized, A: MemPool> RootObj<A> for Prc<T, A> {
-    #[inline]
-    default fn init(journal: &Journal<A>) -> Prc<T, A> {
-        Prc::new(T::default(), journal)
-    }
-}
+// impl<T: Default + PSafe + ?Sized, A: MemPool> RootObj<A> for Prc<T, A> {
+//     #[inline]
+//     default fn init(journal: &Journal<A>) -> Prc<T, A> {
+//         Prc::new(T::default(), journal)
+//     }
+// }
 
 trait RcEqIdent<T: PartialEq + PSafe + ?Sized, A: MemPool> {
     fn eq(&self, other: &Prc<T, A>) -> bool;
@@ -1183,7 +1183,7 @@ trait PrcBoxPtr<T: PSafe + ?Sized, A: MemPool> {
         #[cfg(not(any(feature = "use_pspd", feature = "use_vspd")))] {
             if inner.has_log == 0 {
                 unsafe {
-                    inner.take_log(&*journal, Notifier::NonAtomic(Ptr::from_ref(&inner.has_log)));
+                    inner.create_log(&*journal, Notifier::NonAtomic(Ptr::from_ref(&inner.has_log)));
                 }
             }
         }

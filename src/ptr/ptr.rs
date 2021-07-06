@@ -1,3 +1,4 @@
+use crate::stm::Journal;
 use crate::alloc::MemPool;
 use crate::alloc::PmemUsage;
 use crate::{PSafe, TxOutSafe};
@@ -118,16 +119,8 @@ impl<A: MemPool, T: ?Sized> Ptr<T, A> {
     /// The compiler would not drop the copied data. Developer has the
     /// responsibility of deallocating inner value. Also, it does not clone the
     /// inner value. Instead, it just copies the memory.
-    pub(crate) unsafe fn dup(&self) -> Ptr<T, A> {
-        let src = self.as_ref();
-        let dst = A::alloc_for_value(src);
-        let trg = A::off_unchecked(dst);
-        std::ptr::copy_nonoverlapping(
-            src as *const T as *const u8,
-            dst as *mut T as *mut u8,
-            std::alloc::Layout::for_value(src).size(),
-        );
-        Ptr::from_off_unchecked(trg)
+    pub(crate) unsafe fn dup(&self, j: &Journal<A>) -> Ptr<T, A> {
+        Ptr::from_mut(A::new_copy(self.as_ref(), j))
     }
 
     #[inline]

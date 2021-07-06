@@ -227,7 +227,7 @@ impl<T: PSafe + ?Sized, A: MemPool> DerefMut for LogNonNull<T, A> {
                 use crate::ptr::Ptr;
                 use crate::stm::{Notifier, Logger};
                 if *self.logged == 0 {
-                    value.take_log(&*self.journal, Notifier::NonAtomic(Ptr::from_raw(self.logged)));
+                    value.create_log(&*self.journal, Notifier::NonAtomic(Ptr::from_raw(self.logged)));
                 }
             }
             value

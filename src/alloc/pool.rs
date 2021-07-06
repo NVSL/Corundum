@@ -81,6 +81,9 @@ pub mod open_flags {
 
     /// Open Flag: Creates a pool memory file of size 64TB
     pub const O_64TB: u32 = 0x00100000;
+
+    /// Open Flag: Open only to read info
+    pub const O_READINFO: u32 = u32::MAX;
 }
 
 pub use open_flags::*;
@@ -801,6 +804,41 @@ where
         log.set(off, size, z);
         Self::perform(z);
         p
+    }
+
+    /// Allocates new memory and then copies `x` into it with `DropOnFailure` log
+    unsafe fn new_copy<'a, T: 'a>(x: &T, j: &Journal<Self>) -> &'a mut T 
+    where T: ?Sized {
+        let s = mem::size_of_val(x);
+        debug_assert!(s != 0, "Cannot allocated ZST");
+
+        let mut log = Log::drop_on_failure(u64::MAX, 1, j);
+        let (p, off, len, z) = Self::pre_alloc(s);
+        if p.is_null() {
+            panic!("Memory exhausted");
+        }
+        Self::drop_on_failure(off, len, z);
+        std::ptr::copy_nonoverlapping(x as *const T as *const u8, p, s);
+        log.set(off, len, z);
+        Self::perform(z);
+        utils::read(p)
+    }
+
+    /// Allocates new memory and then copies `x` into it with `DropOnFailure` log
+    unsafe fn new_copy_slice<'a, T: 'a>(x: &[T], j: &Journal<Self>) -> &'a mut [T] {
+        let s = mem::size_of_val(x);
+        debug_assert!(s != 0, "Cannot allocated ZST");
+
+        let mut log = Log::drop_on_failure(u64::MAX, 1, j);
+        let (p, off, len, z) = Self::pre_alloc(s);
+        if p.is_null() {
+            panic!("Memory exhausted");
+        }
+        Self::drop_on_failure(off, len, z);
+        std::ptr::copy_nonoverlapping(x as *const [T] as *const u8, p, s);
+        log.set(off, len, z);
+        Self::perform(z);
+        utils::read(p)
     }
 
     /// Allocates new memory and then places `x` into it without realizing the allocation

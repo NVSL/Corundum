@@ -17,7 +17,7 @@ macro_rules! datalog {
             for i in 0..$cnt {
                 let m = &*bvec[i];
                 measure!(format!("DataLog({})", $s), {
-                    m.take_log(j, Notifier::None);
+                    m.create_log(j, Notifier::None);
                 });
             }
             j.ignore();

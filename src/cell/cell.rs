@@ -200,8 +200,8 @@ impl<T: PSafe, A: MemPool> PCell<T, A> {
         if ptr::eq(this, that) {
             return;
         }
-        self.take_log(journal);
-        other.take_log(journal);
+        self.create_log(journal);
+        other.create_log(journal);
 
         // SAFETY: This can be risky if called from separate threads, but `PCell`
         // is `!Sync` so this won't happen. This also won't invalidate any
@@ -234,7 +234,7 @@ impl<T: PSafe, A: MemPool> PCell<T, A> {
         // SAFETY: This can cause data races if called from a separate thread,
         // but `PCell` is `!Sync` so this won't happen.
 
-        self.take_log(journal);
+        self.create_log(journal);
 
         #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
             if let Some(tmp) = *self.temp {
@@ -348,7 +348,7 @@ impl<T: PSafe, A: MemPool> PCell<T, A> {
 impl<T: PSafe + ?Sized, A: MemPool> PCell<T, A> {
     #[inline]
     #[track_caller]
-    pub(crate) fn take_log(&self, journal: &Journal<A>) {
+    pub(crate) fn create_log(&self, journal: &Journal<A>) {
         unsafe {
             let inner = &mut *self.value.get();
             #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
@@ -363,7 +363,7 @@ impl<T: PSafe + ?Sized, A: MemPool> PCell<T, A> {
                 use crate::stm::Notifier;
                 if inner.0 == 0 {
                     assert!(A::valid(inner), "The object is not in the pool's valid range");
-                    inner.1.take_log(journal, Notifier::NonAtomic(Ptr::from_ref(&inner.0)));
+                    inner.1.create_log(journal, Notifier::NonAtomic(Ptr::from_ref(&inner.0)));
                 }
             }
         }
@@ -395,7 +395,7 @@ impl<T: PSafe + ?Sized, A: MemPool> PCell<T, A> {
         // but `PCell` is `!Sync` so this won't happen, and `&mut` guarantees
         // unique access.
 
-        self.take_log(journal);
+        self.create_log(journal);
 
         #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] unsafe {
             if let Some(tmp) = *self.temp {

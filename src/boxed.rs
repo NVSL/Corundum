@@ -435,12 +435,12 @@ unsafe impl<#[may_dangle] T: PSafe + ?Sized, A: MemPool> Drop for Pbox<T, A> {
     }
 }
 
-impl<T: Default + PSafe, A: MemPool> RootObj<A> for Pbox<T, A> {
-    #[inline]
-    default fn init(journal: &Journal<A>) -> Pbox<T, A> {
-        Pbox::new(T::default(), journal)
-    }
-}
+// impl<T: Default + PSafe, A: MemPool> RootObj<A> for Pbox<T, A> {
+//     #[inline]
+//     default fn init(journal: &Journal<A>) -> Pbox<T, A> {
+//         Pbox::new(T::default(), journal)
+//     }
+// }
 
 impl<T: RootObj<A> + PSafe, A: MemPool> RootObj<A> for Pbox<T, A> {
     #[inline]
@@ -632,7 +632,7 @@ impl<T: PSafe, A: MemPool> DerefMut for Pbox<T, A> {
             let journal = Journal::<A>::try_current()
                 .expect("Unrecoverable data modification").0;
             unsafe {
-                d.take_log(&*journal, Notifier::NonAtomic(Ptr::from_ref(&self.1)));
+                d.create_log(&*journal, Notifier::NonAtomic(Ptr::from_ref(&self.1)));
             }
         }
         d

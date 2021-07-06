@@ -1,5 +1,6 @@
 //! Persistent unicode string slices
 
+use crate::RootObj;
 use crate::convert::PFrom;
 use crate::alloc::MemPool;
 use crate::clone::PClone;
@@ -1389,6 +1390,14 @@ impl<A: MemPool> Default for String<A> {
     #[inline]
     fn default() -> String<A> {
         String { vec: Vec::default() }
+    }
+}
+
+impl<A: MemPool> RootObj<A> for String<A> {
+    /// Creates an empty `String`.
+    #[inline]
+    fn init(j: &Journal<A>) -> String<A> {
+        String { vec: Vec::init(j) }
     }
 }
 
