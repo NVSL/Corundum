@@ -124,7 +124,7 @@ impl<A: MemPool> Page<A> {
 
     unsafe fn rollback(&mut self) {
         for i in 0..self.len {
-            self.logs[i].rollback();
+            self.logs[self.len - i - 1].rollback();
         }
         for i in 0..self.len {
             self.logs[i].rollback_drop_on_abort();
@@ -224,9 +224,14 @@ impl<A: MemPool> Journal<A> {
         self.next_off = *head_off;
         A::log64(A::off_unchecked(head_off), me, zone);
 
-        if let Ok(j) = A::deref_mut::<Journal<A>>(*head_off) {
+        if *head_off != u64::MAX {
+            let j = utils::read_addr::<Journal<A>>(A::start() + *head_off);
             A::log64(A::off_unchecked(&j.prev_off), me, zone);
+
         }
+        // if let Ok(j) = A::deref_mut::<Journal<A>>(*head_off) {
+        //     A::log64(A::off_unchecked(&j.prev_off), me, zone);
+        // }
     }
 
     #[inline]
@@ -466,6 +471,9 @@ impl<A: MemPool> Journal<A> {
                 let z = A::pre_dealloc(page.as_mut_ptr() as *mut u8, std::mem::size_of::<Page<A>>());
                 A::log64(A::off_unchecked(self.pages.off_ref()), nxt.off(), z);
                 A::perform(z);
+
+                #[cfg(feature = "check_allocator_cyclic_links")]
+                debug_assert!(A::verify());
             }
         }
         // if let Ok(prev) = A::deref_mut::<Self>(self.prev_off) {

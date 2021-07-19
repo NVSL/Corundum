@@ -430,7 +430,7 @@ impl<A: MemPool> BuddyAlg<A> {
         self.lock();
 
         if !self.aux.is_empty() {
-            self.discard();
+            // self.discard();
             return true;
         }
 
@@ -594,7 +594,7 @@ impl<A: MemPool> BuddyAlg<A> {
         self.foot_print
     }
 
-    fn check(&self, f: &str) {
+    pub fn check(&self, f: &str) {
         for idx in 3..self.last_idx + 1 {
             let mut curr = self.buddies[idx];
             while let Some(b) = off_to_option(curr) {
@@ -603,6 +603,20 @@ impl<A: MemPool> BuddyAlg<A> {
                 assert_ne!(curr, b, "Cyclic link in checking {}", f);
             }
         }
+    }
+
+    pub fn verify(&mut self) -> bool {
+        self.lock();
+        for idx in 3..self.last_idx + 1 {
+            let mut curr = self.buddies[idx];
+            while let Some(b) = off_to_option(curr) {
+                let e = Self::buddy(b);
+                curr = e.next;
+                if curr == b { self.unlock(); assert!(false, "Memory pool corrupted"); return false; }
+            }
+        }
+        self.unlock(); 
+        true
     }
 
     /// Prints the free lists
@@ -1275,6 +1289,20 @@ macro_rules! pool {
                 #[inline]
                 #[allow(unused_unsafe)]
                 #[track_caller]
+                fn verify() -> bool {
+                    static_inner!(BUDDY_INNER, inner, {
+                        for i in 0..inner.zone.count() {
+                            if !inner.zone[i].verify() {
+                                return false;
+                            }
+                        }
+                        true
+                    })
+                }
+
+                #[inline]
+                #[allow(unused_unsafe)]
+                #[track_caller]
                 unsafe fn journals_head() -> &'static u64 {
                     static_inner!(BUDDY_INNER, inner, {
                         &inner.journals
@@ -1346,13 +1374,27 @@ macro_rules! pool {
                         for i in 0..inner.zone.count() {
                             inner.zone[i].recover();
                         }
+
+                        #[cfg(feature = "check_allocator_cyclic_links")]
+                        debug_assert!(Self::verify());
+
                         while let Ok(logs) = Self::deref_mut::<Journal>(inner.journals) {
 
                             #[cfg(feature = "verbose")]
                             println!("{:?}", logs);
 
+                            #[cfg(feature = "check_allocator_cyclic_links")]
+                            debug_assert!(Self::verify());
+
                             logs.recover();
+
+                            #[cfg(feature = "check_allocator_cyclic_links")]
+                            debug_assert!(Self::verify());
+
                             logs.clear();
+
+                            #[cfg(feature = "check_allocator_cyclic_links")]
+                            debug_assert!(Self::verify());
 
                             #[cfg(feature = "pin_journals")]
                             Self::drop_journal(logs);

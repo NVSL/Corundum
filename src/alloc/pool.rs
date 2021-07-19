@@ -382,6 +382,12 @@ where
         true
     }
 
+    /// Indicates if there the pool is in a good shape
+    #[inline]
+    fn verify() -> bool {
+        true
+    }
+
     /// Translates raw pointers to memory offsets
     ///
     /// # Safety

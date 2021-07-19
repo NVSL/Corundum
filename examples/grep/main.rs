@@ -24,7 +24,7 @@ fn help() {
     println!();
     println!("OPTIONS:");
     println!("  -p num        Search pattern (Default '\\w+')");
-    println!("  -r num        Number of reader threads (Default 1)");
+    println!("  -r num        Number of reader (producer) threads (Default 1)");
     println!("  -c num        Number of consumer threads (Default 1)");
     println!("  -f file       Pool filename (Default ./wc.pool)");
     println!("  -N            Do not print output (perf test)");

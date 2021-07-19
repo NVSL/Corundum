@@ -1,4 +1,3 @@
-use crate::stm::Journal;
 use crate::alloc::MemPool;
 use crate::alloc::PmemUsage;
 use crate::*;
@@ -187,11 +186,15 @@ impl<T: PSafe, A: MemPool> Slice<T, A> {
     /// responsibility of deallocating inner value. Also, it does not clone the
     /// inner value. Instead, it just copies the memory.
     /// 
-    pub unsafe fn dup(&self, j: &Journal<A>) -> Slice<T, A> {
+    pub unsafe fn dup(&self) -> Slice<T, A> {
         if self.is_empty() {
             Self::empty()
         } else {
-            Self::from(A::new_copy(self.as_slice(), j))
+            let slice = self.as_slice();
+            let (dst, off, len, z) = A::atomic_new_slice(slice);
+            A::perform(z);
+            crate::ll::persist(dst, self.cap, true);
+            Self::from_off_cap(off, len)
         }
     }
 }

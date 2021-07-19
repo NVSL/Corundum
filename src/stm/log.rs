@@ -352,7 +352,7 @@ impl<A: MemPool> Log<A> {
                 dump_data::<A>("DATA", pointer.off(), len);
             }
 
-            let log = unsafe { pointer.dup(journal) };
+            let log = unsafe { pointer.dup() };
 
             // if cfg!(feature = "replace_with_log") {
             //     pointer.replace(log.replace(pointer.off()));
@@ -395,7 +395,7 @@ impl<A: MemPool> Log<A> {
                 dump_data::<A>("DATA", slice.off(), len);
             }
 
-            let log = unsafe { slice.dup(journal) };
+            let log = unsafe { slice.dup() };
 
                 crate::ll::persist_obj(log.as_ref(), false);
                 Self::create_impl(slice.off(), log.off(), len, journal, notifier)
@@ -527,6 +527,9 @@ impl<A: MemPool> Log<A> {
                 ptr::copy_nonoverlapping(log, src, *len);
                 persist(log, *len, true);
             }
+                    
+            #[cfg(feature = "check_allocator_cyclic_links")]
+            debug_assert!(A::verify());
         }
     }
 
@@ -539,6 +542,9 @@ impl<A: MemPool> Log<A> {
                 Self::rollback_datalog(src, log, len);
                 self.notify(0);
                 self.1 = Notifier::None;
+                    
+                #[cfg(feature = "check_allocator_cyclic_links")]
+                debug_assert!(A::verify());
             }
             _ => {}
         }
@@ -554,6 +560,9 @@ impl<A: MemPool> Log<A> {
                     let z = A::pre_dealloc(A::get_mut_unchecked(*src), *len);
                     A::log64(A::off_unchecked(src), u64::MAX, z);
                     A::perform(z);
+                    
+                    #[cfg(feature = "check_allocator_cyclic_links")]
+                    debug_assert!(A::verify());
                 }
             }
             _ => {}
@@ -570,6 +579,9 @@ impl<A: MemPool> Log<A> {
                     Self::rollback_datalog(src, log, layout);
                     self.notify(0);
                     self.1 = Notifier::None;
+                    
+                    #[cfg(feature = "check_allocator_cyclic_links")]
+                    debug_assert!(A::verify());
                 }
             }
             DropOnFailure(src, len) => {
@@ -579,6 +591,9 @@ impl<A: MemPool> Log<A> {
                         let z = A::pre_dealloc(A::get_mut_unchecked(*src), *len);
                         A::log64(A::off_unchecked(src), u64::MAX, z);
                         A::perform(z);
+                    
+                        #[cfg(feature = "check_allocator_cyclic_links")]
+                        debug_assert!(A::verify());
                     }
                 }
             }
@@ -598,6 +613,9 @@ impl<A: MemPool> Log<A> {
                     }
                     A::log64(A::off_unchecked(src), u64::MAX, z);
                     A::perform(z);
+                    
+                    #[cfg(feature = "check_allocator_cyclic_links")]
+                    debug_assert!(A::verify());
                 }
             }
             UnlockOnCommit(src) => {
@@ -627,6 +645,9 @@ impl<A: MemPool> Log<A> {
                         let z = A::pre_dealloc(A::get_mut_unchecked(*src), *len);
                         A::log64(A::off_unchecked(src), u64::MAX, z);
                         A::perform(z);
+                    
+                        #[cfg(feature = "check_allocator_cyclic_links")]
+                        debug_assert!(A::verify());
                     }
                 }
             }
@@ -651,10 +672,18 @@ impl<A: MemPool> Log<A> {
                     log!(A, Magenta, "DEL LOG", "FOR:         ({:>6x}:{:<6x}) = {:<6} DataLog({})",
                         *_src, *_src as usize + (*len - 1), *len, log
                     );
-                    debug_assert!(A::allocated(*log, 1), "Access Violation at address 0x{:x}", *log);
+                    debug_assert!(A::allocated(*log, *len), "Access Violation at address 0x{:x}", *log);
+
+
+                    #[cfg(feature = "check_allocator_cyclic_links")]
+                    debug_assert!(A::verify());
+
                     let z = A::pre_dealloc(A::get_mut_unchecked(*log), *len);
                     A::log64(A::off_unchecked(log), u64::MAX, z);
                     A::perform(z);
+
+                    #[cfg(feature = "check_allocator_cyclic_links")]
+                    debug_assert!(A::verify());
                 }
             }
             UnlockOnCommit(src) => {
@@ -689,7 +718,7 @@ impl<A: MemPool> Log<A> {
     pub unsafe fn notify(&mut self, v: u8) {
         if let DataLog(src, _, _) = self.0 {
             if src != u64::MAX {
-                self.1.update(v)
+                self.1.update(v);
             }
         }
     }
