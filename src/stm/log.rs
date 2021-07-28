@@ -497,7 +497,7 @@ impl<A: MemPool> Log<A> {
         Self::write_on_journal(UnlockOnCommit(virt_addr), journal, Notifier::None);
     }
 
-    /// Creates a new [`DropOnCommit`](./enum.LogEnum.html#variant.DropOnCommit)
+    /// Creates a new [`RecountOnFailure`](./enum.LogEnum.html#variant.RecountOnFailure)
     /// log and writes it on `journal`
     #[inline]
     #[track_caller]
@@ -600,7 +600,7 @@ impl<A: MemPool> Log<A> {
             RecountOnFailure(src, inc) => {
                 let off = *src;
                 if off != u64::MAX {
-                    debug_assert!(A::allocated(off, 1), "Access Violation");
+                    debug_assert!(A::allocated(off, 1), "Access Violation (0x{:x}))", off);
                     let c = A::get_mut_unchecked::<u64>(off);
                     let z = A::zone(off);
                     A::prepare(z);
@@ -673,7 +673,6 @@ impl<A: MemPool> Log<A> {
                         *_src, *_src as usize + (*len - 1), *len, log
                     );
                     debug_assert!(A::allocated(*log, *len), "Access Violation at address 0x{:x}", *log);
-
 
                     #[cfg(feature = "check_allocator_cyclic_links")]
                     debug_assert!(A::verify());

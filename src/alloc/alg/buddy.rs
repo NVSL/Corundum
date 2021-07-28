@@ -150,10 +150,14 @@ impl<A: MemPool> BuddyAlg<A> {
     }
 
     #[inline]
+    fn in_range<'a>(off: u64) -> bool {
+        (off < u64::MAX - A::start()) && (off + A::start() < A::end())
+    }
+
+    #[inline]
     #[track_caller]
     fn buddy<'a>(off: u64) -> &'a mut Buddy {
-        debug_assert!(off < u64::MAX - A::start(), "off(0x{:x}) out of range", off);
-        debug_assert!(off + A::start() < A::end(), "off(0x{:x}) out of range", off);
+        debug_assert!(Self::in_range(off), "off(0x{:x}) out of range", off);
         unsafe { read_addr(A::start() + off) }
     }
 
@@ -487,6 +491,12 @@ impl<A: MemPool> BuddyAlg<A> {
         #[cfg(any(feature = "no_pthread", windows))] {
         self.mutex = 0; }
 
+
+        #[cfg(feature = "check_allocator_cyclic_links")]
+        if !self.verify() {
+            eprintln!("not verified before recovery");
+        }
+
         if self.aux_valid {
             #[cfg(debug_assertions)]
             eprintln!("Crashed while the allocator was operating");
@@ -531,6 +541,11 @@ impl<A: MemPool> BuddyAlg<A> {
             self.aux.clear();
             self.log64.clear();
             self.drop_log.clear();
+        }
+
+        #[cfg(feature = "check_allocator_cyclic_links")]
+        if !self.verify() {
+            eprintln!("not verified after recovery");
         }
     }
 
@@ -606,13 +621,25 @@ impl<A: MemPool> BuddyAlg<A> {
     }
 
     pub fn verify(&mut self) -> bool {
+        if std::env::var("VERIFY").is_err() { return true; }
+        let loops = std::env::var("VERIFY").unwrap() == "2";
         self.lock();
         for idx in 3..self.last_idx + 1 {
             let mut curr = self.buddies[idx];
+            let mut links = vec![];
             while let Some(b) = off_to_option(curr) {
+                if { if loops { links.contains(&b) } else { false } } || !Self::in_range(b) {
+                    self.unlock();
+                    if !Self::in_range(b) {
+                        eprintln!("Verification Failed: Invalid block address 0x{:x} (idx={})", b, idx);
+                    } else {
+                        eprintln!("Verification Failed: A cyclic link detected in list {}", idx);
+                    }
+                    return false;
+                }
+                if loops { links.push(b); }
                 let e = Self::buddy(b);
                 curr = e.next;
-                if curr == b { self.unlock(); assert!(false, "Memory pool corrupted"); return false; }
             }
         }
         self.unlock(); 

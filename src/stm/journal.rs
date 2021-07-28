@@ -431,9 +431,9 @@ impl<A: MemPool> Journal<A> {
             curr = page.next;
         }
         let mut curr = self.pages;
-        let fast_forward = self.fast_forward();
-        if !self.is_set(JOURNAL_COMMITTED) || fast_forward {
-            let rollback = !fast_forward || !self.is_set(JOURNAL_COMMITTED);
+        let resume = self.resume();
+        if !self.is_set(JOURNAL_COMMITTED) || resume {
+            let rollback = !resume || !self.is_set(JOURNAL_COMMITTED);
             #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
                 if rollback {
                     self.spd.rollback();
@@ -517,7 +517,7 @@ impl<A: MemPool> Journal<A> {
     ///
     /// [`Chaperon::transaction`]: ../chaperon/struct.Chaperon.html#method.transaction
     ///
-    pub fn fast_forward(&self) -> bool {
+    pub fn resume(&self) -> bool {
         if !self.is_set(JOURNAL_COMMITTED) {
             false
         } else {
@@ -525,11 +525,7 @@ impl<A: MemPool> Journal<A> {
                 let s = String::from_utf8(self.chaperon.to_vec()).unwrap();
                 let c = unsafe { Chaperon::load(&s)
                     .expect(&format!("Missing chaperon file `{}`", s)) };
-                if c.completed() {
-                    true
-                } else {
-                    false
-                }
+                c.completed()
             } else {
                 true
             }

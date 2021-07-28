@@ -1150,6 +1150,9 @@ where
         #[cfg(feature = "stat_perf")]
         let _perf = crate::stat::Measure::<Self>::Transaction;
         
+        #[cfg(feature = "check_allocator_cyclic_links")]
+        debug_assert!(Self::verify());
+
         let mut chaperoned = false;
         let cptr = &mut chaperoned as *mut bool;
         let res = std::panic::catch_unwind(|| {
@@ -1193,6 +1196,9 @@ where
 
         #[cfg(feature = "stat_perf")]
         let _perf = crate::stat::Measure::<Self>::Logging(std::time::Instant::now());
+
+        #[cfg(feature = "check_allocator_cyclic_links")]
+        debug_assert!(Self::verify());
 
         unsafe {
             crate::ll::sfence();
