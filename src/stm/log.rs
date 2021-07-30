@@ -365,8 +365,8 @@ impl<A: MemPool> Log<A> {
 
             //     Self::create_impl(log.off(), pointer.off(), len, journal, notifier)
             // } else {
-                crate::ll::persist_obj_with_log::<_,A>(log.as_ref(), false);
-                Self::create_impl(pointer.off(), log.off(), len, journal, notifier)
+            crate::ll::persist_obj_with_log::<_,A>(log.as_ref(), false);
+            Self::create_impl(pointer.off(), log.off(), len, journal, notifier)
             // }
         }
     }
