@@ -155,7 +155,7 @@ impl Chaperon {
     }
 
     fn deref(raw: *mut u8) -> &'static mut Self {
-        unsafe { utils::read(raw) }
+        unsafe { &mut *utils::read(raw) }
     }
 
     fn as_bytes(&self) -> &[u8] {

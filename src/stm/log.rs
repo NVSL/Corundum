@@ -296,7 +296,8 @@ fn dump_data<A: MemPool>(tag: &str, off: u64, len: usize) {
     use term_painter::Color::*;
     use term_painter::ToStyle;
 
-    print!("{}", BrightBlue.paint(format!("{:>19}  ", tag)));
+    print!("{:<8} {}", A::name().to_owned() + ":", 
+        BrightBlue.paint(format!("{:>10}  ", tag)));
     for i in 0..len {
         let d = unsafe { A::get_unchecked::<u8>(off + i as u64) };
         print!("{}", BrightBlue.paint(format!("{:02x} ", *d)));
@@ -364,7 +365,7 @@ impl<A: MemPool> Log<A> {
 
             //     Self::create_impl(log.off(), pointer.off(), len, journal, notifier)
             // } else {
-                crate::ll::persist_obj(log.as_ref(), false);
+                crate::ll::persist_obj_with_log::<_,A>(log.as_ref(), false);
                 Self::create_impl(pointer.off(), log.off(), len, journal, notifier)
             // }
         }
@@ -397,8 +398,8 @@ impl<A: MemPool> Log<A> {
 
             let log = unsafe { slice.dup() };
 
-                crate::ll::persist_obj(log.as_ref(), false);
-                Self::create_impl(slice.off(), log.off(), len, journal, notifier)
+            crate::ll::persist_obj_with_log::<_,A>(log.as_ref(), false);
+            Self::create_impl(slice.off(), log.off(), len, journal, notifier)
             // }
         }
     }
@@ -525,7 +526,7 @@ impl<A: MemPool> Log<A> {
                 let src = A::get_mut_unchecked::<u8>(*src);
                 let log = A::get_mut_unchecked::<u8>(*log);
                 ptr::copy_nonoverlapping(log, src, *len);
-                persist(log, *len, true);
+                persist_with_log::<_,A>(log, *len, false);
             }
                     
             #[cfg(feature = "check_allocator_cyclic_links")]
@@ -636,7 +637,7 @@ impl<A: MemPool> Log<A> {
 
                 #[cfg(all(not(feature = "no_flush_updates"), not(feature = "replace_with_log")))]
                 unsafe {
-                    persist::<u8>(A::get_mut_unchecked(*_src), *_len, false);
+                    persist_with_log::<u8,A>(A::get_mut_unchecked(*_src), *_len, false);
                 }
             }
             DropOnCommit(src, len) => {

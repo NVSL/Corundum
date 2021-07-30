@@ -9,7 +9,7 @@ Corundum provides persistent memory support for Rust applications. This
 is useful for developing safe persistent memory applications without concerning
 about crash consistency and data loss. More details of its design and implementation
 is available in our ASPLOS 2021 academic [paper](http://cseweb.ucsd.edu/~mhoseinzadeh/hoseinzadeh-corundum-asplos21.pdf)
-(visit this [viedo](https://www.youtube.com/watch?v=yTk7e_3ZEzk) for the presentation).
+(visit this [video](https://www.youtube.com/watch?v=yTk7e_3ZEzk) for the presentation).
 
 Carefully using Rust's strict type checking rules and borrowing mechanism,
 Corundum guarantees that the implementation is free of common persistent memory

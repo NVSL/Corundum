@@ -98,7 +98,7 @@ impl<A: MemPool> Page<A> {
         #[cfg(feature = "use_ntstore")] unsafe {
             std::intrinsics::nontemporal_store(&mut self.logs[self.len], Log::new(log, notifier));
         }
-        persist(&self.logs[self.len], std::mem::size_of::<Log<A>>(), false);
+        persist_with_log::<_,A>(&self.logs[self.len], std::mem::size_of::<Log<A>>(), false);
 
         let log = unsafe { Ptr::new_unchecked(&self.logs[self.len]) };
         self.len += 1;
@@ -205,7 +205,7 @@ impl<A: MemPool> Journal<A> {
     /// Sets a flag
     pub unsafe fn set(&mut self, flag: u64) {
         self.flags |= flag;
-        persist_obj(&self.flags, true);
+        persist_obj_with_log::<_,A>(&self.flags, true);
     }
 
     /// Resets a flag
@@ -559,7 +559,7 @@ impl<A: MemPool> Journal<A> {
                     let id = self.sec_id;
                     self.chaperon = [0; 64];
                     self.sec_id = 0;
-                    persist_obj(&self.sec_id, true);
+                    persist_obj_with_log::<_,A>(&self.sec_id, true);
                     c.finish(id as usize);
                 } else {
                     self.chaperon = [0; 64];

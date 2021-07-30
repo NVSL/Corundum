@@ -1,6 +1,7 @@
 //! Low-level utils
- 
 #![allow(unused)]
+
+use crate::alloc::MemPool;
 
 #[inline(always)]
 pub fn cpu() -> usize {
@@ -15,12 +16,24 @@ use std::arch::x86_64::{_mm_clflush, _mm_mfence, _mm_sfence};
 
 /// Synchronize caches and memories and acts like a write barrier
 #[inline(always)]
-pub fn persist<T: ?Sized>(ptr: &T, len: usize, fence: bool) {
+pub fn persist_with_log<T: ?Sized, A: MemPool>(ptr: *const T, len: usize, fence: bool) {
+    unsafe {
+        crate::log!(A, BrightCyan, "PERSIST", "             ({:>6x}:{:<6x}) = {:<6}",
+            A::off_unchecked(ptr),
+            A::off_unchecked(ptr) + (len as u64 - 1), len   
+        );
+    }
+    persist(ptr, len, fence)
+}
+
+/// Synchronize caches and memories and acts like a write barrier
+#[inline(always)]
+pub fn persist<T: ?Sized>(ptr: *const T, len: usize, fence: bool) {
     #[cfg(feature = "stat_perf")]
     let _perf = crate::stat::Measure::<crate::default::BuddyAlloc>::Sync(std::time::Instant::now());
 
     #[cfg(not(feature = "no_persist"))]
-    {
+    {   
         #[cfg(not(feature = "use_msync"))]
         clflush(ptr, len, fence);
 
@@ -43,6 +56,14 @@ pub fn persist<T: ?Sized>(ptr: &T, len: usize, fence: bool) {
     }
 }
 
+#[inline(always)]
+pub fn persist_obj_with_log<T: ?Sized, A: MemPool>(obj: &T, fence: bool) {
+    #[cfg(not(feature = "no_persist"))]
+    {
+        persist_with_log::<T, A>(obj, std::mem::size_of_val(obj), fence);
+    }
+}
+
 /// Synchronize caches and memories and acts like a write barrier
 #[inline(always)]
 pub fn persist_obj<T: ?Sized>(obj: &T, fence: bool) {
@@ -51,22 +72,16 @@ pub fn persist_obj<T: ?Sized>(obj: &T, fence: bool) {
 
     #[cfg(not(feature = "no_persist"))]
     {
-        #[cfg(not(feature = "use_msync"))]
-        clflush_obj(obj, fence);
-
-        #[cfg(feature = "use_msync")]
-        {
-            persist(obj, std::mem::size_of_val(obj));
-        }
+        persist(obj, std::mem::size_of_val(obj), fence);
     }
 }
 
 /// Flushes cache line back to memory
 #[inline(always)]
-pub fn clflush<T: ?Sized>(ptr: &T, len: usize, fence: bool) {
+pub fn clflush<T: ?Sized>(ptr: *const T, len: usize, fence: bool) {
     #[cfg(not(feature = "no_persist"))]
     {
-        let ptr = ptr as *const _ as *const u8 as *mut u8;
+        let ptr = ptr as *const u8 as *mut u8;
         let mut start = ptr as usize;
         start = (start >> 9) << 9;
         let end = start + len;
@@ -96,15 +111,8 @@ pub fn clflush<T: ?Sized>(ptr: &T, len: usize, fence: bool) {
             start += 64;
         }
     }
-}
-
-/// Flushes cache lines of a whole object back to memory
-#[inline(always)]
-pub fn clflush_obj<T: ?Sized>(obj: &T, fence: bool) {
-    #[cfg(not(feature = "no_persist"))]
-    {
-        let len = std::mem::size_of_val(obj);
-        clflush(obj, len, fence)
+    if (fence) {
+        sfence();
     }
 }
 

@@ -191,9 +191,8 @@ impl<T: PSafe, A: MemPool> Slice<T, A> {
             Self::empty()
         } else {
             let slice = self.as_slice();
-            let (dst, off, len, z) = A::atomic_new_slice(slice);
+            let (_, off, len, z) = A::atomic_new_slice(slice);
             A::perform(z);
-            crate::ll::persist(dst, self.cap, true);
             Self::from_off_cap(off, len)
         }
     }

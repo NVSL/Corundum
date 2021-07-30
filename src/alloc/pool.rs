@@ -96,7 +96,8 @@ pub const FLAG_HAS_ROOT: u64 = 0x0000_0001;
 macro_rules! static_inner {
     ($id:ident, $inner:ident, $body:block) => {
         unsafe {
-            if let Some($inner) = &mut $id {
+            if let Some($inner) = $id {
+                let $inner = &mut *$inner;
                 $body
             } else {
                 panic!("No memory pool is open or the root object is moved to a transaction. Try cloning the root object instead of moving it to a transaction.");
@@ -827,7 +828,7 @@ where
         std::ptr::copy_nonoverlapping(x as *const T as *const u8, p, s);
         log.set(off, len, z);
         Self::perform(z);
-        utils::read(p)
+        &mut *utils::read(p)
     }
 
     /// Allocates new memory and then copies `x` into it with `DropOnFailure` log
@@ -844,7 +845,7 @@ where
         std::ptr::copy_nonoverlapping(x as *const [T] as *const u8, p, s);
         log.set(off, len, z);
         Self::perform(z);
-        utils::read(p)
+        &mut *utils::read(p)
     }
 
     /// Allocates new memory and then places `x` into it without realizing the allocation
@@ -857,7 +858,7 @@ where
             panic!("Memory exhausted");
         }
         Self::drop_on_failure(off, len, z);
-        let p = utils::read(raw);
+        let p = &mut *utils::read(raw);
         mem::forget(ptr::replace(p, x));
         (p, off, size, z)
     }
@@ -915,7 +916,7 @@ where
             panic!("Memory exhausted");
         }
         Self::drop_on_failure(off, len, z);
-        (utils::read(ptr), off, len, z)
+        (&mut *utils::read(ptr), off, len, z)
     }
 
     /// Allocates new memory for value `x`
@@ -924,7 +925,7 @@ where
         if raw.0.is_null() {
             panic!("Memory exhausted");
         }
-        utils::read(raw.0)
+        &mut *utils::read(raw.0)
     }
 
     /// Creates a `DropOnCommit` log for the value `x`

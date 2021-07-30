@@ -126,7 +126,7 @@ fn main() {
         }
     }
     
-    let root = P::open::<Root>(&pool, O_CFNE | O_8GB).unwrap();
+    let root = P::open::<Root>(&pool, O_CFNE | O_1GB).unwrap();
 
     P::transaction(|j| {
         let mut producers = root.producers.borrow_mut(j);

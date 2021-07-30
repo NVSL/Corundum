@@ -1,17 +1,14 @@
-
-use proc_macro2::Group;
-use crate::syn::parse::Parser;
-use syn::punctuated::Punctuated;
-use proc_macro2::TokenStream;
+use proc_macro::TokenStream;
+use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, quote_spanned, format_ident};
 use syn::spanned::Spanned;
 use syn::*;
 
-pub fn derive_pclone(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn derive_pclone(input: TokenStream) -> TokenStream {
     // Parse the input tokens into a syntax tree.
     let input = parse_macro_input!(input as DeriveInput);
 
-    let pools = pools(input.attrs);
+    let pools = crate::pools(input.attrs, "pools");
 
     // Used in the quasi-quotation below as `#name`.
     let name = input.ident;
@@ -41,34 +38,11 @@ pub fn derive_pclone(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
     let expanded = quote! { #(#expanded)* };
 
     // Hand the output tokens back to the compiler.
-    proc_macro::TokenStream::from(expanded)
-}
-
-fn pools(attrs: Vec<Attribute>) -> Vec<TokenStream> {
-    let mut p = vec![];
-    for attr in &attrs {
-        for segment in attr.path.segments.iter() {
-            if segment.ident.to_string() == String::from("pools") {
-                if let Ok(g) = parse2::<Group>(attr.tokens.clone()) {
-                    let parser = Punctuated::<Path, Token![,]>::parse_terminated;
-                    if let Ok(pools) = parser.parse2(g.stream()) {
-                        for pool in pools {
-                            p.push(quote! { #pool });
-                        }
-                    }
-                }
-            };
-        }
-    }
-    if p.is_empty() {
-        vec![quote!{ corundum::default::BuddyAlloc }]
-    } else {
-        p
-    }
+    TokenStream::from(expanded)
 }
 
 // Add a bound `T: PClone` to every type parameter T.
-fn add_trait_bounds(mut generics: Generics, pool: &Vec<TokenStream>, p: &TokenStream) -> Generics {
+fn add_trait_bounds(mut generics: Generics, pool: &Vec<TokenStream2>, p: &TokenStream2) -> Generics {
     for param in &mut generics.params {
         if let GenericParam::Type(ref mut type_param) = *param {
             let ident = type_param.ident.clone();
@@ -82,7 +56,7 @@ fn add_trait_bounds(mut generics: Generics, pool: &Vec<TokenStream>, p: &TokenSt
 }
 
 // Generate an expression to sum up the heap size of each field.
-fn pclone_all_fields(ident: &Ident, data: &Data) -> TokenStream {
+fn pclone_all_fields(ident: &Ident, data: &Data) -> TokenStream2 {
     match *data {
         Data::Struct(ref data) => {
             match data.fields {

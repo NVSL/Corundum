@@ -1408,6 +1408,21 @@ pub(crate) mod test {
     }
 
     #[test]
+    fn test_address() {
+        fn what_address<T>(obj: &T) {
+            println!("address = {:p}", obj);
+        }
+
+        fn test() {
+            let d = Box::new(10);
+            println!("address = {:p}", &d);
+            what_address(&d);
+        }
+
+        test()
+    }
+
+    #[test]
     fn test_transaction() {
         use crate::default::*;
 

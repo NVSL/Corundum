@@ -300,6 +300,15 @@ macro_rules! log {
                 $c.paint(format!("{:>10}  {}", $tag, format!($msg, $($args)*))));
         }
     };
+    (@none, $c:tt, $tag:expr, $msg:expr, $($args:tt)*) => {
+        #[cfg(feature = "verbose")] {
+            use term_painter::Color::*;
+            use term_painter::ToStyle;
+
+            println!("{:<8} {}", "",
+                $c.paint(format!("{:>10}  {}", $tag, format!($msg, $($args)*))));
+        }
+    };
 }
 
 pub const fn nearest_pow2(mut v: u64) -> u64 {
