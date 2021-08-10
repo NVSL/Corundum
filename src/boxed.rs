@@ -32,7 +32,7 @@ use std::ptr::{self, NonNull};
 /// ```
 /// use corundum::default::*;
 ///
-/// type P = BuddyAlloc;
+/// type P = Allocator;
 ///
 /// let _p = P::open_no_root("foo.pool", O_CF).unwrap();
 /// 
@@ -48,7 +48,7 @@ use std::ptr::{self, NonNull};
 ///
 /// ```
 /// # use corundum::default::*;
-/// # type P = BuddyAlloc;
+/// # type P = Allocator;
 /// # let _p = P::open_no_root("foo.pool", O_CF).unwrap();
 /// transaction(|j| {
 ///     let val: u8 = 5;
@@ -60,7 +60,7 @@ use std::ptr::{self, NonNull};
 ///
 /// ```
 /// # use corundum::default::*;
-/// # type P = BuddyAlloc;
+/// # type P = Allocator;
 /// # let _p = P::open_no_root("foo.pool", O_CF).unwrap();
 /// transaction(|j| {
 ///     let boxed: Pbox<u8> = Pbox::new(5, j);
@@ -72,7 +72,7 @@ use std::ptr::{self, NonNull};
 ///
 /// ```
 /// # use corundum::default::*;
-/// # type P = BuddyAlloc;
+/// # type P = Allocator;
 /// #[derive(Debug)]
 /// enum List<T: PSafe> {
 ///     Cons(T, Pbox<List<T>>),
@@ -148,7 +148,7 @@ impl<T: PSafe, A: MemPool> Pbox<T, A> {
     /// 
     /// ```
     /// # use corundum::default::*;
-    /// # type P = BuddyAlloc;
+    /// # type P = Allocator;
     /// # let _p = P::open_no_root("foo.pool", O_CF).unwrap();
     /// P::transaction(|j| {
     ///     let mut five = Pbox::<u32>::new_uninit(j);
@@ -178,7 +178,7 @@ impl<T: PSafe, A: MemPool> Pbox<T, A> {
     ///
     /// ```
     /// # use corundum::default::*;
-    /// # type P = BuddyAlloc;
+    /// # type P = Allocator;
     /// # let _p = P::open_no_root("foo.pool", O_CF).unwrap();
     /// P::transaction(|j| {
     ///     let zero = Pbox::<u32>::new_zeroed(j);
@@ -239,7 +239,7 @@ impl<T: PSafe, A: MemPool> Pbox<T, A> {
     /// ```
     /// use corundum::default::*;
     /// 
-    /// type P = BuddyAlloc;
+    /// type P = Allocator;
     ///
     /// let root = P::open::<Option<Pbox<i32>>>("foo.pool", O_CF).unwrap();
     ///

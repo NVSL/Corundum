@@ -1,3 +1,6 @@
+#![feature(once_cell)]
+#![feature(iter_map_while)]
+
 use proc_macro2::Group;
 use syn::parse::Parser;
 use syn::punctuated::Punctuated;
@@ -8,55 +11,171 @@ use syn::*;
 extern crate syn;
 extern crate proc_macro;
 extern crate quote;
+extern crate cbindgen;
+
+#[macro_use]
+extern crate proc_macro_error;
 
 mod pclone;
 mod root;
-mod cbindgen;
+mod cbinding;
 
+#[proc_macro_error]
 #[proc_macro_derive(PClone, attributes(pools))]
 pub fn derive_pclone(input: TokenStream) -> TokenStream {
     pclone::derive_pclone(input)
 }
 
+#[proc_macro_error]
 #[proc_macro_derive(Root, attributes(pools))]
 pub fn derive_root(input: TokenStream) -> TokenStream {
     root::derive_root(input)
 }
 
-#[proc_macro_derive(PoolCBindGen, attributes(mods,container,open_flags))]
+#[proc_macro_error]
+#[proc_macro_derive(PoolCBindGen, attributes(mods,types,open_flags))]
 pub fn derive_poolcbindgen(input: TokenStream) -> TokenStream {
-    cbindgen::derive_poolcbindgen(input)
+    cbinding::derive_poolcbindgen(input)
 }
 
-#[proc_macro_derive(CBindGen, attributes(mods,container))]
+#[proc_macro_error]
+#[proc_macro_derive(CBindGen, attributes(mods,generics))]
 pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
-    cbindgen::derive_cbindgen(input)
+    cbinding::derive_cbindgen(input)
 }
 
+#[proc_macro_error]
 #[proc_macro_attribute]
 pub fn cbindgen(attr: TokenStream, item: TokenStream) -> TokenStream {
-    cbindgen::cbindgen(attr, item)
+    cbinding::cbindgen(attr, item)
 }
 
-fn pools(attrs: Vec<Attribute>, name: &str) -> Vec<proc_macro2::TokenStream> {
-    let mut p = vec![];
-    for attr in &attrs {
+fn list(attrs: &Vec<Attribute>, name: &str) -> Vec<proc_macro2::TokenStream> {
+    let mut ret = vec![];
+    for attr in attrs {
         for segment in attr.path.segments.iter() {
             if segment.ident.to_string() == String::from(name) {
                 if let Ok(g) = parse2::<Group>(attr.tokens.clone()) {
                     let parser = Punctuated::<Path, Token![,]>::parse_terminated;
-                    if let Ok(pools) = parser.parse2(g.stream()) {
-                        for pool in pools {
-                            p.push(quote! { #pool });
+                    if let Ok(list) = parser.parse2(g.stream()) {
+                        for item in list {
+                            ret.push(quote! { #item });
                         }
                     }
                 }
             };
         }
     }
-    if p.is_empty() {
-        vec![quote!{ corundum::default::BuddyAlloc }]
+    if ret.is_empty() && name == "pools" {
+        vec![quote!{ corundum::default::Allocator }]
     } else {
-        p
+        ret
     }
+}
+
+#[proc_macro_error]
+#[proc_macro]
+pub fn generate(input: TokenStream) -> TokenStream {
+    use spanned::Spanned;
+    use std::path::PathBuf;
+
+    let mut overwrite = false;
+    let mut warning = true;
+    let mut dir: Option<(PathBuf,proc_macro2::Span)> = None;
+
+    
+    let parser = Punctuated::<Expr, Token![,]>::parse_terminated;
+    if let Ok(list) = parser.parse2(input.into()) {
+        for item in list {
+            if let Expr::Assign(ass) = item {
+                if !if let Expr::Path(p) = &*ass.left {
+                    if p.path.segments.len() == 1 {
+                        match &p.path.segments[0].ident.to_string()[..] {
+                            "path" => {
+                                if !if let Expr::Lit(p) = &*ass.right {
+                                    if let Lit::Str(d) = &p.lit {
+                                        let dr = PathBuf::from(d.value());
+                                        dir = Some((dr,d.span()));
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                } else {
+                                    false
+                                } {
+                                    abort!(ass.right.span(), "invalid value";
+                                        note = "aborting export procedure";
+                                        help = "specify a valid string"
+                                    );
+                                }
+                                true
+                            }
+                            "overwrite" => {
+                                if !if let Expr::Lit(p) = &*ass.right {
+                                    if let Lit::Bool(b) = &p.lit {
+                                        overwrite = b.value;
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                } else {
+                                    false
+                                } {
+                                    abort!(ass.right.span(), "invalid value";
+                                        note = "aborting export procedure";
+                                        help = "specify a valid bool (true/false)"
+                                    );
+                                }
+                                true
+                            }
+                            "warning" => {
+                                if !if let Expr::Lit(p) = &*ass.right {
+                                    if let Lit::Bool(b) = &p.lit {
+                                        warning = b.value;
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                } else {
+                                    false
+                                } {
+                                    abort!(ass.right.span(), "invalid value";
+                                        note = "aborting export procedure";
+                                        help = "specify a valid bool (true/false)"
+                                    );
+                                }
+                                true
+                            }
+                            _ => { false }
+                        }
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                } {
+                    abort!(ass.left.span(), "invalid option";
+                        note = "aborting export procedure";
+                        note = "available options are 'path', 'overwrite', and 'warning'"
+                    );
+                }
+            } else {
+                abort!(item.span(), "invalid option";
+                    note = "aborting export procedure";
+                    note = "available options are 'path', 'overwrite', and 'warning'"
+                );
+            }
+        }
+    }
+
+    if let Some((dir,span)) = dir {
+        if let Err(err) = cbinding::export(dir, span, overwrite, warning) {
+            abort_call_site!(
+                "header files generation failed";
+                note = "{}", err;
+            );
+        }
+    }
+
+    TokenStream::default()
 }

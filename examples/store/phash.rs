@@ -8,7 +8,7 @@ use std::str::FromStr;
 
 const BUCKETS_MAX: usize = 16;
 
-type P = BuddyAlloc;
+type P = Allocator;
 pub trait NVData =
     PSafe + TxInSafe + UnwindSafe + RefUnwindSafe + PartialEq + FromStr + Hash + Debug;
 

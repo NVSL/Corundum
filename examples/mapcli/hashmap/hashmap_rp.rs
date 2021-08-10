@@ -3,7 +3,7 @@ use corundum::default::*;
 use corundum::stm::Journal;
 use corundum::RootObj;
 
-type P = BuddyAlloc;
+type P = Allocator;
 
 pub struct HashmapRp {}
 

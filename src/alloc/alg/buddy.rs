@@ -705,7 +705,7 @@ impl<T, A: MemPool> Zones<T, A> {
     #[inline]
     /// Returns a mutable reference to the i-th zone object
     pub fn at(&self, i: usize) -> &mut T {
-        debug_assert!(i < self.count);
+        debug_assert!(i < self.count, "no zone index {} (max = {})", i, self.count);
         let off = self.base + i * mem::size_of::<T>();
         Self::read(off as u64)
     }
@@ -747,7 +747,7 @@ impl<T, A: MemPool> IndexMut<usize> for Zones<T, A> {
 mod test {
     use crate::default::*;
     // use crate::boxed::Pbox;
-    type P = BuddyAlloc;
+    type P = Allocator;
 
     #[test]
     fn buddy_alg_test() {
@@ -828,21 +828,21 @@ mod test {
 
 #[macro_export]
 /// This macro creates a new pool module and aliases for persistent types. It
-/// generates type [`BuddyAlloc`] which a persistent allocator type. It is
-/// recommended to alias the [`BuddyAlloc`] type for tidiness.
+/// generates type [`Allocator`] which a persistent allocator type. It is
+/// recommended to alias the [`Allocator`] type for tidiness.
 /// 
 /// The aliased types are 
 /// 
-/// * `Pbox<T>` = [`corundum::boxed::Pbox`]`<T, `[`BuddyAlloc`]`>`
-/// * `Prc<T>` = [`corundum::prc::Prc`]`<T, `[`BuddyAlloc`]`>`
-/// * `Parc<T>` = [`corundum::sync::Parc`]`<T, `[`BuddyAlloc`]`>`
-/// * `PMutex<T>` = [`corundum::sync::PMutex`]`<T, `[`BuddyAlloc`]`>`
-/// * `PCell<T>` = [`corundum::cell::PCell`]`<T, `[`BuddyAlloc`]`>`
-/// * `PRefCell<T>` = [`corundum::cell::PRefCell`]`<T, `[`BuddyAlloc`]`>`
-/// * `VCell<T>` = [`corundum::cell::VCell`]`<T, `[`BuddyAlloc`]`>`
-/// * `TCell<T>` = [`corundum::cell::TCell`]`<T, `[`BuddyAlloc`]`>`
-/// * `PVec<T>` = [`corundum::vec::Vec`]`<T, `[`BuddyAlloc`]`>`
-/// * `PString` = [`corundum::str::String`]`<`[`BuddyAlloc`]`>`
+/// * `Pbox<T>` = [`corundum::boxed::Pbox`]`<T, `[`Allocator`]`>`
+/// * `Prc<T>` = [`corundum::prc::Prc`]`<T, `[`Allocator`]`>`
+/// * `Parc<T>` = [`corundum::sync::Parc`]`<T, `[`Allocator`]`>`
+/// * `PMutex<T>` = [`corundum::sync::PMutex`]`<T, `[`Allocator`]`>`
+/// * `PCell<T>` = [`corundum::cell::PCell`]`<T, `[`Allocator`]`>`
+/// * `PRefCell<T>` = [`corundum::cell::PRefCell`]`<T, `[`Allocator`]`>`
+/// * `VCell<T>` = [`corundum::cell::VCell`]`<T, `[`Allocator`]`>`
+/// * `TCell<T>` = [`corundum::cell::TCell`]`<T, `[`Allocator`]`>`
+/// * `PVec<T>` = [`corundum::vec::Vec`]`<T, `[`Allocator`]`>`
+/// * `PString` = [`corundum::str::String`]`<`[`Allocator`]`>`
 ///
 /// # Examples
 /// 
@@ -854,7 +854,7 @@ mod test {
 /// corundum::pool!(my_alloc);
 /// use my_alloc::*;
 /// 
-/// type P = BuddyAlloc;
+/// type P = Allocator;
 /// 
 /// let _pool = P::open_no_root("p.pool", O_CF).unwrap();
 /// 
@@ -872,8 +872,8 @@ mod test {
 /// corundum::pool!(pool1);
 /// corundum::pool!(pool2);
 /// 
-/// type P1 = pool1::BuddyAlloc;
-/// type P2 = pool2::BuddyAlloc;
+/// type P1 = pool1::Allocator;
+/// type P2 = pool2::Allocator;
 /// 
 /// let _p1 = P1::open_no_root("p1.pool", O_CF).unwrap();
 /// let _p2 = P2::open_no_root("p2.pool", O_CF).unwrap();
@@ -886,7 +886,7 @@ mod test {
 /// }).unwrap();
 /// ```
 /// 
-/// [`BuddyAlloc`]: ./alloc/default/struct.BuddyAlloc.html
+/// [`Allocator`]: ./alloc/default/struct.Allocator.html
 /// [`corundum::boxed::Pbox`]: ./boxed/struct.Pbox.html
 /// [`corundum::prc::Prc`]: ./prc/struct.Prc.html
 /// [`corundum::sync::Parc`]: ./sync/struct.Parc.html
@@ -898,742 +898,749 @@ mod test {
 /// [`corundum::vec::Vec`]: ./vec/struct.Vec.html
 /// [`corundum::str::String`]: ./str/struct.String.html
 macro_rules! pool {
-    ($name:ident) => {
+    ($mod:ident, $name:ident) => {
         /// The default allocator module
-        pub mod $name {
-            $crate::pool!(@define, $name);
-        }
-    };
-    (@define, $name:ident) => {
-        use memmap::*;
-        use std::collections::hash_map::DefaultHasher;
-        use std::collections::HashMap;
-        use std::fs::OpenOptions;
-        use std::hash::{Hash, Hasher};
-        use std::mem;
-        use std::ops::Range;
-        use std::path::{Path, PathBuf};
-        use std::sync::atomic::{AtomicBool, Ordering};
-        use std::sync::{Arc, Mutex};
-        use std::thread::ThreadId;
-        use $crate::ll::*;
-        use $crate::cell::LazyCell;
-        use $crate::result::Result;
-        use $crate::utils::read;
-        pub use $crate::*;
-        pub use $crate::alloc::*;
-        pub use $crate::cell::{RootCell, RootObj};
-        pub use $crate::clone::PClone;
-        pub use $crate::convert::PFrom;
-        pub use $crate::str::ToPString;
-        pub use $crate::stm::transaction;
-        pub use $crate::ptr::Ptr;
-
-        static mut BUDDY_START: u64 = 0;
-        static mut BUDDY_VALID_START: u64 = 0;
-        static mut BUDDY_END: u64 = 0;
-
-        #[repr(C)]
-        struct BuddyAllocInner {
-            magic_number: u64,
-            flags: u64,
-            gen: u32,
-            tx_gen: u32,
-            root_obj: u64,
-            root_type_id: u64,
-            journals: u64,
-            size: usize,
-            zone: Zones<BuddyAlg<BuddyAlloc>, BuddyAlloc>
-        }
-
-        struct VData {
-            filename: String,
-            journals: HashMap<ThreadId, (u64, i32)>,
-            mmap: MmapMut,
-        }
-
-        impl VData {
-            fn new(mmap: MmapMut, filename: &str) -> Self {
-                Self {
-                    filename: filename.to_string(),
-                    journals: HashMap::new(),
-                    mmap,
+        pub mod $mod {
+            use memmap::*;
+            use std::collections::hash_map::DefaultHasher;
+            use std::collections::HashMap;
+            use std::fs::OpenOptions;
+            use std::hash::{Hash, Hasher};
+            use std::mem;
+            use std::ops::Range;
+            use std::path::{Path, PathBuf};
+            use std::sync::atomic::{AtomicBool, Ordering};
+            use std::sync::{Arc, Mutex};
+            use std::thread::ThreadId;
+            use $crate::ll::*;
+            use $crate::cell::LazyCell;
+            use $crate::result::Result;
+            use $crate::utils::read;
+            pub use $crate::*;
+            pub use $crate::alloc::*;
+            pub use $crate::cell::{RootCell, RootObj};
+            pub use $crate::clone::PClone;
+            pub use $crate::convert::PFrom;
+            pub use $crate::str::ToPString;
+            pub use $crate::stm::transaction;
+            pub use $crate::ptr::Ptr;
+    
+            static mut BUDDY_START: u64 = 0;
+            static mut BUDDY_VALID_START: u64 = 0;
+            static mut BUDDY_END: u64 = 0;
+    
+            #[repr(C)]
+            struct BuddyAllocInner {
+                magic_number: u64,
+                flags: u64,
+                gen: u32,
+                tx_gen: u32,
+                root_obj: u64,
+                root_type_id: u64,
+                journals: u64,
+                size: usize,
+                zone: Zones<BuddyAlg<$name>, $name>
+            }
+    
+            struct VData {
+                filename: String,
+                journals: HashMap<ThreadId, (u64, i32)>,
+                mmap: MmapMut,
+            }
+    
+            impl VData {
+                fn new(mmap: MmapMut, filename: &str) -> Self {
+                    Self {
+                        filename: filename.to_string(),
+                        journals: HashMap::new(),
+                        mmap,
+                    }
                 }
             }
-        }
-
-        impl BuddyAllocInner {
-            fn init(&mut self, size: usize) {
-                let id = std::any::type_name::<Self>();
-                let mut s = DefaultHasher::new();
-                id.hash(&mut s);
-                self.flags = 0;
-                self.gen = 1;
-                self.tx_gen = 0;
-                self.root_obj = u64::MAX;
-                self.root_type_id = 0;
-                self.journals = u64::MAX;
-                self.size = size;
-
-                type T = BuddyAlg<BuddyAlloc>;
-                let cpus = if let Some(val) = std::env::var_os("CPUS") {
-                    val.into_string().unwrap().parse::<usize>().unwrap()
-                } else {
-                    num_cpus::get()
-                };
-                assert_ne!(cpus, 0);
-                let quota = size / cpus;
-                self.zone = Zones::new(cpus, mem::size_of::<Self>(), quota);
-                for i in 0..cpus {
-                    self.zone[i].init((quota * i) as u64, quota);
-                }
-                self.magic_number = u64::MAX;
-                unsafe {
-                    self.zone[0].alloc_impl(
-                        mem::size_of::<Self>() + mem::size_of::<T>() * cpus,
-                        true,
-                    );
-                }
-                self.magic_number = s.finish();
-            }
-
-            fn as_bytes(&self) -> &[u8] {
-                let ptr: *const Self = self;
-                let ptr = ptr as *const u8;
-                unsafe { std::slice::from_raw_parts(ptr, std::mem::size_of::<Self>()) }
-            }
-
-            fn has_root(&self) -> bool {
-                self.flags & FLAG_HAS_ROOT == FLAG_HAS_ROOT
-            }
-        }
-
-        /// A memory allocator with buddy allocation mechanism
-        ///
-        /// To define a new buddy allocator type as a memory pool, you may
-        /// use [`pool!()`] macro. 
-        /// 
-        /// [`pool!()`]: ../macro.pool.html
-        pub struct BuddyAlloc {}
-
-        static mut BUDDY_INNER: Option<*mut BuddyAllocInner> = None;
-        static mut OPEN: AtomicBool = AtomicBool::new(false);
-        static mut MAX_GEN: u32 = 0;
-        static mut VDATA: LazyCell<Arc<Mutex<Option<VData>>>> = 
-            LazyCell::new(|| Arc::new(Mutex::new(None)));
-
-        impl BuddyAlloc {
-            fn running_transaction() -> bool {
-                let vdata = match unsafe { VDATA.lock() } {
-                    Ok(g) => g,
-                    Err(p) => p.into_inner()
-                };
-                if let Some(vdata) = &*vdata {
-                    !vdata.journals.is_empty()
-                } else {
-                    false
-                }
-            }
-
-            /// Opens a memory pool file and returns an instance of
-            /// [`BuddyAlloc`](#) if success. The pool remains open as long
-            /// as the instance lives.
-            #[track_caller]
-            pub fn open_impl(filename: &str, no_check: bool) -> Result<Self> {
-                let metadata = std::fs::metadata(filename);
-                if let Err(e) = &metadata {
-                    Err(format!("{}", e))
-                } else {
-                    let metadata = metadata.unwrap();
-                    assert!(metadata.is_file());
-                    if metadata.len() < 8 {
-                        Err("Invalid pool file".to_string())
+    
+            impl BuddyAllocInner {
+                fn init(&mut self, size: usize) {
+                    let id = std::any::type_name::<Self>();
+                    let mut s = DefaultHasher::new();
+                    id.hash(&mut s);
+                    self.flags = 0;
+                    self.gen = 1;
+                    self.tx_gen = 0;
+                    self.root_obj = u64::MAX;
+                    self.root_type_id = 0;
+                    self.journals = u64::MAX;
+                    self.size = size;
+    
+                    type T = BuddyAlg<$name>;
+                    let cpus = if let Some(val) = std::env::var_os("CPUS") {
+                        val.into_string().unwrap().parse::<usize>().unwrap()
                     } else {
-                        let path = PathBuf::from(filename);
+                        num_cpus::get()
+                    };
+                    assert_ne!(cpus, 0);
+                    let quota = size / cpus;
+                    self.zone = Zones::new(cpus, mem::size_of::<Self>(), quota);
+                    for i in 0..cpus {
+                        self.zone[i].init((quota * i) as u64, quota);
+                    }
+                    self.magic_number = u64::MAX;
+                    unsafe {
+                        self.zone[0].alloc_impl(
+                            mem::size_of::<Self>() + mem::size_of::<T>() * cpus,
+                            true,
+                        );
+                    }
+                    self.magic_number = s.finish();
+                }
+    
+                fn as_bytes(&self) -> &[u8] {
+                    let ptr: *const Self = self;
+                    let ptr = ptr as *const u8;
+                    unsafe { std::slice::from_raw_parts(ptr, std::mem::size_of::<Self>()) }
+                }
+    
+                fn has_root(&self) -> bool {
+                    self.flags & FLAG_HAS_ROOT == FLAG_HAS_ROOT
+                }
+            }
+    
+            /// A memory allocator with buddy allocation mechanism
+            ///
+            /// To define a new buddy allocator type as a memory pool, you may
+            /// use [`pool!()`] macro. 
+            /// 
+            /// [`pool!()`]: ../macro.pool.html
+            pub struct $name {}
+    
+            pub mod dummy {
+                #[repr(C)]
+                pub enum Option<T> {
+                    Some(T), None
+                }
+            }
+    
+            static mut BUDDY_INNER: Option<*mut BuddyAllocInner> = None;
+            static mut OPEN: AtomicBool = AtomicBool::new(false);
+            static mut MAX_GEN: u32 = 0;
+            static mut VDATA: LazyCell<Arc<Mutex<Option<VData>>>> = 
+                LazyCell::new(|| Arc::new(Mutex::new(None)));
+    
+            impl $name {
+                fn running_transaction() -> bool {
+                    let vdata = match unsafe { VDATA.lock() } {
+                        Ok(g) => g,
+                        Err(p) => p.into_inner()
+                    };
+                    if let Some(vdata) = &*vdata {
+                        !vdata.journals.is_empty()
+                    } else {
+                        false
+                    }
+                }
+    
+                /// Opens a memory pool file and returns an instance of
+                /// [`Allocator`](#) if success. The pool remains open as long
+                /// as the instance lives.
+                #[track_caller]
+                pub fn open_impl(filename: &str, no_check: bool) -> Result<Self> {
+                    let metadata = std::fs::metadata(filename);
+                    if let Err(e) = &metadata {
+                        Err(format!("{}", e))
+                    } else {
+                        let metadata = metadata.unwrap();
+                        assert!(metadata.is_file());
+                        if metadata.len() < 8 {
+                            Err("Invalid pool file".to_string())
+                        } else {
+                            let path = PathBuf::from(filename);
+                            let file = OpenOptions::new()
+                                .read(true)
+                                .write(true)
+                                .create(true)
+                                .open(&path)
+                                .unwrap();
+    
+                            let mut mmap =
+                                unsafe { memmap::MmapOptions::new().map_mut(&file).unwrap() };
+    
+                            let raw_offset = mmap.get_mut(0).unwrap();
+    
+                            let id = std::any::type_name::<BuddyAllocInner>();
+                            let mut s = DefaultHasher::new();
+                            id.hash(&mut s);
+                            let id = s.finish();
+    
+                            let inner = unsafe {
+                                read::<BuddyAllocInner>(raw_offset)
+                            };
+                            if !no_check {
+                                assert_eq!(
+                                    inner.magic_number, id,
+                                    "Invalid magic number for the pool image file"
+                                );
+                            }
+    
+                            let base = raw_offset as *mut _ as u64;
+                            unsafe {
+                                inner.gen = MAX_GEN.max(inner.gen + 1);
+                                inner.tx_gen = 0;
+                                MAX_GEN = inner.gen;
+                                BUDDY_START = base;
+                                BUDDY_VALID_START = base
+                                    + mem::size_of::<BuddyAllocInner>() as u64
+                                    + mem::size_of::<BuddyAlg<Self>>() as u64;
+                                BUDDY_END = BUDDY_START + inner.size as u64 + 1;
+                                BUDDY_INNER = Some(inner);
+                                let mut vdata = match VDATA.lock() {
+                                    Ok(g) => g,
+                                    Err(p) => p.into_inner()
+                                };
+                                *vdata = Some(VData::new(mmap, filename));
+                            }
+    
+                            Ok(Self {})
+                        }
+                    }
+                }
+            }
+    
+            unsafe impl MemPool for $name {
+                #[inline]
+                fn name() -> &'static str {
+                    stringify!($name)
+                }
+    
+                /// Formats the image file
+                unsafe fn format(filename: &str) -> Result<()> {
+                    if Path::new(filename).exists() {
                         let file = OpenOptions::new()
                             .read(true)
                             .write(true)
                             .create(true)
-                            .open(&path)
-                            .unwrap();
-
-                        let mut mmap =
-                            unsafe { memmap::MmapOptions::new().map_mut(&file).unwrap() };
-
-                        let raw_offset = mmap.get_mut(0).unwrap();
-
-                        let id = std::any::type_name::<BuddyAllocInner>();
-                        let mut s = DefaultHasher::new();
-                        id.hash(&mut s);
-                        let id = s.finish();
-
-                        let inner = unsafe {
-                            read::<BuddyAllocInner>(raw_offset)
-                        };
-                        if !no_check {
-                            assert_eq!(
-                                inner.magic_number, id,
-                                "Invalid magic number for the pool image file"
-                            );
-                        }
-
-                        let base = raw_offset as *mut _ as u64;
-                        unsafe {
-                            inner.gen = MAX_GEN.max(inner.gen + 1);
-                            inner.tx_gen = 0;
-                            MAX_GEN = inner.gen;
-                            BUDDY_START = base;
-                            BUDDY_VALID_START = base
-                                + mem::size_of::<BuddyAllocInner>() as u64
-                                + mem::size_of::<BuddyAlg<Self>>() as u64;
-                            BUDDY_END = BUDDY_START + inner.size as u64 + 1;
-                            BUDDY_INNER = Some(inner);
-                            let mut vdata = match VDATA.lock() {
-                                Ok(g) => g,
-                                Err(p) => p.into_inner()
-                            };
-                            *vdata = Some(VData::new(mmap, filename));
-                        }
-
-                        Ok(Self {})
-                    }
-                }
-            }
-        }
-
-        unsafe impl MemPool for BuddyAlloc {
-            #[inline]
-            fn name() -> &'static str {
-                stringify!($name)
-            }
-
-            /// Formats the image file
-            unsafe fn format(filename: &str) -> Result<()> {
-                if Path::new(filename).exists() {
-                    let file = OpenOptions::new()
-                        .read(true)
-                        .write(true)
-                        .create(true)
-                        .open(filename);
-                    if let Err(e) = &file {
-                        Err(format!("{}", e))
-                    } else {
-                        let file = file.unwrap();
-                        let mut len = file.metadata().unwrap().len() as usize;
-                        if len < 8 {
-                            len = 10 * 1024 * 1024;
-                            file.set_len(len as u64).unwrap();
-                        }
-
-                        let mut mmap = memmap::MmapOptions::new().map_mut(&file).unwrap();
-                        let begin = mmap.get_mut(0).unwrap();
-                        std::ptr::write_bytes(begin, 0xff, 8);
-                        BUDDY_START = begin as *const _ as u64;
-                        BUDDY_END = u64::MAX;
-
-                        let inner = read::<BuddyAllocInner>(begin);
-                        inner.init(len);
-                        mmap.flush().unwrap();
-                        Ok(())
-                    }
-                } else {
-                    Err("Image file does not exist".to_string())
-                }
-            }
-
-            #[inline]
-            #[track_caller]
-            fn gen() -> u32 {
-                static_inner!(BUDDY_INNER, inner, { inner.gen })
-            }
-
-            #[inline]
-            #[track_caller]
-            fn tx_gen() -> u32 {
-                static_inner!(BUDDY_INNER, inner, {
-                    inner.tx_gen += 1;
-                    inner.tx_gen
-                })
-            }
-
-            #[track_caller]
-            fn size() -> usize {
-                static_inner!(BUDDY_INNER, inner, { inner.size })
-            }
-
-            #[inline]
-            #[track_caller]
-            fn available() -> usize {
-                static_inner!(BUDDY_INNER, inner, {
-                    let mut sum = 0;
-                    for i in 0..inner.zone.count() {
-                        sum += inner.zone[i].available();
-                    }
-                    sum
-                })
-            }
-
-            #[track_caller]
-            fn used() -> usize {
-                static_inner!(BUDDY_INNER, inner, {
-                    let mut sum = 0;
-                    for i in 0..inner.zone.count() {
-                        sum += inner.zone[i].used();
-                    }
-                    sum
-                })
-            }
-
-            #[inline]
-            fn rng() -> Range<u64> {
-                unsafe { BUDDY_VALID_START..BUDDY_END }
-            }
-
-            #[inline]
-            fn start() -> u64 {
-                unsafe { BUDDY_START }
-            }
-
-            #[inline]
-            fn end() -> u64 {
-                unsafe { BUDDY_END }
-            }
-
-            #[allow(unused_unsafe)]
-            #[track_caller]
-            unsafe fn pre_alloc(size: usize) -> (*mut u8, u64, usize, usize) {
-                #[cfg(feature = "stat_perf")]
-                let _perf = $crate::stat::Measure::<Self>::Alloc(std::time::Instant::now());
-
-                static_inner!(BUDDY_INNER, inner, {
-                    let cpu = cpu();
-                    let cnt = inner.zone.count();
-                    for i in 0..cnt {
-                        let z = (cpu+i)%cnt;
-                        let a = inner.zone[z].alloc_impl(size, false);
-                        if a != u64::MAX {
-                            return (Self::get_mut_unchecked(a), a, size, z);
-                        }
-                    }
-                    eprintln!(
-                        "No space left (requested = {}, available= {})",
-                        size, Self::available()
-                    );
-                    (std::ptr::null_mut(), u64::MAX, 0, 0)
-                })
-            }
-
-            #[allow(unused_unsafe)]
-            #[track_caller]
-            unsafe fn pre_dealloc(ptr: *mut u8, size: usize) -> usize {
-                #[cfg(feature = "stat_perf")]
-                let _perf = $crate::stat::Measure::<Self>::Dealloc(std::time::Instant::now());
-
-                static_inner!(BUDDY_INNER, inner, {
-                    let off = Self::off(ptr).expect("invalid pointer");
-                    let (zone,zidx) = inner.zone.from_off(off);
-                    if cfg!(feature = "check_access_violation") {
-                        if zone.is_allocated(off, size) {
-                            zone.dealloc_impl(off, size, false);
+                            .open(filename);
+                        if let Err(e) = &file {
+                            Err(format!("{}", e))
                         } else {
-                            panic!("offset @{} ({}) was not allocated", off, size);
-                        }
-                    } else {
-                        zone.dealloc_impl(off, size, false);
-                    }
-                    zidx
-                })
-            }
-
-            #[inline]
-            #[allow(unused_unsafe)]
-            #[track_caller]
-            unsafe fn log64(off: u64, val: u64, z: usize) {
-                static_inner!(BUDDY_INNER, inner, {
-                    inner.zone[z].log(off, val);
-                })
-            }
-
-            #[inline]
-            #[allow(unused_unsafe)]
-            #[track_caller]
-            unsafe fn drop_on_failure(off: u64, len: usize, z: usize) {
-                static_inner!(BUDDY_INNER, inner, {
-                    inner.zone[z].drop_on_failure(off, len);
-                })
-            }
-
-            #[inline]
-            #[track_caller]
-            fn zone(off: u64) -> usize {
-                static_inner!(BUDDY_INNER, inner, {
-                    off as usize / inner.zone.quota()
-                })
-            }
-
-            #[inline]
-            #[allow(unused_unsafe)]
-            #[track_caller]
-            unsafe fn prepare(z: usize) {
-                static_inner!(BUDDY_INNER, inner, {
-                    inner.zone[z].prepare();
-                })
-            }
-
-            #[inline]
-            #[allow(unused_unsafe)]
-            #[track_caller]
-            unsafe fn perform(z: usize) {
-                static_inner!(BUDDY_INNER, inner, {
-                    inner.zone[z].perform();
-                })
-            }
-
-            #[inline]
-            #[allow(unused_unsafe)]
-            #[track_caller]
-            unsafe fn discard(z: usize) {
-                static_inner!(BUDDY_INNER, inner, {
-                    inner.zone[z].discard();
-                })
-            }
-
-            #[inline]
-            #[allow(unused_unsafe)]
-            #[track_caller]
-            fn allocated(off: u64, len: usize) -> bool {
-                static_inner!(BUDDY_INNER, inner, {
-                    if off >= Self::end() {
-                        false
-                    } else if Self::contains(off + Self::start()) {
-                        if cfg!(feature = "check_access_violation") {
-                            inner.zone.from_off(off).0.is_allocated(off, len)
-                        } else {
-                            true
-                        }
-                    } else {
-                        false
-                    }
-                })
-            }
-
-            #[inline]
-            #[allow(unused_unsafe)]
-            #[track_caller]
-            fn verify() -> bool {
-                static_inner!(BUDDY_INNER, inner, {
-                    for i in 0..inner.zone.count() {
-                        if !inner.zone[i].verify() {
-                            return false;
-                        }
-                    }
-                    true
-                })
-            }
-
-            #[inline]
-            #[allow(unused_unsafe)]
-            #[track_caller]
-            unsafe fn journals_head() -> &'static u64 {
-                static_inner!(BUDDY_INNER, inner, {
-                    &inner.journals
-                })
-            }
-
-            #[allow(unused_unsafe)]
-            #[track_caller]
-            unsafe fn drop_journal(journal: &mut Journal) {
-                let _vdata = match VDATA.lock() {
-                    Ok(g) => g,
-                    Err(p) => p.into_inner()
-                };
-                static_inner!(BUDDY_INNER, inner, {
-                    let off = Self::off(journal).unwrap();
-                
-                    #[cfg(feature = "pin_journals")]
-                    journal.drop_pages();
-
-                    let z = Self::pre_dealloc(journal as *mut _ as *mut u8, mem::size_of::<Journal>());
-                    if inner.journals == off {
-                        Self::log64(Self::off_unchecked(&inner.journals), journal.next_off(), z);
-                    }
-                    if let Ok(prev) = Self::deref_mut::<Journal>(journal.prev_off()) {
-                        Self::log64(Self::off_unchecked(prev.next_off_ref()), journal.next_off(), z);
-                    }
-                    if let Ok(next) = Self::deref_mut::<Journal>(journal.next_off()) {
-                        Self::log64(Self::off_unchecked(next.prev_off_ref()), journal.prev_off(), z);
-                    }
-                    Self::perform(z);
-                });
-            }
-
-            #[allow(unused_unsafe)]
-            #[track_caller]
-            unsafe fn journals<T, F: Fn(&mut HashMap<ThreadId, (u64, i32)>)->T>(f: F)->T{
-                let mut vdata = match VDATA.lock() {
-                    Ok(g) => g,
-                    Err(p) => p.into_inner()
-                };
-                if let Some(vdata) = &mut *vdata {
-                    f(&mut vdata.journals)
-                } else {
-                    panic!("No memory pool is open or the root object is moved to a transaction. Try cloning the root object instead of moving it to a transaction.");
-                }
-            }
-
-            #[allow(unused_unsafe)]
-            unsafe fn recover() {
-                static_inner!(BUDDY_INNER, inner, {
-                    let info_level = std::env::var("RECOVERY_INFO")
-                        .unwrap_or("0".to_string())
-                        .parse::<u32>()
-                        .expect("RECOVERY_INFO should be an unsigned integer");
-                    
-                    if info_level > 0 {
-                        for i in 0..inner.zone.count() {
-                            eprintln!("{:=^60}", format!(" Restore Allocator (Zone {}) ", i));
-                            eprintln!("{}", inner.zone[i].recovery_info(info_level));
-                        }
-
-                        let mut curr = inner.journals;
-                        while let Ok(j) = Self::deref_mut::<Journal>(curr) {
-                            eprintln!("{:-^60}\n{}", format!(" Journal @({}) ", curr), j.recovery_info(info_level));
-                            curr = j.next_off();
-                        }
-                    }
-
-                    for i in 0..inner.zone.count() {
-                        inner.zone[i].recover();
-                    }
-
-                    #[cfg(feature = "check_allocator_cyclic_links")]
-                    debug_assert!(Self::verify());
-
-                    while let Ok(logs) = Self::deref_mut::<Journal>(inner.journals) {
-
-                        #[cfg(feature = "verbose")]
-                        println!("{:?}", logs);
-
-                        #[cfg(feature = "check_allocator_cyclic_links")]
-                        debug_assert!(Self::verify());
-
-                        logs.recover();
-
-                        #[cfg(feature = "check_allocator_cyclic_links")]
-                        debug_assert!(Self::verify());
-
-                        logs.clear();
-
-                        #[cfg(feature = "check_allocator_cyclic_links")]
-                        debug_assert!(Self::verify());
-
-                        #[cfg(feature = "pin_journals")]
-                        Self::drop_journal(logs);
-                    }
-                })
-            }
-
-            #[allow(unused_unsafe)]
-            #[track_caller]
-            fn open<'a, U: 'a + PSafe + RootObj<Self>>(
-                path: &str,
-                flags: u32,
-            ) -> Result<RootCell<'a, U, Self>> {
-                let slf = Self::open_no_root(path, flags)?;
-                static_inner!(BUDDY_INNER, inner, {
-                    // Replace it with std::any::TypeId::of::<U>() when it
-                    // is available in the future for non-'static types
-                    let id = format!("{} ({})", std::any::type_name::<U>(),
-                        mem::size_of::<U>());
-                    let mut s = DefaultHasher::new();
-                    id.hash(&mut s);
-                    let id = s.finish();
-                    if !inner.has_root() {
-                        if mem::size_of::<U>() == 0 {
-                            Err("root type cannot be a ZST".to_string())
-                        } else {
-                            let root_off = Self::transaction(move |j| {
-                                let ptr = Self::new(U::init(j), j);
-                                Self::off_unchecked(ptr)
-                            })
-                            .unwrap();
-                            let ptr = Self::get_unchecked(root_off);
-                            inner.flags |= FLAG_HAS_ROOT;
-                            inner.root_obj = root_off;
-                            inner.root_type_id = id;
-                            persist_obj(inner, true);
-                            Ok((RootCell::new(ptr, Arc::new(slf))))
-                        }
-                    } else {
-                        if inner.root_type_id == id {
-                            Ok((RootCell::new(
-                                Self::deref::<U>(inner.root_obj)?,
-                                Arc::new(slf),
-                            )))
-                        } else {
-                            Err("Incompatible root type".to_string())
-                        }
-                    }
-                })
-            }
-
-            #[inline]
-            fn is_open() -> bool {
-                unsafe { BUDDY_INNER.is_some() }
-            }
-
-            #[allow(unused_unsafe)]
-            #[track_caller]
-            fn open_no_root(path: &str, flags: u32) -> Result<Self> {
-                unsafe {
-                    while OPEN.compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed).is_err() {}
-                    if !Self::running_transaction() {
-                        if flags == open_flags::O_READINFO {
-                            Self::open_impl(path, true)
-                        } else if let Ok(_) = Self::apply_flags(path, flags) {
-                            let res = Self::open_impl(path, false);
-                            if res.is_ok() {
-                                Self::recover();
+                            let file = file.unwrap();
+                            let mut len = file.metadata().unwrap().len() as usize;
+                            if len < 8 {
+                                len = 10 * 1024 * 1024;
+                                file.set_len(len as u64).unwrap();
                             }
-                            res
-                        } else {
-                            OPEN.store(false, Ordering::Release);
-                            Err("Could not open file".to_string())
+    
+                            let mut mmap = memmap::MmapOptions::new().map_mut(&file).unwrap();
+                            let begin = mmap.get_mut(0).unwrap();
+                            std::ptr::write_bytes(begin, 0xff, 8);
+                            BUDDY_START = begin as *const _ as u64;
+                            BUDDY_END = u64::MAX;
+    
+                            let inner = read::<BuddyAllocInner>(begin);
+                            inner.init(len);
+                            mmap.flush().unwrap();
+                            Ok(())
                         }
                     } else {
-                        OPEN.store(false, Ordering::Release);
-                        Err("An uncommitted transaction exists in the pool"
-                            .to_string())
+                        Err("Image file does not exist".to_string())
                     }
                 }
-            }
-
-            #[allow(unused_unsafe)]
-            unsafe fn close() -> Result<()> {
-                if OPEN.load(Ordering::Acquire) {
+    
+                #[inline]
+                #[track_caller]
+                fn gen() -> u32 {
+                    static_inner!(BUDDY_INNER, inner, { inner.gen })
+                }
+    
+                #[inline]
+                #[track_caller]
+                fn tx_gen() -> u32 {
+                    static_inner!(BUDDY_INNER, inner, {
+                        inner.tx_gen += 1;
+                        inner.tx_gen
+                    })
+                }
+    
+                #[track_caller]
+                fn size() -> usize {
+                    static_inner!(BUDDY_INNER, inner, { inner.size })
+                }
+    
+                #[inline]
+                #[track_caller]
+                fn available() -> usize {
+                    static_inner!(BUDDY_INNER, inner, {
+                        let mut sum = 0;
+                        for i in 0..inner.zone.count() {
+                            sum += inner.zone[i].available();
+                        }
+                        sum
+                    })
+                }
+    
+                #[track_caller]
+                fn used() -> usize {
+                    static_inner!(BUDDY_INNER, inner, {
+                        let mut sum = 0;
+                        for i in 0..inner.zone.count() {
+                            sum += inner.zone[i].used();
+                        }
+                        sum
+                    })
+                }
+    
+                #[inline]
+                fn rng() -> Range<u64> {
+                    unsafe { BUDDY_VALID_START..BUDDY_END }
+                }
+    
+                #[inline]
+                fn start() -> u64 {
+                    unsafe { BUDDY_START }
+                }
+    
+                #[inline]
+                fn end() -> u64 {
+                    unsafe { BUDDY_END }
+                }
+    
+                #[allow(unused_unsafe)]
+                #[track_caller]
+                unsafe fn pre_alloc(size: usize) -> (*mut u8, u64, usize, usize) {
+                    #[cfg(feature = "stat_perf")]
+                    let _perf = $crate::stat::Measure::<Self>::Alloc(std::time::Instant::now());
+    
+                    static_inner!(BUDDY_INNER, inner, {
+                        let cpu = cpu();
+                        let cnt = inner.zone.count();
+                        for i in 0..cnt {
+                            let z = (cpu+i)%cnt;
+                            let a = inner.zone[z].alloc_impl(size, false);
+                            if a != u64::MAX {
+                                return (Self::get_mut_unchecked(a), a, size, z);
+                            }
+                        }
+                        eprintln!(
+                            "No space left (requested = {}, available= {})",
+                            size, Self::available()
+                        );
+                        (std::ptr::null_mut(), u64::MAX, 0, 0)
+                    })
+                }
+    
+                #[allow(unused_unsafe)]
+                #[track_caller]
+                unsafe fn pre_dealloc(ptr: *mut u8, size: usize) -> usize {
+                    #[cfg(feature = "stat_perf")]
+                    let _perf = $crate::stat::Measure::<Self>::Dealloc(std::time::Instant::now());
+    
+                    static_inner!(BUDDY_INNER, inner, {
+                        let off = Self::off(ptr).expect("invalid pointer");
+                        let (zone,zidx) = inner.zone.from_off(off);
+                        if cfg!(feature = "check_access_violation") {
+                            if zone.is_allocated(off, size) {
+                                zone.dealloc_impl(off, size, false);
+                            } else {
+                                panic!("offset @{} ({}) was not allocated", off, size);
+                            }
+                        } else {
+                            zone.dealloc_impl(off, size, false);
+                        }
+                        zidx
+                    })
+                }
+    
+                #[inline]
+                #[allow(unused_unsafe)]
+                #[track_caller]
+                unsafe fn log64(off: u64, val: u64, z: usize) {
+                    static_inner!(BUDDY_INNER, inner, {
+                        inner.zone[z].log(off, val);
+                    })
+                }
+    
+                #[inline]
+                #[allow(unused_unsafe)]
+                #[track_caller]
+                unsafe fn drop_on_failure(off: u64, len: usize, z: usize) {
+                    static_inner!(BUDDY_INNER, inner, {
+                        inner.zone[z].drop_on_failure(off, len);
+                    })
+                }
+    
+                #[inline]
+                #[track_caller]
+                fn zone(off: u64) -> usize {
+                    static_inner!(BUDDY_INNER, inner, {
+                        off as usize / inner.zone.quota()
+                    })
+                }
+    
+                #[inline]
+                #[allow(unused_unsafe)]
+                #[track_caller]
+                unsafe fn prepare(z: usize) {
+                    static_inner!(BUDDY_INNER, inner, {
+                        inner.zone[z].prepare();
+                    })
+                }
+    
+                #[inline]
+                #[allow(unused_unsafe)]
+                #[track_caller]
+                unsafe fn perform(z: usize) {
+                    static_inner!(BUDDY_INNER, inner, {
+                        inner.zone[z].perform();
+                    })
+                }
+    
+                #[inline]
+                #[allow(unused_unsafe)]
+                #[track_caller]
+                unsafe fn discard(z: usize) {
+                    static_inner!(BUDDY_INNER, inner, {
+                        inner.zone[z].discard();
+                    })
+                }
+    
+                #[inline]
+                #[allow(unused_unsafe)]
+                #[track_caller]
+                fn allocated(off: u64, len: usize) -> bool {
+                    static_inner!(BUDDY_INNER, inner, {
+                        if off >= Self::end() {
+                            false
+                        } else if Self::contains(off + Self::start()) {
+                            if cfg!(feature = "check_access_violation") {
+                                inner.zone.from_off(off).0.is_allocated(off, len)
+                            } else {
+                                true
+                            }
+                        } else {
+                            false
+                        }
+                    })
+                }
+    
+                #[inline]
+                #[allow(unused_unsafe)]
+                #[track_caller]
+                fn verify() -> bool {
+                    static_inner!(BUDDY_INNER, inner, {
+                        for i in 0..inner.zone.count() {
+                            if !inner.zone[i].verify() {
+                                return false;
+                            }
+                        }
+                        true
+                    })
+                }
+    
+                #[inline]
+                #[allow(unused_unsafe)]
+                #[track_caller]
+                unsafe fn journals_head() -> &'static u64 {
+                    static_inner!(BUDDY_INNER, inner, {
+                        &inner.journals
+                    })
+                }
+    
+                #[allow(unused_unsafe)]
+                #[track_caller]
+                unsafe fn drop_journal(journal: &mut Journal) {
+                    let _vdata = match VDATA.lock() {
+                        Ok(g) => g,
+                        Err(p) => p.into_inner()
+                    };
+                    static_inner!(BUDDY_INNER, inner, {
+                        let off = Self::off(journal).unwrap();
+                    
+                        #[cfg(feature = "pin_journals")]
+                        journal.drop_pages();
+    
+                        let z = Self::pre_dealloc(journal as *mut _ as *mut u8, mem::size_of::<Journal>());
+                        if inner.journals == off {
+                            Self::log64(Self::off_unchecked(&inner.journals), journal.next_off(), z);
+                        }
+                        if let Ok(prev) = Self::deref_mut::<Journal>(journal.prev_off()) {
+                            Self::log64(Self::off_unchecked(prev.next_off_ref()), journal.next_off(), z);
+                        }
+                        if let Ok(next) = Self::deref_mut::<Journal>(journal.next_off()) {
+                            Self::log64(Self::off_unchecked(next.prev_off_ref()), journal.prev_off(), z);
+                        }
+                        Self::perform(z);
+                    });
+                }
+    
+                #[allow(unused_unsafe)]
+                #[track_caller]
+                unsafe fn journals<T, F: Fn(&mut HashMap<ThreadId, (u64, i32)>)->T>(f: F)->T{
                     let mut vdata = match VDATA.lock() {
                         Ok(g) => g,
                         Err(p) => p.into_inner()
                     };
-                    *vdata = None;
-                    BUDDY_INNER = None;
-                    OPEN.store(false, Ordering::Release);
-                    Ok(())
-                } else {
-                    Err("Pool was already closed".to_string())
-                }
-            }
-
-            #[cfg(feature = "stat_footprint")]
-            fn stat_footprint() -> usize {
-                static_inner!(BUDDY_INNER, inner, { inner.zone.stat_footprint() })
-            }
-
-            fn print_info() {
-                println!("{:=^80}", " All Zones ");
-                println!("      Total: {} bytes", Self::size());
-                println!("       Used: {} bytes", Self::used());
-                println!("  Available: {} bytes", Self::available());
-
-                static_inner!(BUDDY_INNER, inner, { 
-                    for i in 0..inner.zone.count() {
-                        println!("{:=^80}", format!(" Persistent Memory Zone #{} ", i));
-                        println!("       Total      {}", inner.zone[i].size());
-                        println!("        Used      {}", inner.zone[i].used());
-                        println!("   Available      {}", inner.zone[i].available());
-                        inner.zone[i].print();
+                    if let Some(vdata) = &mut *vdata {
+                        f(&mut vdata.journals)
+                    } else {
+                        panic!("No memory pool is open or the root object is moved to a transaction. Try cloning the root object instead of moving it to a transaction.");
                     }
-                })
+                }
+    
+                #[allow(unused_unsafe)]
+                unsafe fn recover() {
+                    static_inner!(BUDDY_INNER, inner, {
+                        let info_level = std::env::var("RECOVERY_INFO")
+                            .unwrap_or("0".to_string())
+                            .parse::<u32>()
+                            .expect("RECOVERY_INFO should be an unsigned integer");
+                        
+                        if info_level > 0 {
+                            for i in 0..inner.zone.count() {
+                                eprintln!("{:=^60}", format!(" Restore Allocator (Zone {}) ", i));
+                                eprintln!("{}", inner.zone[i].recovery_info(info_level));
+                            }
+    
+                            let mut curr = inner.journals;
+                            while let Ok(j) = Self::deref_mut::<Journal>(curr) {
+                                eprintln!("{:-^60}\n{}", format!(" Journal @({}) ", curr), j.recovery_info(info_level));
+                                curr = j.next_off();
+                            }
+                        }
+    
+                        for i in 0..inner.zone.count() {
+                            inner.zone[i].recover();
+                        }
+    
+                        #[cfg(feature = "check_allocator_cyclic_links")]
+                        debug_assert!(Self::verify());
+    
+                        while let Ok(logs) = Self::deref_mut::<Journal>(inner.journals) {
+    
+                            #[cfg(feature = "verbose")]
+                            println!("{:?}", logs);
+    
+                            #[cfg(feature = "check_allocator_cyclic_links")]
+                            debug_assert!(Self::verify());
+    
+                            logs.recover();
+    
+                            #[cfg(feature = "check_allocator_cyclic_links")]
+                            debug_assert!(Self::verify());
+    
+                            logs.clear();
+    
+                            #[cfg(feature = "check_allocator_cyclic_links")]
+                            debug_assert!(Self::verify());
+    
+                            #[cfg(feature = "pin_journals")]
+                            Self::drop_journal(logs);
+                        }
+                    })
+                }
+    
+                #[allow(unused_unsafe)]
+                #[track_caller]
+                fn open<'a, U: 'a + PSafe + RootObj<Self>>(
+                    path: &str,
+                    flags: u32,
+                ) -> Result<RootCell<'a, U, Self>> {
+                    let slf = Self::open_no_root(path, flags)?;
+                    static_inner!(BUDDY_INNER, inner, {
+                        // Replace it with std::any::TypeId::of::<U>() when it
+                        // is available in the future for non-'static types
+                        let id = format!("{} ({})", std::any::type_name::<U>(),
+                            mem::size_of::<U>());
+                        let mut s = DefaultHasher::new();
+                        id.hash(&mut s);
+                        let id = s.finish();
+                        if !inner.has_root() {
+                            if mem::size_of::<U>() == 0 {
+                                Err("root type cannot be a ZST".to_string())
+                            } else {
+                                let root_off = Self::transaction(move |j| {
+                                    let ptr = Self::new(U::init(j), j);
+                                    Self::off_unchecked(ptr)
+                                })
+                                .unwrap();
+                                let ptr = Self::get_unchecked(root_off);
+                                inner.flags |= FLAG_HAS_ROOT;
+                                inner.root_obj = root_off;
+                                inner.root_type_id = id;
+                                persist_obj(inner, true);
+                                Ok(RootCell::new(ptr, Arc::new(slf)))
+                            }
+                        } else {
+                            if inner.root_type_id == id {
+                                Ok(RootCell::new(
+                                    Self::deref::<U>(inner.root_obj)?,
+                                    Arc::new(slf),
+                                ))
+                            } else {
+                                Err("Incompatible root type".to_string())
+                            }
+                        }
+                    })
+                }
+    
+                #[inline]
+                fn is_open() -> bool {
+                    unsafe { BUDDY_INNER.is_some() }
+                }
+    
+                #[allow(unused_unsafe)]
+                #[track_caller]
+                fn open_no_root(path: &str, flags: u32) -> Result<Self> {
+                    unsafe {
+                        while OPEN.compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed).is_err() {}
+                        if !Self::running_transaction() {
+                            if flags == open_flags::O_READINFO {
+                                Self::open_impl(path, true)
+                            } else if let Ok(_) = Self::apply_flags(path, flags) {
+                                let res = Self::open_impl(path, false);
+                                if res.is_ok() {
+                                    Self::recover();
+                                }
+                                res
+                            } else {
+                                OPEN.store(false, Ordering::Release);
+                                Err("Could not open file".to_string())
+                            }
+                        } else {
+                            OPEN.store(false, Ordering::Release);
+                            Err("An uncommitted transaction exists in the pool"
+                                .to_string())
+                        }
+                    }
+                }
+    
+                #[allow(unused_unsafe)]
+                unsafe fn close() -> Result<()> {
+                    if OPEN.load(Ordering::Acquire) {
+                        let mut vdata = match VDATA.lock() {
+                            Ok(g) => g,
+                            Err(p) => p.into_inner()
+                        };
+                        *vdata = None;
+                        BUDDY_INNER = None;
+                        OPEN.store(false, Ordering::Release);
+                        Ok(())
+                    } else {
+                        Err("Pool was already closed".to_string())
+                    }
+                }
+    
+                #[cfg(feature = "stat_footprint")]
+                fn stat_footprint() -> usize {
+                    static_inner!(BUDDY_INNER, inner, { inner.zone.stat_footprint() })
+                }
+    
+                fn print_info() {
+                    println!("{:=^80}", " All Zones ");
+                    println!("      Total: {} bytes", Self::size());
+                    println!("       Used: {} bytes", Self::used());
+                    println!("  Available: {} bytes", Self::available());
+    
+                    static_inner!(BUDDY_INNER, inner, { 
+                        for i in 0..inner.zone.count() {
+                            println!("{:=^80}", format!(" Persistent Memory Zone #{} ", i));
+                            println!("       Total      {}", inner.zone[i].size());
+                            println!("        Used      {}", inner.zone[i].used());
+                            println!("   Available      {}", inner.zone[i].available());
+                            inner.zone[i].print();
+                        }
+                    })
+                }
+            }
+    
+            impl Drop for $name {
+                fn drop(&mut self) {
+                    unsafe {
+                        Self::close().unwrap();
+                    }
+    
+                    #[cfg(feature = "stat_perf")] {
+                        eprintln!("{}", $crate::stat::report());
+                    }
+                }
+            }
+    
+            /// Compact form of [`Pbox`](../../boxed/struct.Pbox.html)
+            /// `<T,`[`Allocator`](./struct.Allocator.html)`>`.
+            pub type Pbox<T> = $crate::boxed::Pbox<T, $name>;
+    
+            /// Compact form of [`Prc`](../../prc/struct.Prc.html)
+            /// `<T,`[`Allocator`](./struct.Allocator.html)`>`.
+            pub type Prc<T> = $crate::prc::Prc<T, $name>;
+    
+            /// Compact form of [`Parc`](../../sync/struct.Parc.html)
+            /// `<T,`[`Allocator`](./struct.Allocator.html)`>`.
+            pub type Parc<T> = $crate::sync::Parc<T, $name>;
+    
+            /// Compact form of [`PMutex`](../../sync/struct.PMutex.html)
+            /// `<T,`[`Allocator`](./struct.Allocator.html)`>`.
+            pub type PMutex<T> = $crate::sync::PMutex<T, $name>;
+    
+            /// Compact form of [`PCell`](../../cell/struct.PCell.html)
+            /// `<T,`[`Allocator`](./struct.Allocator.html)`>`.
+            pub type PCell<T> = $crate::cell::PCell<T, $name>;
+    
+            /// Compact form of [`LogNonNull`](../../ptr/struct.LogNonNull.html)
+            /// `<T,`[`Allocator`](./struct.Allocator.html)`>`.
+            pub type PNonNull<T> = $crate::ptr::LogNonNull<T, $name>;
+    
+            /// Compact form of [`PRefCell`](../../cell/struct.PRefCell.html)
+            /// `<T,`[`Allocator`](./struct.Allocator.html)`>`.
+            pub type PRefCell<T> = $crate::cell::PRefCell<T, $name>;
+    
+            /// Compact form of [`Ref`](../../cell/struct.Ref.html)
+            /// `<'b, T, `[`Allocator`](./struct.Allocator.html)`>`.
+            pub type PRef<'b, T> = $crate::cell::Ref<'b, T, $name>;
+    
+            /// Compact form of [`RefMut`](../../cell/struct.Mut.html)
+            /// `<'b, T, `[`Allocator`](./struct.Allocator.html)`>`.
+            pub type PRefMut<'b, T> = $crate::cell::RefMut<'b, T, $name>;
+    
+            /// Compact form of [`VCell`](../../cell/struct.VCell.html)
+            /// `<T,`[`Allocator`](./struct.Allocator.html)`>`.
+            pub type VCell<T> = $crate::cell::VCell<T, $name>;
+    
+            /// Compact form of [`TCell`](../../cell/struct.TCell.html)
+            /// `<T,`[`Allocator`](./struct.Allocator.html)`>`.
+            pub type TCell<T> = $crate::cell::TCell<T, $name>;
+    
+            /// Compact form of [`Vec`](../../vec/struct.Vec.html)
+            /// `<T,`[`Allocator`](./struct.Allocator.html)`>`.
+            pub type PVec<T> = $crate::vec::Vec<T, $name>;
+    
+            /// Compact form of [`String`](../../str/struct.String.html)
+            /// `<`[`Allocator`](./struct.Allocator.html)`>`.
+            pub type PString = $crate::str::String<$name>;
+    
+            /// Compact form of [`Journal`](../../stm/struct.Journal.html)
+            /// `<`[`Allocator`](./struct.Allocator.html)`>`.
+            pub type Journal = $crate::stm::Journal<$name>;
+    
+            pub mod prc {
+                /// Compact form of [`prc::Weak`](../../../prc/struct.Weak.html)
+                /// `<`[`Allocator`](./struct.Allocator.html)`>`.
+                pub type PWeak<T> = $crate::prc::Weak<T, super::$name>;
+    
+                /// Compact form of [`prc::VWeak`](../../../prc/struct.VWeak.html)
+                /// `<`[`Allocator`](../struct.Allocator.html)`>`.
+                pub type VWeak<T> = $crate::prc::VWeak<T, super::$name>;
+            }
+    
+            pub mod parc {
+                /// Compact form of [`sync::Weak`](../../../sync/struct.Weak.html)
+                /// `<`[`Allocator`](../struct.Allocator.html)`>`.
+                pub type PWeak<T> = $crate::sync::Weak<T, super::$name>;
+    
+                /// Compact form of [`sync::VWeak`](../../../sync/struct.VWeak.html)
+                /// `<`[`Allocator`](../struct.Allocator.html)`>`.
+                pub type VWeak<T> = $crate::sync::VWeak<T, super::$name>;
             }
         }
-
-        impl Drop for BuddyAlloc {
-            fn drop(&mut self) {
-                unsafe {
-                    Self::close().unwrap();
-                }
-
-                #[cfg(feature = "stat_perf")] {
-                    eprintln!("{}", $crate::stat::report());
-                }
-            }
-        }
-
-        /// Compact form of [`Pbox`](../../boxed/struct.Pbox.html)
-        /// `<T,`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
-        pub type Pbox<T> = $crate::boxed::Pbox<T, BuddyAlloc>;
-
-        /// Compact form of [`Prc`](../../prc/struct.Prc.html)
-        /// `<T,`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
-        pub type Prc<T> = $crate::prc::Prc<T, BuddyAlloc>;
-
-        /// Compact form of [`Parc`](../../sync/struct.Parc.html)
-        /// `<T,`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
-        pub type Parc<T> = $crate::sync::Parc<T, BuddyAlloc>;
-
-        /// Compact form of [`PMutex`](../../sync/struct.PMutex.html)
-        /// `<T,`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
-        pub type PMutex<T> = $crate::sync::PMutex<T, BuddyAlloc>;
-
-        /// Compact form of [`PCell`](../../cell/struct.PCell.html)
-        /// `<T,`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
-        pub type PCell<T> = $crate::cell::PCell<T, BuddyAlloc>;
-
-        /// Compact form of [`LogNonNull`](../../ptr/struct.LogNonNull.html)
-        /// `<T,`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
-        pub type PNonNull<T> = $crate::ptr::LogNonNull<T, BuddyAlloc>;
-
-        /// Compact form of [`PRefCell`](../../cell/struct.PRefCell.html)
-        /// `<T,`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
-        pub type PRefCell<T> = $crate::cell::PRefCell<T, BuddyAlloc>;
-
-        /// Compact form of [`Ref`](../../cell/struct.Ref.html)
-        /// `<'b, T, `[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
-        pub type PRef<'b, T> = $crate::cell::Ref<'b, T, BuddyAlloc>;
-
-        /// Compact form of [`RefMut`](../../cell/struct.Mut.html)
-        /// `<'b, T, `[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
-        pub type PRefMut<'b, T> = $crate::cell::RefMut<'b, T, BuddyAlloc>;
-
-        /// Compact form of [`VCell`](../../cell/struct.VCell.html)
-        /// `<T,`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
-        pub type VCell<T> = $crate::cell::VCell<T, BuddyAlloc>;
-
-        /// Compact form of [`TCell`](../../cell/struct.TCell.html)
-        /// `<T,`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
-        pub type TCell<T> = $crate::cell::TCell<T, BuddyAlloc>;
-
-        /// Compact form of [`Vec`](../../vec/struct.Vec.html)
-        /// `<T,`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
-        pub type PVec<T> = $crate::vec::Vec<T, BuddyAlloc>;
-
-        /// Compact form of [`String`](../../str/struct.String.html)
-        /// `<`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
-        pub type PString = $crate::str::String<BuddyAlloc>;
-
-        /// Compact form of [`Journal`](../../stm/struct.Journal.html)
-        /// `<`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
-        pub type Journal = $crate::stm::Journal<BuddyAlloc>;
-
-        pub mod prc {
-            /// Compact form of [`prc::Weak`](../../../prc/struct.Weak.html)
-            /// `<`[`BuddyAlloc`](./struct.BuddyAlloc.html)`>`.
-            pub type PWeak<T> = $crate::prc::Weak<T, super::BuddyAlloc>;
-
-            /// Compact form of [`prc::VWeak`](../../../prc/struct.VWeak.html)
-            /// `<`[`BuddyAlloc`](../struct.BuddyAlloc.html)`>`.
-            pub type VWeak<T> = $crate::prc::VWeak<T, super::BuddyAlloc>;
-        }
-
-        pub mod parc {
-            /// Compact form of [`sync::Weak`](../../../sync/struct.Weak.html)
-            /// `<`[`BuddyAlloc`](../struct.BuddyAlloc.html)`>`.
-            pub type PWeak<T> = $crate::sync::Weak<T, super::BuddyAlloc>;
-
-            /// Compact form of [`sync::VWeak`](../../../sync/struct.VWeak.html)
-            /// `<`[`BuddyAlloc`](../struct.BuddyAlloc.html)`>`.
-            pub type VWeak<T> = $crate::sync::VWeak<T, super::BuddyAlloc>;
-        }
+    };
+    ($mod:ident) => {
+        $crate::pool!($mod, Allocator);
     };
 }
 

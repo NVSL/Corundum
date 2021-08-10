@@ -67,7 +67,7 @@ fn show(label: &str, buf: &[Complex<f64>]) {
 pub fn fft_persistent(filename: &str) -> Vec<Complex<f64>> {
     use corundum::default::*;
 
-    type P = BuddyAlloc;
+    type P = Allocator;
 
     struct FFT {
         a: PRefCell<PVec<PCell<Complex<f64>>>>,

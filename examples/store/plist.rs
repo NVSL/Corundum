@@ -5,7 +5,7 @@ use std::panic::RefUnwindSafe;
 use std::panic::UnwindSafe;
 use std::str::FromStr;
 
-type P = BuddyAlloc;
+type P = Allocator;
 type Link<T> = PRefCell<Option<Pbox<Node<T>>>>;
 pub trait NVData = PSafe + TxInSafe + TxOutSafe + UnwindSafe + RefUnwindSafe + Clone;
 

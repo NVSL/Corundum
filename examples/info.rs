@@ -1,6 +1,6 @@
 use corundum::default::*;
 
-type P = BuddyAlloc;
+type P = Allocator;
 
 fn main() {
     use std::env;

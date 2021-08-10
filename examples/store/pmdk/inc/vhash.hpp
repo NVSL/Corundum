@@ -18,7 +18,7 @@ private:
 	value_vector values;
 
 public:
-	vhash() = default;
+	vhash() = Allocator;
 
 	const uint64_t & get(const string &key) const {
 		auto index = hash<string>{}(key) % BUCKETS_NUM;

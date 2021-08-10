@@ -15,7 +15,7 @@ use std::{alloc::Layout, mem, ptr};
 pub const DEFAULT_POOL_SIZE: u64 = 8 * 1024 * 1024;
 
 /// Open pool flags
-pub mod open_flags {
+pub  mod open_flags {
     /// Open Flag: Create the pool memory file
     pub const O_C: u32 = 0x00000001;
 
@@ -118,7 +118,7 @@ macro_rules! static_inner {
 /// To implement a new memory pool, you should define a new type with static
 /// values, that implements `MemPool`. You may redefine the default allocator as
 /// a new pool using [`pool!()`] which creates a pool module and generates the
-/// necessary code segments of type [`BuddyAlloc`].
+/// necessary code segments of type [`Allocator`].
 ///
 /// # Examples
 /// The following example shows how to use `MemPool` to track allocations of a
@@ -167,8 +167,8 @@ macro_rules! static_inner {
 /// // Declare p2 module
 /// pool!(p2);
 /// 
-/// let _pool1 = p1::BuddyAlloc::open_no_root("p1.pool", O_CF).unwrap();
-/// let _pool2 = p2::BuddyAlloc::open_no_root("p2.pool", O_CF).unwrap();
+/// let _pool1 = p1::Allocator::open_no_root("p1.pool", O_CF).unwrap();
+/// let _pool2 = p2::Allocator::open_no_root("p2.pool", O_CF).unwrap();
 /// 
 /// transaction(|j| {
 ///     // Create a Pbox object in p1
@@ -192,7 +192,7 @@ macro_rules! static_inner {
 /// RAII. They internally use the unsafe methods.
 /// 
 /// [`pool!()`]: ./default/macro.pool.html
-/// [`BuddyAlloc`]: ../default/struct.BuddyAlloc.html
+/// [`Allocator`]: ../default/struct.Allocator.html
 pub unsafe trait MemPool
 where
     Self: 'static + Sized,
@@ -257,7 +257,7 @@ where
     /// ```
     /// use corundum::default::*;
     ///
-    /// let root = BuddyAlloc::open::<i32>("foo.pool", O_CF).unwrap();
+    /// let root = Allocator::open::<i32>("foo.pool", O_CF).unwrap();
     ///
     /// assert_eq!(*root, i32::default());
     /// ```
@@ -272,7 +272,7 @@ where
     ///
     /// type Root = Prc<PCell<i32>>;
     ///
-    /// let root = BuddyAlloc::open::<Root>("foo.pool", O_CF).unwrap();
+    /// let root = Allocator::open::<Root>("foo.pool", O_CF).unwrap();
     ///
     /// let data = root.get();
     ///
@@ -298,7 +298,7 @@ where
     ///
     /// type Root = Parc<PMutex<i32>>;
     ///
-    /// let root = BuddyAlloc::open::<Root>("foo.pool", O_CF).unwrap();
+    /// let root = Allocator::open::<Root>("foo.pool", O_CF).unwrap();
     ///
     /// let mut threads = vec!();
     ///
@@ -638,7 +638,7 @@ where
     /// 
     /// ```
     /// # use corundum::default::*;
-    /// # type P = BuddyAlloc;
+    /// # type P = Allocator;
     /// # let _p = P::open_no_root("foo.pool", O_CF).unwrap();
     /// unsafe {
     ///     let (ptr, _, _, z) = P::pre_alloc(8);
@@ -662,7 +662,7 @@ where
     /// 
     /// ```
     /// # use corundum::default::*;
-    /// # type P = BuddyAlloc;
+    /// # type P = Allocator;
     /// # let _p = P::open_no_root("foo.pool", O_CF).unwrap();
     /// unsafe {
     ///     let (ptr, _, _) = P::alloc(8);
@@ -696,7 +696,7 @@ where
     /// 
     /// ```
     /// # use corundum::default::*;
-    /// # type P = BuddyAlloc;
+    /// # type P = Allocator;
     /// # let _p = P::open_no_root("foo.pool", O_CF).unwrap();
     /// unsafe {
     ///     // Prepare an allocation. The allocation is not durable yet. In case
@@ -1123,12 +1123,12 @@ where
     /// ```
     /// use corundum::default::*;
     /// 
-    /// type P = BuddyAlloc;
+    /// type P = Allocator;
     /// 
     /// let root = P::open::<PCell<i32>>("foo.pool", O_CF).unwrap();
     /// 
     /// let old = root.get();
-    /// let new = BuddyAlloc::transaction(|j| {
+    /// let new = Allocator::transaction(|j| {
     ///     root.set(root.get() + 1, j);
     ///     root.get()
     /// }).unwrap();
@@ -1258,11 +1258,11 @@ mod test {
     #[test]
     #[ignore]
     fn nested_transactions() {
-        let _image = BuddyAlloc::open_no_root("nosb.pool", O_CFNE);
-        if let Err(e) = BuddyAlloc::transaction(|_| {
-            let _ = BuddyAlloc::transaction(|_| {
-                let _ = BuddyAlloc::transaction(|_| {
-                    let _ = BuddyAlloc::transaction(|_| {
+        let _image = Allocator::open_no_root("nosb.pool", O_CFNE);
+        if let Err(e) = Allocator::transaction(|_| {
+            let _ = Allocator::transaction(|_| {
+                let _ = Allocator::transaction(|_| {
+                    let _ = Allocator::transaction(|_| {
                         println!("should print");
                         panic!("intentional");
                     });

@@ -5,7 +5,7 @@ use corundum::*;
 use std::env;
 use std::fmt::{Display, Error, Formatter};
 
-type P = corundum::default::BuddyAlloc;
+type P = corundum::default::Allocator;
 //type P = Heap;
 type Pbox<T> = corundum::boxed::Pbox<T, P>;
 type Ptr = Option<Pbox<BTreeNode>>;

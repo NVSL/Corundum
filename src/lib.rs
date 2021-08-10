@@ -38,7 +38,7 @@
 //! 
 //! The first step is to open a memory pool file in the program to be able to
 //! work with persistent data. The [`default`] module provides a default memory
-//! pool type ([`BuddyAlloc`]). To open a pool, we can invoke [`open<T>()`]
+//! pool type ([`Allocator`]). To open a pool, we can invoke [`open<T>()`]
 //! function which [initializes and] returns a reference to the root object of
 //! type `T`. 
 //! 
@@ -61,7 +61,7 @@
 //! use corundum::default::*;
 //! 
 //! // Aliasing the pool type for convenience
-//! type P = BuddyAlloc;
+//! type P = Allocator;
 //! 
 //! #[derive(Root)]
 //! struct Node {
@@ -92,7 +92,7 @@
 //! [`Parc`]: ./sync/struct.Parc.html
 //! [`MemPool`]: ./alloc/trait.MemPool.html
 //! [`default`]: ./alloc/default/index.html
-//! [`BuddyAlloc`]: ./alloc/default/struct.BuddyAlloc.html
+//! [`Allocator`]: ./alloc/default/struct.Allocator.html
 //! [`PCell<T,P>`]: ./cell/struct.PCell.html
 //! [`PCell<T>`]: ./alloc/default/type.PCell.html
 //! [`PRefCell<T,P>`]: ./cell/struct.PRefCell.html 
@@ -171,7 +171,7 @@ pub use crndm_derive::*;
 pub use stm::transaction;
 
 // This is an example of defining a new buddy allocator type
-// `BuddyAlloc` is the default allocator with Buddy Allocation
+// `Allocator` is the default allocator with Buddy Allocation algorithm
 crate::pool!(default);
 
 /// A `Result` type with string error messages

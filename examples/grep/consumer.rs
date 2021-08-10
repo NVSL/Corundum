@@ -5,7 +5,7 @@ use corundum::default::*;
 use corundum::sync::VWeak;
 use regex::Regex;
 
-type P = BuddyAlloc;
+type P = Allocator;
 
 struct ConsumerData {
     buf: PString,

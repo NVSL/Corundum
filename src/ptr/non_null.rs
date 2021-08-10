@@ -106,7 +106,7 @@ impl<T: fmt::Debug + PSafe + ?Sized> fmt::Debug for NonNull<T> {
 /// use corundum::default::*;
 /// use corundum::ptr::LogNonNull;
 /// 
-/// type P = BuddyAlloc;
+/// type P = Allocator;
 /// 
 /// fn multiply(mut obj: LogNonNull<i32,P>, m: i32) {
 ///     // Takes a log if required and then provides mut ref to the object

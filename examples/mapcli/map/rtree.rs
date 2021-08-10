@@ -3,7 +3,7 @@ use corundum::default::*;
 
 use std::collections::BTreeMap;
 
-type P = BuddyAlloc;
+type P = Allocator;
 
 pub struct RTree<K, V> {
     btree: BTreeMap<K, V>,

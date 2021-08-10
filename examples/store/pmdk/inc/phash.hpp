@@ -33,7 +33,7 @@ private:
 	value_vector values;
 
 public:
-	phash() = default;
+	phash() = Allocator;
 
 	const uint64_t & get(const string &key) const {
 		auto index = hash<string>{}(key) % BUCKETS_NUM;

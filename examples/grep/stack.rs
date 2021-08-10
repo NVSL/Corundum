@@ -1,7 +1,7 @@
 use corundum::default::*;
 use std::fmt::Display;
 
-type P = BuddyAlloc;
+type P = Allocator;
 
 struct StackItem<T: PSafe> {
     data: T,

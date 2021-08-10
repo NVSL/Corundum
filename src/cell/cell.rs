@@ -183,9 +183,9 @@ impl<T: PSafe, A: MemPool> PCell<T, A> {
     /// ```
     /// use corundum::default::*;
     ///
-    /// let _pool = BuddyAlloc::open_no_root("foo.pool", O_CF).unwrap();
+    /// let _pool = Allocator::open_no_root("foo.pool", O_CF).unwrap();
     ///     
-    /// BuddyAlloc::transaction(|j| {
+    /// Allocator::transaction(|j| {
     ///     let c1 = Pbox::new(PCell::new(5i32), j);
     ///     let c2 = Pbox::new(PCell::new(10i32), j);
     ///     c1.swap(&c2, j);
@@ -423,7 +423,7 @@ impl<T: PSafe + ?Sized, A: MemPool> PCell<T, A> {
     /// use corundum::default::*;
     /// use corundum::cell::PCell;
     /// 
-    /// type P = BuddyAlloc;
+    /// type P = Allocator;
     /// 
     /// let root = P::open::<PCell<i32,P>>("foo.pool", O_CF).unwrap();
     /// 

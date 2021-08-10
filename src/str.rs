@@ -1945,7 +1945,7 @@ impl<A: MemPool> fmt::Write for String<A> {
 mod test {
     use crate::default::*;
 
-    type A = BuddyAlloc;
+    type A = Allocator;
 
     #[test]
     fn test_pstring() {

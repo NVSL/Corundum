@@ -162,9 +162,9 @@ impl<T: PSafe, A: MemPool> PRefCell<T, A> {
     /// ```
     /// use corundum::default::*;
     ///
-    /// let _pool = BuddyAlloc::open_no_root("foo.pool", O_CF);
+    /// let _pool = Allocator::open_no_root("foo.pool", O_CF);
     ///     
-    /// BuddyAlloc::transaction(|j| {
+    /// Allocator::transaction(|j| {
     ///     let c1 = Pbox::new(PRefCell::new(5i32), j);
     ///     let c2 = Pbox::new(PRefCell::new(10i32), j);
     ///     c1.swap(&c2, j);
@@ -224,9 +224,9 @@ impl<T: PSafe + ?Sized, A: MemPool> PRefCell<T, A> {
     /// ```
     /// use corundum::default::*;
     ///
-    /// let _pool = BuddyAlloc::open_no_root("foo.pool", O_CF);
+    /// let _pool = Allocator::open_no_root("foo.pool", O_CF);
     ///     
-    /// BuddyAlloc::transaction(|j| {
+    /// Allocator::transaction(|j| {
     ///     let c1 = Pbox::new(PRefCell::new(5i32), j);
     ///     let c2 = Pbox::new(PRefCell::new(10i32), j);
     ///     c1.swap(&c2, j);
@@ -265,7 +265,7 @@ impl<T: PSafe + ?Sized, A: MemPool> PRefCell<T, A> {
     /// use corundum::default::*;
     /// use corundum::cell::PRefCell;
     /// 
-    /// type P = BuddyAlloc;
+    /// type P = Allocator;
     /// 
     /// let root = P::open::<PRefCell<i32,P>>("foo.pool", O_CF).unwrap();
     /// 

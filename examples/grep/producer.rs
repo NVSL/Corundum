@@ -8,7 +8,7 @@ use std::io::{BufRead, BufReader, Seek, SeekFrom};
 use std::string::String as StdStr;
 use std::vec::Vec as StdVec;
 
-type P = BuddyAlloc;
+type P = Allocator;
 const BATCH_SIZE: usize = 1024; // number of chars per job
 
 pub struct Producer {

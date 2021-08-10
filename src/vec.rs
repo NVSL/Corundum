@@ -364,6 +364,16 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
     }
 
     #[inline]
+    /// Returns a raw pointer to data if there is any
+    pub(crate) unsafe fn as_ptr(&self) -> *mut T {
+        if self.len == 0 {
+            std::ptr::null_mut()
+        } else {
+            A::get_mut_unchecked(self.off())
+        }
+    }
+
+    #[inline]
     /// Consumes the vector and converts it into a slice.
     /// Since we should create a log of the context, this function is transactional
     /// 
@@ -1284,7 +1294,7 @@ impl<A: MemPool> Vec<u8, A> {
 mod test {
     use crate::default::*;
 
-    type A = BuddyAlloc;
+    type A = Allocator;
 
     #[test]
     fn test_array() {

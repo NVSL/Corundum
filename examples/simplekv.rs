@@ -16,7 +16,7 @@ use std::panic::RefUnwindSafe;
 
 const BUCKETS_MAX: usize = 16;
 
-type P = BuddyAlloc;
+type P = Allocator;
 
 type Key = PString;
 type Bucket = PVec<(Key, usize)>;

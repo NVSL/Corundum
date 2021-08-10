@@ -208,7 +208,7 @@ impl<A: MemPool> Log<A> {
     /// ```
     /// # use corundum::default::*;
     /// # use corundum::stm::Log;
-    /// # type P = BuddyAlloc;
+    /// # type P = Allocator;
     /// # let _p = P::open_no_root("foo.pool", O_CF).unwrap();
     /// P::transaction(|j| unsafe {
     ///     // Create a neutral high-level log to drop the allocation on failure.

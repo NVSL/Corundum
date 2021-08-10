@@ -17,7 +17,7 @@ use std::ops::{Deref, DerefMut};
 /// use corundum::default::*;
 /// use std::cell::RefCell;
 /// 
-/// type P = BuddyAlloc;
+/// type P = Allocator;
 /// 
 /// #[derive(Default)]
 /// struct Root {

@@ -16,7 +16,7 @@ pub use vbtree::*;
 
 use corundum::default::*;
 
-pub type P = BuddyAlloc;
+pub type P = Allocator;
 
 pub trait Map<K, V> {
     fn clear(&self) {}

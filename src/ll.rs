@@ -30,7 +30,7 @@ pub fn persist_with_log<T: ?Sized, A: MemPool>(ptr: *const T, len: usize, fence:
 #[inline(always)]
 pub fn persist<T: ?Sized>(ptr: *const T, len: usize, fence: bool) {
     #[cfg(feature = "stat_perf")]
-    let _perf = crate::stat::Measure::<crate::default::BuddyAlloc>::Sync(std::time::Instant::now());
+    let _perf = crate::stat::Measure::<crate::default::Allocator>::Sync(std::time::Instant::now());
 
     #[cfg(not(feature = "no_persist"))]
     {   
@@ -68,7 +68,7 @@ pub fn persist_obj_with_log<T: ?Sized, A: MemPool>(obj: &T, fence: bool) {
 #[inline(always)]
 pub fn persist_obj<T: ?Sized>(obj: &T, fence: bool) {
     #[cfg(feature = "stat_perf")]
-    let _perf = crate::stat::Measure::<crate::default::BuddyAlloc>::Sync(std::time::Instant::now());
+    let _perf = crate::stat::Measure::<crate::default::Allocator>::Sync(std::time::Instant::now());
 
     #[cfg(not(feature = "no_persist"))]
     {

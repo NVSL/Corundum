@@ -27,7 +27,7 @@ use std::{fmt, intrinsics};
 /// use corundum::default::*;
 /// use std::sync::Mutex;
 /// 
-/// type P = BuddyAlloc;
+/// type P = Allocator;
 /// 
 /// let obj = P::open::<Parc<Mutex<i32>>>("foo.pool", O_CF).unwrap();
 /// //                       ^ std::sync::Mutex is not PSafe
@@ -57,7 +57,7 @@ use std::{fmt, intrinsics};
 /// ```
 /// use corundum::default::*;
 /// 
-/// type P = BuddyAlloc;
+/// type P = Allocator;
 /// 
 /// // PMutex<T> = corundum::sync::Mutex<T,P>
 /// let obj = P::open::<Parc<PMutex<i32>>>("foo.pool", O_CF).unwrap();
@@ -234,7 +234,7 @@ impl<T, A: MemPool> PMutex<T, A> {
     /// use corundum::default::*;
     /// use std::thread;
     /// 
-    /// type P = BuddyAlloc;
+    /// type P = Allocator;
     /// 
     /// let obj = P::open::<Parc<PMutex<i32>>>("foo.pool", O_CF).unwrap();
     /// 
@@ -313,7 +313,7 @@ impl<T, A: MemPool> PMutex<T, A> {
     /// use corundum::default::*;
     /// use std::thread;
     /// 
-    /// type P = BuddyAlloc;
+    /// type P = Allocator;
     /// 
     /// let obj = P::open::<Parc<PMutex<i32>>>("foo.pool", O_CF).unwrap();
     ///

@@ -25,7 +25,7 @@ fn help() {
     println!("b [$value] - rebuild $value (default: 1) times");
     println!("q - quit");
     println!();
-    println!("usage: {} bytes", BuddyAlloc::used());
+    println!("usage: {} bytes", Allocator::used());
 }
 
 fn unknown_command(cmd: &str) {

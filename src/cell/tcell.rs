@@ -22,7 +22,7 @@ use std::fmt::{self,Debug};
 /// use corundum::default::*;
 /// use std::cell::RefCell;
 /// 
-/// type P = BuddyAlloc;
+/// type P = Allocator;
 /// 
 /// #[derive(Root)]
 /// struct Root {

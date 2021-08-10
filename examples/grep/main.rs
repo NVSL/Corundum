@@ -17,7 +17,7 @@ use std::io::{BufRead, BufReader};
 use std::thread;
 
 pub static mut PRINT: bool = true;
-type P = BuddyAlloc;
+type P = Allocator;
 
 fn help() {
     println!("usage: grep [OPTIONS] list-file");

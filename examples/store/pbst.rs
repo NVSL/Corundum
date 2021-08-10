@@ -4,7 +4,7 @@ use std::fmt::{Debug, Display, Error, Formatter};
 use std::panic::*;
 use std::str::FromStr;
 
-type P = BuddyAlloc;
+type P = Allocator;
 type Link<T> = Prc<PRefCell<Option<Node<T>>>>;
 pub trait NVData = PSafe + TxInSafe + TxOutSafe + UnwindSafe + RefUnwindSafe + Clone;
 

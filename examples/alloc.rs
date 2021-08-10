@@ -1,7 +1,7 @@
 use corundum::alloc::*;
 use std::env;
 
-type P = corundum::default::BuddyAlloc;
+type P = corundum::default::Allocator;
 
 fn main() {
     let args: Vec<String> = env::args().collect();

@@ -9,7 +9,7 @@ use corundum::default::*;
 use rand::random;
 use std::time::Instant;
 
-type P = BuddyAlloc;
+type P = Allocator;
 
 const ARRAY_SIZE: usize = 80;
 

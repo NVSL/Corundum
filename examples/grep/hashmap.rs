@@ -5,7 +5,7 @@ use std::hash::{Hash, Hasher};
 
 const BUCKETS_MAX: usize = 16;
 
-type P = BuddyAlloc;
+type P = Allocator;
 
 type Bucket<K> = PVec<PRefCell<(K, usize)>>;
 

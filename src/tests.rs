@@ -23,7 +23,7 @@ pub(crate) mod problems {
     #[test]
     fn abort_txn_test() {
         use crate::default::*;
-        type P = BuddyAlloc;
+        type P = Allocator;
 
         let vec = P::open::<PRefCell<PVec<i32>>>("abort_txn.pool", O_CFNE).unwrap();
         let _ = P::transaction(|j| {
@@ -44,7 +44,7 @@ pub(crate) mod problems {
     fn challenge_mt() {
         use crate::sync::*;
 
-        type P = BuddyAlloc;
+        type P = Allocator;
 
         struct Root {
             v1: Parc<PMutex<i32, P>, P>,
@@ -83,7 +83,7 @@ pub(crate) mod problems {
         use crate::vec::Vec;
         use std::thread;
 
-        type P = BuddyAlloc;
+        type P = Allocator;
 
         struct Root {
             v1: Parc<PMutex<Vec<String<P>, P>, P>, P>,
@@ -135,7 +135,7 @@ pub(crate) mod problems {
     #[test]
     fn paper() {
         use crate::default::*;
-        type P = BuddyAlloc;
+        type P = Allocator;
         struct Node { val: i32, next: PRefCell<Option<Pbox<Node>>> }
         impl RootObj<P> for Node {
             fn init(_j: &Journal) -> Self { Self{
@@ -154,7 +154,7 @@ pub(crate) mod problems {
             }
         }
         fn go(v: i32) {
-            let head = BuddyAlloc::open::<Node>("list.pool",O_CFNE).unwrap();
+            let head = Allocator::open::<Node>("list.pool",O_CFNE).unwrap();
             transaction(|j| {
                 append(&head, v, j);
             }).unwrap();
@@ -170,7 +170,7 @@ pub(crate) mod problems {
         }
 
         fn print_all() {
-            let head = BuddyAlloc::open::<Node>("list.pool",O_CFNE).unwrap();
+            let head = Allocator::open::<Node>("list.pool",O_CFNE).unwrap();
             print(&head);
             println!();
         }
@@ -185,7 +185,7 @@ pub(crate) mod problems {
         use crate::default::*;
         use std::time::Duration;
 
-        type P = BuddyAlloc;
+        type P = Allocator;
 
         let _pool = P::open_no_root("my_test.pool", O_CF).unwrap();
 
@@ -215,7 +215,7 @@ pub(crate) mod problems {
         use crate::alloc::*;
         use std::time::Duration;
 
-        type P = BuddyAlloc;
+        type P = Allocator;
 
         struct Root {
             data: Parc<PMutex<Parc<u32>>>,
@@ -274,7 +274,7 @@ pub(crate) mod problems {
         use crate::alloc::*;
         use std::time::Duration;
 
-        type P = BuddyAlloc;
+        type P = Allocator;
 
         let _img = P::open_no_root("nosb.pool", O_CF).unwrap();
         crate::tests::test::print_usage(0);
@@ -301,7 +301,7 @@ pub(crate) mod problems {
     #[test]
     fn ref_cycle_mem_leak() {
         use crate::default::*;
-        type P = BuddyAlloc;
+        type P = Allocator;
 
         #[derive(Debug)]
         enum List {
@@ -347,7 +347,7 @@ pub(crate) mod problems {
     #[test]
     fn test_vweak() {
         use crate::default::*;
-        type P = BuddyAlloc;
+        type P = Allocator;
 
         struct Root {
             v: PRefCell<Prc<u32>>,
@@ -422,11 +422,11 @@ pub(crate) mod problems {
         use crate::cell::PRefCell as RefCell;
         use crate::boxed::Pbox;
 
-        crate::pool!(pool1);
-        crate::pool!(pool2);
+        crate::pool!(pool1, P1);
+        crate::pool!(pool2, P2);
 
-        type P1 = pool1::BuddyAlloc;
-        type P2 = pool2::BuddyAlloc;
+        type P1 = pool1::P1;
+        type P2 = pool2::P2;
 
         fn foo<M: MemPool>(root: &RefCell<i32, M>, v: i32) -> i32 {
             M::transaction(|j| {
@@ -474,7 +474,7 @@ pub(crate) mod problems {
     fn test_refcell_ownership() {
         use crate::default::*;
 
-        type P = BuddyAlloc;
+        type P = Allocator;
 
         let root = P::open::<Prc<PRefCell<i32>>>("test.pool", O_CF).unwrap();
 
@@ -504,13 +504,13 @@ pub(crate) mod problems {
         use crate::alloc::*;
         use std::time::Instant;
 
-        let _pool = BuddyAlloc::open_no_root("conc.pool", O_CF).unwrap();
+        let _pool = Allocator::open_no_root("conc.pool", O_CF).unwrap();
 
         let mut threads = vec![];
         let start = Instant::now();
         for _ in 0..4 {
             threads.push(std::thread::spawn(move || {
-                BuddyAlloc::transaction(|j| {
+                Allocator::transaction(|j| {
                     let mut v = vec![];
                     for _ in 0..100 {
                         v.push(Pbox::new(0, j));
@@ -524,11 +524,11 @@ pub(crate) mod problems {
         }
         let duration = start.elapsed();
         println!("Time elapsed in parallel execution is: {:?}", duration);
-        println!("usage = {} bytes", BuddyAlloc::used());
+        println!("usage = {} bytes", Allocator::used());
 
         let start = Instant::now();
         for _ in 0..4 {
-            BuddyAlloc::transaction(|j| {
+            Allocator::transaction(|j| {
                 let mut v = vec![];
                 for _ in 0..100 {
                     v.push(Pbox::new(0, j));
@@ -538,14 +538,14 @@ pub(crate) mod problems {
         }
         let duration = start.elapsed();
         println!("Time elapsed in serial execution is: {:?}", duration);
-        println!("usage = {} bytes", BuddyAlloc::used());
+        println!("usage = {} bytes", Allocator::used());
     }
 
     #[test]
     fn parc_two_threads() {
         use crate::default::*;
 
-        type P = BuddyAlloc;
+        type P = Allocator;
         let root = P::open::<Parc<i32>>("parc_two_threads.pool", O_CFNE).unwrap();
         println!("usage: {}", P::used());
         println!("strong = {}", Parc::strong_count(&root));
@@ -592,7 +592,7 @@ pub(crate) mod test {
     use crate::sync::PMutex;
     use crate::*;
 
-    type A = BuddyAlloc;
+    type A = Allocator;
 
     #[test]
     #[ignore]
@@ -762,11 +762,11 @@ pub(crate) mod test {
     fn multiple_pools() {
         use crate::cell::PRefCell;
 
-        crate::pool!(pool1);
-        crate::pool!(pool2);
+        crate::pool!(pool1, P1);
+        crate::pool!(pool2, P2);
 
-        type P1 = pool1::BuddyAlloc;
-        type P2 = pool2::BuddyAlloc;
+        type P1 = pool1::P1;
+        type P2 = pool2::P2;
 
         struct Root<P: MemPool> {
             val: Pbox<PRefCell<i32, P>, P>,
@@ -824,7 +824,7 @@ pub(crate) mod test {
     fn concat_test() {
         use crate::default::*;
 
-        type P = BuddyAlloc;
+        type P = Allocator;
         type Ptr = Option<Prc<PRefCell<Node>>>;
         struct Node {
             val: i32,
@@ -1785,8 +1785,8 @@ pub(crate) mod test {
     //     crate::pool!(pool1);
     //     crate::pool!(pool2);
 
-    //     type P1 = pool1::BuddyAlloc;
-    //     type P2 = pool2::BuddyAlloc;
+    //     type P1 = pool1::pool1;
+    //     type P2 = pool2::pool2;
 
     //     type Root = Pbox<PRefCell<Option<Pbox<i32,P2>>,P1>,P1>;
     //     let root = P1::open::<Root>("interpool.pool", O_CFNE).unwrap();
@@ -1849,7 +1849,7 @@ pub(crate) mod test {
     fn assert_safe() {
         use crate::default::*;
 
-        type P = BuddyAlloc;
+        type P = Allocator;
 
         struct Obj {
             val: prc::VWeak<i32>
@@ -1881,7 +1881,7 @@ mod test_btree {
     // use crate::cell::*;
     // use crate::Map;
 
-    type P = BuddyAlloc;
+    type P = Allocator;
 
     const N: usize = 5;
 

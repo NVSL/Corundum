@@ -1,9 +1,49 @@
-use core::ffi::c_void;
+#![cfg(feature = "cbindings")]
+
+use std::marker::PhantomData;
+use std::mem::MaybeUninit;
+use std::ffi::c_void;
+use std::panic::{UnwindSafe, RefUnwindSafe};
+use crate::*;
 use crate::stm::Journal;
 use crate::clone::PClone;
 use crate::alloc::*;
 use crate::vec::Vec as PVec;
 
+#[repr(C)]
+pub struct Any<T, P: MemPool> {
+    pub ptr: *const c_void,
+    pub len: usize,
+    phantom: PhantomData<(T,P)>
+}
+
+unsafe impl<T: TxInSafe, P: MemPool> TxInSafe for Any<T, P> {}
+unsafe impl<T: LooseTxInUnsafe, P: MemPool> LooseTxInUnsafe for Any<T, P> {}
+impl<T: UnwindSafe, P: MemPool> UnwindSafe for Any<T, P> {}
+impl<T: RefUnwindSafe, P: MemPool> RefUnwindSafe for Any<T, P> {}
+
+/// A byte-vector representation of any type
+/// 
+/// It is useful for FFI functions when template types cannot be externally used.
+/// 
+/// # Examples
+/// 
+/// ```
+/// corundum::pool!(pool);
+/// use pool::*;
+/// type P = Allocator;
+/// 
+/// use corundum::gen::{ByteObject,Any};
+/// 
+/// struct ExternalType {
+///     obj: ByteObject<P>
+/// }
+/// 
+/// #[no_mangle]
+/// pub extern "C" fn new_obj(obj: Any) {
+///     
+/// }
+/// ```
 pub struct ByteObject<P: MemPool> {
     bytes: PVec<u8, P>
 }
@@ -21,23 +61,129 @@ impl<P: MemPool> ByteObject<P> {
         Self::new(vec![0; size].as_slice(), j)
     }
 
-    pub fn new(bytes: &[u8], j: &Journal<P>) -> Self {
+    pub fn from_bytes(bytes: &[u8], j: &Journal<P>) -> Self {
         Self { bytes: PVec::from_slice(bytes, j) }
     }
 
+    pub unsafe fn from_raw(ptr: *const c_void, len: usize) -> Self {
+        Self {
+            bytes: PVec::from_raw_parts(ptr as *mut u8, len, len)
+        }
+    }
+
+    pub fn new<T: PSafe + ?Sized>(obj: &T, j: &Journal<P>) -> Self {
+        Self { bytes: PVec::from_slice(utils::as_slice(obj), j) }
+    }
+
     pub fn as_bytes(&self) -> Vec<u8> {
-        self.bytes.as_slice().to_vec()
+        self.bytes.to_vec()
     }
 
-    pub fn ptr(&self) -> *const c_void {
-        self.bytes.as_slice().as_ptr() as *const c_void
+    pub fn as_ref<T>(&self) -> &T {
+        unsafe { &*(self.bytes.as_ptr() as *const T) }
     }
 
-    pub fn ptr_mut(&mut self) -> *mut c_void {
-        self.bytes.as_slice().as_ptr() as *mut c_void
+    pub fn from_any<T>(obj: Any<T, P>, j: &Journal<P>) -> Self {
+        let bytes = obj.as_slice();
+        Self { bytes: PVec::from_slice(bytes, j) }
     }
 
-    pub fn to_ptr_mut(slf: &mut Self) -> *mut c_void {
-        slf.bytes.as_slice().as_ptr() as *mut c_void
+    pub fn as_any<T>(&self) -> Any<T, P> {
+        Any::<T, P>::from(self.as_ptr::<T>())
+    }
+
+    pub unsafe fn as_mut<T>(&self) -> &mut T {
+        &mut *(self.bytes.as_ptr() as *mut T)
+    }
+
+    pub fn as_ptr<T>(&self) -> *const T {
+        unsafe { self.bytes.as_ptr() as *const T }
+    }
+
+    pub fn as_ptr_mut(&mut self) -> *mut c_void {
+        unsafe { self.bytes.as_ptr() as *mut c_void }
+    }
+
+    pub unsafe fn to_ptr_mut(slf: &mut Self) -> *mut c_void {
+        slf.bytes.as_ptr() as *mut c_void
+    }
+
+    pub fn off(&self) -> u64 {
+        self.bytes.off()
+    }
+
+    pub fn write_to<T>(&self, loc: &mut MaybeUninit<T>) {
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                self.bytes.as_ptr(), 
+                loc as *mut _ as *mut u8, 
+                self.bytes.len());
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.bytes.len()
+    }
+}
+
+impl<T, P: MemPool> Any<T, P> {
+    pub fn null() -> Self {
+        Self {
+            ptr: std::ptr::null(),
+            len: 0,
+            phantom: PhantomData
+        }
+    }
+}
+
+impl<T, P: MemPool> Any<T, P> {
+    pub fn as_slice(&self) -> &[u8] {
+        unsafe { std::slice::from_raw_parts(self.ptr as *mut u8, self.len) }
+    }
+}
+
+impl<T, P: MemPool> From<&c_void> for Any<T, P> {
+    fn from(obj: &c_void) -> Self {
+        Self {
+            ptr: obj as *const c_void,
+            len: std::mem::size_of::<T>(),
+            phantom: PhantomData
+        }
+    }
+}
+
+impl<'a, T, P: MemPool> Into<&'a c_void> for Any<T, P> {
+    fn into(self) -> &'a c_void {
+        unsafe { &*self.ptr }
+    }
+}
+
+impl<T, P: MemPool> From<*const T> for Any<T, P> {
+    fn from(obj: *const T) -> Self {
+        Self {
+            ptr: obj as *const T as *const c_void,
+            len: std::mem::size_of::<T>(),
+            phantom: PhantomData
+        }
+    }
+}
+
+impl<T, P: MemPool> From<&[u8]> for Any<T, P> {
+    fn from(bytes: &[u8]) -> Self {
+        Self {
+            ptr: bytes.as_ref().as_ptr() as *const c_void,
+            len: bytes.len(),
+            phantom: PhantomData
+        }
+    }
+}
+
+impl<T, P: MemPool> From<ByteObject<P>> for Any<T, P> {
+    fn from(obj: ByteObject<P>) -> Self {
+        Self {
+            ptr: obj.as_ptr(),
+            len: obj.len(),
+            phantom: PhantomData
+        }
     }
 }

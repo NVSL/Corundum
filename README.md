@@ -66,11 +66,18 @@ with persistent memory. You can use the default memory pool, or define a new
 memory pool type. The latter requires your type implementing
 [`MemPool`](src/alloc/pool.rs#L169) trait. Please see the
 [pass-through](src/alloc/heap.rs#L26) allocator as an example. To automatically
-implement a new pool type, `pool!()` macro is provided which creates a new module
-with a `BuddyAlloc` type.
+implement a new pool type, `pool!()` macro is provided.
+Given one parameter, it creates a new module named with the parameter, and a
+default allocator named `Allocator` inside it.
+If two parameters are provided, it creates a module with the first parameter as
+its name, and an allocator type using the second parameter.
 
 ```rust
-corundum::pool!(my_pool);
+// Custom name for the allocator (my_mod::MyAllocator)
+corundum::pool!(my_mod, MyAllocator);
+
+// Standard name for the allocator (my_mod::Allocator)
+corundum::pool!(my_mod);
 ```
 
 ### Opening a memory pool file
@@ -83,7 +90,7 @@ the scope. The open functions take a pool file path and a flag set to create
 the pool file.
 
 ```rust
-if let Ok(_) = my_pool::BuddyAlloc::open_no_root("image", O_F) {
+if let Ok(_) = my_pool::Allocator::open_no_root("image", O_F) {
     println!("Image file is formatted and ready to use");
 } else {
     println!("No image file found");
@@ -91,7 +98,7 @@ if let Ok(_) = my_pool::BuddyAlloc::open_no_root("image", O_F) {
 ```
 
 ```rust
-if let Ok(root) = my_pool::BuddyAlloc::open::<Root>("image", O_F) {
+if let Ok(root) = my_pool::Allocator::open::<Root>("image", O_F) {
     println!("Image file is formatted and the root object is created ({:?})", root);
 } else {
     println!("No image file");
@@ -107,7 +114,7 @@ pointers or references. Corundum helps you to write the right code down the road
 use corundum::rc::Prc;
 use corundum::cell::LogCell;
 
-type A = BuddyAlloc;
+type A = corundum::default::Allocator;
 
 struct MyData {
     id: i32,

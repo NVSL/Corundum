@@ -4,7 +4,7 @@ fn main() {
     use corundum::default::*;
     use std::env;
 
-    type P = BuddyAlloc;
+    type P = Allocator;
 
     struct Root {
         list: PVec<PCell<i32>>

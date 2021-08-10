@@ -20,21 +20,21 @@ use crate::PSafe;
 ///
 /// This trait can be used with `#[derive]` if all fields are `PClone`. The
 /// `derive`d implementation of [`PClone`] calls [`pclone`] on each field. It
-/// uses [`default::BuddyAlloc`] by default. It is possible to change the pool
+/// uses [`default::Allocator`] by default. It is possible to change the pool
 /// type(s) by using `pools()` attribute. 
 ///
 /// [`pclone`]: #method.pclone
 /// [`Prc`]: ../prc/struct.Prc.html
 /// [`Parc`]: ../sync/struct.Parc.html
-/// [`default::BuddyAlloc`]: ../default/struct.BuddyAlloc.html
+/// [`default::Allocator`]: ../default/struct.Allocator.html
 ///
 /// For a generic struct, `#[derive]` implements `PClone` conditionally by
 /// adding bound `Clone` on generic parameters.
 ///
 /// ```
 /// # use corundum::*;
-/// // `derive` implements PClone<BuddyAlloc> for Reading<T> when T is 
-/// // PClone<BuddyAlloc>
+/// // `derive` implements PClone<Allocator> for Reading<T> when T is 
+/// // PClone<Allocator>
 /// #[derive(PClone)]
 /// struct Reading<T> {
 ///     frequency: T,
@@ -44,8 +44,8 @@ use crate::PSafe;
 /// ```
 /// # use corundum::*;
 /// # use corundum::alloc::heap::*;
-/// # pool!(p); type P = p::BuddyAlloc;
-/// # pool!(q); type Q = q::BuddyAlloc;
+/// # pool!(p); type P = p::Allocator;
+/// # pool!(q); type Q = q::Allocator;
 /// // `derive` implements PClone<P> and PClone<Q> for Reading<T> when T is 
 /// // PClone<P> and PClone<Q> specified by `pools`.
 /// #[derive(PClone)]

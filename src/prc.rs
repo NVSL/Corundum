@@ -39,7 +39,7 @@
 //! 
 //! ```
 //! use corundum::default::*;
-//! type P = BuddyAlloc;
+//! type P = Allocator;
 //! 
 //! struct Node {
 //!     val: char,
@@ -90,7 +90,7 @@
 //! 
 //! ```
 //! use corundum::default::*;
-//! type P = BuddyAlloc;
+//! type P = Allocator;
 //! 
 //! enum Link<T: PSafe> {
 //!     Strong(Prc<T>),
@@ -183,6 +183,7 @@ struct Counter<A: MemPool> {
 }
 
 unsafe impl<A: MemPool> PSafe for Counter<A> {}
+unsafe impl<A: MemPool> TxInSafe for Counter<A> {}
 
 impl<A: MemPool> Debug for Counter<A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
@@ -754,7 +755,7 @@ impl<T: PSafe, A: MemPool> Prc<T, A> {
     /// ```
     /// use corundum::default::*;
     /// 
-    /// type P = BuddyAlloc;
+    /// type P = Allocator;
     ///
     /// let root = P::open::<Option<Prc<i32>>>("foo.pool", O_CF).unwrap();
     ///
@@ -881,7 +882,7 @@ impl<T: PSafe + ?Sized, A: MemPool> PClone<A> for Prc<T, A> {
     /// 
     /// ```
     /// # use corundum::default::*;
-    /// # type P = BuddyAlloc;
+    /// # type P = Allocator;
     /// let root = P::open::<Prc<i32>>("foo.pool", O_CF).unwrap();
     /// 
     /// let _ = P::transaction(|j| {

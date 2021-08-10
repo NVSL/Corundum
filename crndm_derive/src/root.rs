@@ -8,7 +8,7 @@ pub fn derive_root(input: TokenStream) -> TokenStream {
     // Parse the input tokens into a syntax tree.
     let input = parse_macro_input!(input as DeriveInput);
 
-    let pools = crate::pools(input.attrs, "pools");
+    let pools = crate::list(&input.attrs, "pools");
 
     // Used in the quasi-quotation below as `#name`.
     let name = input.ident;

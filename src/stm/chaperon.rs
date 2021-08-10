@@ -313,8 +313,8 @@ impl Chaperon {
     /// corundum::pool!(pool1);
     /// corundum::pool!(pool2);
     ///
-    /// type P1 = pool1::BuddyAlloc;
-    /// type P2 = pool2::BuddyAlloc;
+    /// type P1 = pool1::Allocator;
+    /// type P2 = pool2::Allocator;
     ///
     /// struct Root<M: MemPool> {
     ///     val: Pbox<PCell<i32, M>, M>

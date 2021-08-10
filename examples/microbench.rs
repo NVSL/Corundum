@@ -4,7 +4,7 @@ use corundum::stm::*;
 use corundum::default::{*, Journal};
 use corundum::stat::*;
 
-type P = BuddyAlloc;
+type P = Allocator;
 const CNT: usize = 50000;
 
 macro_rules! datalog {

@@ -1,6 +1,6 @@
 use corundum::default::*;
 
-type P = BuddyAlloc;
+type P = Allocator;
 
 struct Consumer {
     buf: PMutex<u64>,

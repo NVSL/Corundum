@@ -89,7 +89,7 @@ unsafe fn set_data_ptr<T, U>(mut ptr: *mut T, data: *mut U) -> *mut T {
 /// use corundum::default::*;
 /// use std::thread;
 /// 
-/// type P = BuddyAlloc;
+/// type P = Allocator;
 /// 
 /// let p = P::open::<Parc<i32>>("foo.pool", O_CF).unwrap();
 /// let v = p.demote();
@@ -121,7 +121,7 @@ unsafe fn set_data_ptr<T, U>(mut ptr: *mut T, data: *mut U) -> *mut T {
 /// use corundum::default::*;
 /// use std::thread;
 /// 
-/// type P = BuddyAlloc;
+/// type P = Allocator;
 /// 
 /// let p = P::open::<Parc<PMutex<i32>>>("foo.pool", O_CF).unwrap();
 /// let v = p.demote();
@@ -475,7 +475,7 @@ impl<T: PSafe + ?Sized, A: MemPool> Parc<T, A> {
     /// ```
     /// use corundum::default::*;
     /// 
-    /// type P = BuddyAlloc;
+    /// type P = Allocator;
     /// 
     /// let obj = P::open::<Parc<i32>>("foo.pool", O_CF).unwrap();
     /// 
@@ -620,7 +620,7 @@ impl<T: PSafe, A: MemPool> Parc<T, A> {
     /// ```
     /// use corundum::default::*;
     /// 
-    /// type P = BuddyAlloc;
+    /// type P = Allocator;
     ///
     /// let root = P::open::<Option<Parc<i32>>>("foo.pool", O_CF).unwrap();
     ///
@@ -1296,7 +1296,7 @@ impl<T: PSafe + ?Sized, A: MemPool> VWeak<T, A> {
     /// use corundum::default::*;
     /// use std::mem::drop;
     /// 
-    /// type P = BuddyAlloc;
+    /// type P = Allocator;
     /// let obj = P::open::<Root>("foo.pool", O_CF).unwrap();
     ///
     /// struct Root(PRefCell<Option<Parc<i32>>>);
