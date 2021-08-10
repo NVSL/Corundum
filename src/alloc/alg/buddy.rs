@@ -1107,7 +1107,7 @@ macro_rules! pool {
             unsafe impl MemPool for $name {
                 #[inline]
                 fn name() -> &'static str {
-                    stringify!($name)
+                    stringify!($mod)
                 }
     
                 /// Formats the image file

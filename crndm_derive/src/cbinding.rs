@@ -535,7 +535,6 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
         entry.traits.insert(pool.clone(), format!("
 template<>
 struct {small_name}_traits<{pool}> {{
-    typedef {pool} repr;
     typedef typename pool_traits<{pool}>::journal journal;
     static const {name}<{pool}>* create(const journal *j) {{
         return {fn_new}(j);
@@ -1209,9 +1208,9 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
                     format!("template<class {}> ", tmp.join(", class"))
                 };
                 let args = arglist.join(", ");
-                for p in ty_pool {
-                    let re = Regex::new(&format!(r"\b{}\b", p)).unwrap();
-                    *sig = re.replace_all(sig, "repr").to_string();
+                for pl in ty_pool {
+                    let re = Regex::new(&format!(r"\b{}\b", pl)).unwrap();
+                    *sig = re.replace_all(sig, p as &str).to_string();
                 }
                 *t = t.replace("    // specialized methods",
                     &format!("    // specialized methods\n    {}static {}{{\n        {}\n    }}",
