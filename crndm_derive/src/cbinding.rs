@@ -312,7 +312,6 @@ pub fn derive_poolcbindgen(input: TokenStream) -> TokenStream {
 #include <unistd.h>
 #include <proot.h>
 
-class {pool};
 // forward declarations
 
 template<>
@@ -1208,6 +1207,7 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
                     format!("template<class {}> ", tmp.join(", class"))
                 };
                 let args = arglist.join(", ");
+                let old_sig = sig.clone();
                 for pl in ty_pool {
                     let re = Regex::new(&format!(r"\b{}\b", pl)).unwrap();
                     *sig = re.replace_all(sig, p as &str).to_string();
@@ -1228,6 +1228,7 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
                             comma = if args.is_empty() { "" } else { ", " },
                             args = args)
                         ));
+                *sig = old_sig;
             }
             cnt.contents += t;
         }
