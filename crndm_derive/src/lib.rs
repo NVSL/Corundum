@@ -35,14 +35,14 @@ pub fn derive_root(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_error]
-#[proc_macro_derive(CBindGen, attributes(mods,generics))]
+#[proc_macro_derive(Carbide, attributes(mods,generics))]
 pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
     cbinding::derive_cbindgen(input)
 }
 
 #[proc_macro_error]
 #[proc_macro_attribute]
-pub fn cbindgen(attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn export(attr: TokenStream, item: TokenStream) -> TokenStream {
     cbinding::cbindgen(attr, item)
 }
 
