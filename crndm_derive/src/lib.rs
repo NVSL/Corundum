@@ -1,5 +1,6 @@
 #![feature(once_cell)]
 #![feature(iter_map_while)]
+#![feature(type_name_of_val)]
 
 use proc_macro2::Group;
 use syn::parse::Parser;

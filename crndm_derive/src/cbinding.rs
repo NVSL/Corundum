@@ -435,8 +435,104 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
     // Parse the input tokens into a syntax tree.
     let input = parse_macro_input!(input as DeriveInput);
 
+    let mut found_pool_generic: Option<Ident> = None;
+    let mut ogen = vec!();
+    if !input.generics.params.is_empty() {
+        for t in &input.generics.params {
+            if let GenericParam::Type(t) = t {
+                let mut is_pool = false;
+                for b in &t.bounds {
+                    if let TypeParamBound::Trait(b) = b {
+                        if let Some(p) = b.path.segments.last() {
+                            if p.ident == "MemPool" {
+                                if let Some(other) = found_pool_generic {
+                                    abort!(t.span(),
+                                        "multiple generic parameters are assigned as memory pool";
+                                        note = "previous MemPool parameter is {}", other
+                                    );
+                                }
+                                found_pool_generic = Some(t.ident.clone());
+                                is_pool = true;
+                            }
+                        }
+                    }
+                }
+                if !is_pool {
+                    ogen.push(t.ident.clone());
+                }
+            } else if let GenericParam::Const(_) = t {
+                abort!(t.span(),
+                    "const type parameters are not FFI-compatible";
+                    help = "you may want to use type aliasing to statically assign a value to it"
+                );
+            }
+         }
+    }
+    if found_pool_generic.is_none() {
+        if let Some(w) = &input.generics.where_clause {
+            for w in &w.predicates {
+                if let WherePredicate::Type(t) = w {
+                    for b in &t.bounds {
+                        if let TypeParamBound::Trait(b) = b {
+                            if let Some(p) = b.path.segments.last() {
+                                if p.ident == "MemPool" {
+                                    if let Some(other) = found_pool_generic {
+                                        abort!(t.span(),
+                                            "multiple generic parameters are assigned as memory pool";
+                                            note = "previous MemPool parameter is {}", other
+                                        );
+                                    }
+                                    if let Type::Path(p) = &t.bounded_ty {
+                                        if p.path.segments.len() == 1 {
+                                            found_pool_generic = Some(p.path.segments[0].ident.clone());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if !ogen.is_empty() {
+        let pool = if let Some(p) = &found_pool_generic { p.to_string() } else { "".to_owned() };
+        let mut abort = false;
+        for t in &ogen {
+            if *t != pool {
+                emit_warning!(t.span(),
+                    "FFI-incompatible generic type parameter";
+                    help = "add {} to the generics list and use corundum::gen::ByteObject instead", t
+                );
+                abort = true;
+            }
+        }
+        if abort {
+            abort!(input.ident.span(),
+                "struct {} should have only one generic type parameter as the pool type", input.ident;
+                help = "use corundum::gen::ByteObject instead of the generic types, and specify the generic types using `generics(...)` attribute (e.g., #[generics({})])", 
+                ogen.iter().map(|v| v.to_string()).collect::<Vec<String>>().join(", ")
+            )
+        }
+    }
+    if found_pool_generic.is_none() {
+        abort!(input.ident.span(),
+            "struct {} should be generic with regard to the pool type", input.ident;
+            help = "specify a generic type which implements MemPool trait"
+        )
+    }
+
     let mods = crate::list(&input.attrs, "mods");
     let generics = crate::list(&input.attrs, "generics");
+
+
+    if generics.is_empty() {
+        abort!(input.ident.span(),
+            "struct {} should have at least one generic type parameter as the data type", input.ident;
+            help = "specify the generic data types using `generics(...)` attribute (e.g., #[generics(T)])"
+        )
+    }
+
     let generics_list = quote!{ #(class #generics,)*; }.to_string();
     let generics_list = generics_list.replace(", ;", "");
     let generics_str = quote!{ #(#generics,)*; }.to_string().replace(", ;", "");
@@ -490,7 +586,7 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
                     assert!(!j.is_null(), "transactional operation outside a transaction");
                     unsafe {
                         let j = corundum::utils::read::<corundum::stm::Journal<#m>>(j as *mut u8);
-                        Pbox::leak(Pbox::new(Stack::new(), j)) as *mut #name<#m>
+                        Pbox::leak(Pbox::new(#name::new(), j)) as *mut #name<#m>
                     }
                 }
 
@@ -569,40 +665,40 @@ root_name = __m.to_string()
 #include <cstring>
 {includes}
 
-template<class P>
-using pstring = typename corundum::make_persistent<std::string, P>::type;
+template<class _P>
+using pstring = typename corundum::make_persistent<std::string, _P>::type;
 
-template<class P>
+template<class _P>
 struct {small_name}_traits {{
-    typedef typename pool_traits<P>::journal journal;
-    static const {name}<P>* create(const journal *j);
-    static void drop({name}<P> *obj);
-    static const {name}<P>* open(const void *p, const char *name);
+    typedef typename pool_traits<_P>::journal journal;
+    static const {name}<_P>* create(const journal *j);
+    static void drop({name}<_P> *obj);
+    static const {name}<_P>* open(const void *p, const char *name);
     // template methods
 }};
 
-template <{generics_list}, class P>
+template <{generics_list}, class _P>
 class {cname} : public corundum::psafe_type_parameters {{ 
 
-    typedef pool_traits<P>                        pool_traits;
+    typedef pool_traits<_P>                        pool_traits;
     typedef typename pool_traits::handle          handle;
     typedef typename pool_traits::journal         journal;
-    typedef corundum::pointer_t<{name}<P>, P>   pointer;
+    typedef corundum::pointer_t<{name}<_P>, _P>   pointer;
 
     pointer inner;
-    pstring<P> name;
+    pstring<_P> name;
     bool is_root;
 
     static std::unordered_set<std::string> objs;
 
 private:
-    inline const Stack<P>* self() const {{
+    inline const {name}<_P>* self() const {{
         return inner.operator->();
     }}
 
 public:
     {cname}(const journal *j, const std::string &name = \"(anonymous)\") {{ 
-        inner = pointer::from({small_name}_traits<P>::create(j));
+        inner = pointer::from({small_name}_traits<_P>::create(j));
         this->name = name.c_str();
         is_root = false;
     }} 
@@ -614,11 +710,11 @@ public:
     }} 
 
     {cname}(const handle *pool, const std::string &name) noexcept(false) {{ 
-        P::txn([this,&pool,&name](auto j) {{ 
+        _P::txn([this,&pool,&name](auto j) {{ 
             assert(objs.find(name) == objs.end(), \"'%s' was already open\", name.c_str());
             this->name = name.c_str();
             objs.insert(name);
-            pointer stk = pointer::from_unsafe({small_name}_traits<P>::open(pool, name.c_str()));
+            pointer stk = pointer::from_unsafe({small_name}_traits<_P>::open(pool, name.c_str()));
             memcpy((void*)&inner, (void*)&stk, sizeof(pointer));
             is_root = true;
         }} );
@@ -630,8 +726,8 @@ public:
             assert(objs.find(n) != objs.end(), \"'%s' is not open\", n);
             objs.erase(n);
         }}  else {{ 
-            {small_name}_traits<P>::drop(
-                static_cast<{name}<P>*>(
+            {small_name}_traits<_P>::drop(
+                static_cast<{name}<_P>*>(
                     static_cast<void*>(inner)
                 )
             );
@@ -641,7 +737,7 @@ public:
     // other methods
 }};
 
-template <{generics_list}, class P> std::unordered_set<std::string> {cname}<{generics}, P>::objs;
+template <{generics_list}, class _P> std::unordered_set<std::string> {cname}<{generics}, _P>::objs;
 ",
 generics_list = generics_list,
 generics = generics_str,
@@ -650,7 +746,7 @@ small_name = small_name,
 name = name_str,
 cname = cname
 );
-    entry.decl = format!("template<{generics_list}, class P> class p{name}_t;",
+    entry.decl = format!("template<{generics_list}, class _P> class p{name}_t;",
             name = small_name,
             generics_list = generics_list
         );
@@ -1133,7 +1229,7 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
             bindings.write_to_file("/tmp/___corundum_tmp_file.h");
             let s = read_to_string("/tmp/___corundum_tmp_file.h")?;
 
-            for (name, args, sig, tmp, _ty_tmp, has_return, _) in &mut cnt.funcs {
+            for (name, args, sig, tmp, ty_pool, has_return, _) in &mut cnt.funcs {
                 let tmpl = if tmp.is_empty() { "".to_owned() } else {
                     format!("template<class {}> ", tmp.join(", class"))
                 };
@@ -1143,19 +1239,25 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
                 }.to_owned();
                 let args = args.iter().map(|(_, n)| n.to_owned()).collect::<Vec<String>>().join(", ");
                 let re = Regex::new(&format!(r"(.+\W+{}\(.*\));", name)).unwrap();
+                let re_pool = if ty_pool.is_empty() { None } else { 
+                    Some(Regex::new(&format!(r"\b{}\b", ty_pool[0])).unwrap()) 
+                };
                 if let Some(cap) = re.captures(&s) {
                     *sig = cap.get(1).unwrap().as_str().to_owned();
+                    if let Some(re) = re_pool {
+                        *sig = re.replace_all(sig, "_P").to_string();
+                    }
                     cnt.contents = cnt.contents.replace("    // template methods",
                         &format!("    // template methods\n    {}static {};",
                         tmpl,
                         sig.replacen(
                             &format!("{}(", name), 
-                            &format!("{}(const {}<P> *__self, ", name, ty), 1)
+                            &format!("{}(const {}<_P> *__self, ", name, ty), 1)
                             .replace(", )", ")")));
                     let ret_tok = if *has_return { "return " } else { "" };
                         cnt.contents = cnt.contents.replace("    // other methods",
                             &format!("    // other methods\n    {sig} {{
-        {ret}{ty}_traits<P>::{tmp}{fn}{gen}(self(){comma}{args});
+        {ret}{ty}_traits<_P>::{tmp}{fn}{gen}(self(){comma}{args});
     }}\n",
     ret = ret_tok,
     ty = ty.to_lowercase(),
@@ -1177,7 +1279,7 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
         }
 
         for (p, t) in &mut cnt.traits {
-            for (f, args, sig, tmp, ty_pool, ret, ret_gen) in &mut cnt.funcs {
+            for (f, args, sig, tmp, _, ret, ret_gen) in &mut cnt.funcs {
                 
                 let (cret, cargs) = parse_c_fn(sig, f);
                 let re = Regex::new(r"\bAny\b").unwrap();
@@ -1208,10 +1310,8 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
                 };
                 let args = arglist.join(", ");
                 let old_sig = sig.clone();
-                for pl in ty_pool {
-                    let re = Regex::new(&format!(r"\b{}\b", pl)).unwrap();
-                    *sig = re.replace_all(sig, p as &str).to_string();
-                }
+                let re = Regex::new(r"\b_P\b").unwrap();
+                *sig = re.replace_all(sig, p as &str).to_string();
                 *t = t.replace("    // specialized methods",
                     &format!("    // specialized methods\n    {}static {}{{\n        {}\n    }}",
                         tmp,
