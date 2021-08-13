@@ -1,4 +1,3 @@
-use proc_macro2::Group;
 use proc_macro::TokenStream;
 use syn::parse::Parser;
 use proc_macro2::TokenStream as TokenStream2;
@@ -38,388 +37,6 @@ pub static mut TYPES: SyncLazy<Mutex<HashMap<TypeName, Contents>>> = SyncLazy::n
 pub static mut POOLS: SyncLazy<Mutex<HashMap<TypeName, Contents>>> = SyncLazy::new(|| {
     Mutex::new(HashMap::new())
 });
-
-pub fn derive_poolcbindgen(input: TokenStream) -> TokenStream {
-    // Parse the input tokens into a syntax tree.
-    let input = parse_macro_input!(input as DeriveInput);
-    let mods = crate::list(&input.attrs, "mods");
-    let flags = open_flags(&input.attrs);
-    let types = types(&input.attrs);
-
-    // Used in the quasi-quotation below as `#name`.
-    // let name = input.ident;
-
-    let mut expanded = vec![];
-    for m in &mods {
-
-        // // Generate an expression to sum up the heap size of each field.
-        // let sum = root_all_fields(&name, &input.data);
-        let name_str: String = m.to_string();
-        let fn_open = format_ident!("{}_open", name_str);
-        let fn_close = format_ident!("{}_close", name_str);
-        let fn_base = format_ident!("{}_base", name_str);
-        let fn_alloc = format_ident!("{}_alloc", name_str);
-        let fn_dealloc = format_ident!("{}_dealloc", name_str);
-        let fn_allocated = format_ident!("{}_allocated", name_str);
-        let fn_valid = format_ident!("{}_valid", name_str);
-        let fn_txn_begin = format_ident!("{}_txn_begin", name_str);
-        let fn_txn_commit = format_ident!("{}_txn_commit", name_str);
-        let fn_txn_rollback = format_ident!("{}_txn_rollback", name_str);
-        let fn_journal = format_ident!("{}_journal", name_str);
-        let fn_log = format_ident!("{}_log", name_str);
-        let fn_print_info = format_ident!("{}_print_info", name_str);
-        let fn_read64 = format_ident!("{}_read64", name_str);
-        let named_open = format_ident!("{}_named_open", name_str);
-        let named_data_pointer = format_ident!("{}_named_data_pointer", name_str);
-        let named_logged_pointer = format_ident!("{}_named_logged_pointer", name_str);
-        let mod_name = format_ident!("__{}", name_str);
-        let root_name = format_ident!("__{}_root_t", name_str);
-        // let pool_mod = format_ident!("__{}_module", name_str);
-        
-        let mut all_pools = unsafe { match POOLS.lock() {
-            Ok(g) => g,
-            Err(p) => p.into_inner()
-        } };
-        let entry = all_pools.entry(name_str.clone()).or_insert(Contents::default());
-
-        expanded.push(quote! {
-            corundum::pool!(#m);
-
-            pub mod #mod_name {
-                use super::*;
-                use corundum::stm::{Logger, Notifier};
-                use corundum::stl::HashMap as PHashMap;
-                use corundum::gen::ByteObject;
-                use std::collections::hash_map::DefaultHasher;
-                use std::hash::{Hash, Hasher};
-                use core::ffi::c_void;
-                use std::os::raw::c_char;
-                use std::ffi::CStr;
-                use super::#m::*;
-
-                #[allow(non_camel_case_types)]
-                type #m = super::#m::Allocator;
-
-                pub enum Container {
-                    #types
-                    Custom(Named),
-                    None
-                }
-
-                impl Default for Container {
-                    fn default() -> Self {
-                        Container::None
-                    }
-                }
-
-                pub struct #root_name {
-                    pub(crate) objs: PMutex<PHashMap<u64, Container, Allocator>>
-                }
-
-                impl RootObj<Allocator> for #root_name {
-                    fn init(j: &Journal) -> Self {
-                        Self {
-                            objs: PMutex::new(PHashMap::new(j))
-                        }
-                    }
-                }
-
-                #[no_mangle]
-                pub extern "C" fn #fn_open(path: *const c_char, mut flags: u32) -> *const #root_name {
-                    let path = unsafe { CStr::from_ptr(path).to_str().unwrap() };
-                    if flags == 0 { flags = #flags; }
-                    let res = Allocator::open::<#root_name>(path, flags).unwrap();
-                    let p = &*res as *const #root_name;
-                    std::mem::forget(res); // Keep the pool open
-                    p
-                }
-
-                #[no_mangle]
-                pub extern "C" fn #fn_close() -> bool {
-                    if Allocator::is_open() {
-                        unsafe { Allocator::close().unwrap(); }
-                        true
-                    } else {
-                        false
-                    }
-                }
-
-                #[no_mangle]
-                pub extern "C" fn #fn_base() -> usize {
-                    Allocator::start() as usize
-                }
-
-                #[no_mangle]
-                pub extern "C" fn #fn_alloc(size: usize) -> *mut c_void {
-                    let j = unsafe {
-                        Journal::current(false)
-                        .expect(&format!("{} cannot be used outside a transaction", stringify!(#fn_alloc)))
-                    };
-                    unsafe { Allocator::new_uninit_for_layout(size, &*j.0) as *mut c_void }
-                }
-
-                #[no_mangle]
-                pub extern "C" fn #fn_dealloc(ptr: *mut c_void, size: usize) {
-                    assert!(
-                        Journal::is_running(),
-                        "{} cannot be used outside a transaction",
-                        stringify!(#fn_dealloc)
-                    );
-                    unsafe { Allocator::free_slice(std::slice::from_raw_parts_mut(ptr, size)); }
-                }
-
-                #[no_mangle]
-                pub extern "C" fn #fn_allocated(off: u64, size: usize) -> bool {
-                    if Allocator::allocated(off, size) || off == 0 {
-                        true
-                    } else {
-                        eprintln!("off {} (len: {}) is not allocated", off, size);
-                        false
-                    }
-                }
-                #[no_mangle]
-                pub extern "C" fn #fn_valid(ptr: *const c_void) -> bool {
-                    Allocator::valid(ptr)
-                }
-
-                #[no_mangle]
-                pub extern "C" fn #fn_txn_begin() -> *const c_void {
-                    unsafe {
-                        let j = Journal::current(true).unwrap();
-                        *j.1 += 1;
-                        let journal = utils::as_mut(j.0);
-                        journal.unset(corundum::stm::JOURNAL_COMMITTED);
-                        journal as *const _ as *const u8 as *const c_void
-                    }
-                }
-
-                #[no_mangle]
-                pub extern "C" fn #fn_txn_commit() {
-                    unsafe {
-                        corundum::ll::sfence();
-                        Allocator::commit();
-                    }
-                }
-
-                #[no_mangle]
-                pub extern "C" fn #fn_txn_rollback() {
-                    unsafe {
-                        corundum::ll::sfence();
-                        if Allocator::rollback() {
-                            eprintln!("note: transaction rolled back successfully");
-                        }
-                    }
-                }
-
-                #[no_mangle]
-                pub extern "C" fn #fn_journal() -> *const c_void {
-                    unsafe {
-                        if let Some(j) = Journal::current(false) {
-                            let journal = utils::as_mut(j.0);
-                            journal as *const _ as *const u8 as *const c_void
-                        } else {
-                            std::ptr::null()
-                        }
-                    }
-                }
-
-                #[no_mangle]
-                pub extern "C" fn #fn_log(obj: *const c_void, logged: *const u8, size: usize, j: *const c_void) {
-                    assert!(!obj.is_null() && !j.is_null());
-                    unsafe {
-                        if Allocator::valid(obj) {
-                            let slice = std::slice::from_raw_parts(obj as *mut u8, size);
-                            slice.create_log(
-                                corundum::utils::read::<Journal>(j as *mut u8),
-                                if logged.is_null() {
-                                    Notifier::None
-                                } else {
-                                    Notifier::NonAtomic(Ptr::from_raw(logged))
-                                }
-                            );
-                        }
-                    }
-                }
-
-                #[no_mangle]
-                pub extern "C" fn #fn_print_info() {
-                    Allocator::print_info()
-                }
-
-                #[no_mangle]
-                pub extern "C" fn #fn_read64(addr: u64) -> u64 {
-                    unsafe { *Allocator::get_unchecked(addr) }
-                }
-
-                pub struct Named(u8, ByteObject<Allocator>);
-
-                #[no_mangle]
-                pub extern "C" fn #named_open(p: &#root_name, name: *const c_char, size: usize, init: extern fn(*mut c_void)->()) -> *const c_void /* Named */ {
-                    let name = unsafe { CStr::from_ptr(name).to_str().unwrap() };
-                    let mut hasher = DefaultHasher::new();
-                    name.hash(&mut hasher);
-                    let key = hasher.finish();
-
-                    let mut res: *const Named = std::ptr::null();
-                    if transaction(AssertTxInSafe(|j| {
-                        let mut objs = p.objs.lock(j);
-                        if let Container::Custom(named) = objs.get_or_insert(key, || {
-                            let mut obj = ByteObject::new_uninit(size, j);
-                            init(unsafe { obj.as_ptr_mut() });
-                            Container::Custom(Named(0, obj))
-                        }, j) {
-                            res = named as *const Named;
-                        }
-                    })).is_err() {
-                        res = std::ptr::null_mut();
-                    }
-                    res as *const c_void
-                }
-
-                #[no_mangle]
-                pub extern "C" fn #named_data_pointer(obj: *const c_void /* &Named */) -> *const c_void {
-                    let obj = unsafe { corundum::utils::read::<Named>(obj as *mut u8) };
-                    obj.1.as_ptr()
-                }
-
-                #[no_mangle]
-                pub extern "C" fn #named_logged_pointer(obj: *mut c_void /* &Named */) -> *mut c_void {
-                    let obj = unsafe { corundum::utils::read::<Named>(obj as *mut u8) };
-                    &mut obj.0 as *mut u8 as *mut c_void
-                }
-            }
-            #[allow(non_camel_case_types)]
-            pub type #root_name = #mod_name::#root_name;
-        });
-
-
-
-        let contents = format!(
-        "// This file is auto-generated by Corundum. Don't manually modify it.
-#pragma once
-
-#include <pstdlib>
-#include <functional>
-#include <stdio.h>
-#include <execinfo.h>
-#include <signal.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <proot.h>
-
-// forward declarations
-
-template<>
-struct pool_traits<{pool}> {{
-    static size_t base;
-    typedef struct{{}} journal;
-    using handle = {root_name};
-    using void_pointer = corundum::pointer_t<void, {pool}>;
-
-    static void_pointer allocate(size_t size) {{
-        auto res = {pool_alloc}(size);
-        return void_pointer::from_unsafe(res);
-    }}
-    static void deallocate(void_pointer ptr, size_t __n) {{
-        {pool_dealloc}(ptr.get(), __n);
-    }}
-    static bool allocated(size_t off, size_t __n) {{
-        return {pool_allocated}(off, __n);
-    }}
-    static bool valid(const void* ptr) {{
-        return {pool_valid}(ptr);
-    }}
-    static void print_info() {{
-        {pool_print_info}();
-    }}
-    static void cell_log(const void *obj, const u_int8_t *logged, size_t size, const journal *j) {{
-        {pool_log}(obj, logged, size, j);
-    }}
-    static const journal* journal_handle() {{
-        return (const journal*) {pool_journal}();
-    }}
-    static const void *named_open(const {root_name} *p, const char *name, size_t size, void (*init)(void*)) {{
-        return {pool_named_open}(p, name, size, init);
-    }}
-    static const void *named_data_pointer(const void *obj) {{
-        return {pool_named_data_pointer}(obj);
-    }}
-    static void *named_logged_pointer(void *obj) {{
-        return {pool_named_logged_pointer}(obj);
-    }}
-}};
-
-size_t pool_traits<{pool}>::base = 0;
-class {pool}: public corundum::pool_type {{
-    const {root_name} *inner;
-public:
-    typedef pool_traits<{pool}>::journal journal;
-    // type aliases
-    template<class T> using root = proot_t<T, {pool}>;
-    template<class T> using make_persistent = corundum::make_persistent<T, {pool}>;
-    template<class T> using cell = corundum::cell<T, {pool}>;
-    {pool}(const char* path, u_int32_t flags, bool check_open = true) {{
-        if (check_open) assert(pool_traits<{pool}>::base==0, \"{pool} was already open\");
-        inner = {pool_open}(path, flags);
-        pool_traits<{pool}>::base = {pool_base}();
-    }}
-    ~{pool}() {{
-        {pool_close}();
-        pool_traits<{pool}>::base = 0;
-    }}
-    const {root_name} *handle() const {{
-        return inner;
-    }}
-    static bool txn(std::function<void(const journal*)> f) {{
-        auto j = {pool_txn_begin}();
-        try {{
-            f((const journal*)j);
-        {pool_txn_commit}();
-            return true;
-        }} catch (const std::exception& ex) {{
-            std::cerr << \"runtime error: \" << ex.what() << std::endl;
-        }} catch (const std::string& ex) {{
-            std::cerr << \"runtime error: \" << ex << std::endl;
-        }} catch (const char *e) {{
-            std::cerr << \"runtime error: \" << e << std::endl;
-        }} catch (...) {{
-            std::cerr << \"runtime error: unsuccessful transaction\" << std::endl;
-        }}
-        {pool_txn_rollback}();
-        return false;
-    }}
-}};",
-pool = m,
-pool_alloc = fn_alloc.to_string(),
-pool_allocated = fn_allocated.to_string(),
-pool_dealloc = fn_dealloc.to_string(),
-pool_valid = fn_valid.to_string(),
-pool_print_info = fn_print_info.to_string(),
-pool_log = fn_log.to_string(),
-pool_journal = fn_journal.to_string(),
-pool_open = fn_open.to_string(),
-pool_close = fn_close.to_string(),
-pool_base = fn_base.to_string(),
-pool_txn_begin = fn_txn_begin.to_string(),
-pool_txn_commit = fn_txn_commit.to_string(),
-pool_txn_rollback = fn_txn_rollback.to_string(),
-pool_named_open = named_open.to_string(),
-pool_named_data_pointer = named_data_pointer.to_string(),
-pool_named_logged_pointer = named_logged_pointer.to_string(),
-root_name = root_name.to_string(),
-);
-        entry.contents = contents;
-
-        // if let Ok(mut file) = std::fs::File::create(format!("inc/{}.hpp", name_str)) {
-        //     let _=file.write_all(export.as_bytes());
-        // }
-    }
-
-    let expanded = quote! { #(#expanded)* };
-
-    // Hand the output tokens back to the compiler.
-    TokenStream::from(expanded)
-}
 
 pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
     // Parse the input tokens into a syntax tree.
@@ -548,6 +165,7 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
         Ok(g) => g,
         Err(p) => p.into_inner()
     } };
+    all_types.remove(&name_str);
     let mut entry = all_types.entry(name_str.clone()).or_insert(Contents::default());
     entry.generics = generics.iter().map(|v| v.to_string()).collect();
     for m in &mods {
@@ -760,39 +378,6 @@ cname = cname
 
     // Hand the output tokens back to the compiler.
     TokenStream::from(expanded)
-}
-
-fn types(attrs: &Vec<Attribute>) -> TokenStream2 {
-    let types = crate::list(attrs, "types");
-    let recurse = types.iter().map(|name| {
-        let name_str = name.to_string().replace(" ", "");
-        let parts: Vec<&str> = name_str.split("::").collect();
-        let ident = format_ident!("{}", parts.last().unwrap());
-        quote_spanned!(name.span()=> #ident(super::#name<Allocator>))
-    });
-    quote! {
-        #(#recurse,)* 
-    }
-}
-
-fn open_flags(attrs: &Vec<Attribute>) -> TokenStream2 {
-    let mut vflags = vec![];
-    for attr in attrs {
-        for segment in attr.path.segments.iter() {
-            if segment.ident.to_string() == String::from("open_flags") {
-                if let Ok(g) = parse2::<Group>(attr.tokens.clone()) {
-                    let parser = Punctuated::<Path, Token![,]>::parse_terminated;
-                    if let Ok(flags) = parser.parse2(g.stream()) {
-                        for flag in flags {
-                            vflags.push(quote! { #flag });
-                        }
-                    }
-                }
-            };
-        }
-    }
-    if vflags.is_empty() { vflags.push(quote! { O_CFNE }) }
-    quote!{ #(#vflags)|* }
 }
 
 fn refine_path(m: &TokenStream2, p: &mut Path, tmpl: &Vec<String>, ty_tmpl: &Vec<String>, gen: &Vec<String>, check: i32, modify: bool, has_generics: &mut Option<&mut bool>) {
@@ -1392,4 +977,489 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
     }
 
     Ok(())
+}
+
+pub fn carbide(input: TokenStream) -> TokenStream {
+    let mut types = vec!();
+    let mut mods = vec!();
+    let mut output = "".to_owned();
+    let mut overwrite = false;
+    // let mut warnings = true;
+    let parser = Punctuated::<Expr, Token![;]>::parse_terminated;
+    if let Ok(segments) = parser.parse2(input.into()) {
+        for segment in segments {
+            if let Ok(Expr::Call(call)) = parse2(quote!(#segment)) {
+                if let Expr::Path(func) = *call.func {
+                    if let Some(op) = func.path.get_ident() {
+                        match op.to_string().as_str() {
+                            "mods"       => {
+                                for arg in call.args {
+                                    if let Expr::Call(call) = arg {
+                                        let m = &*call.func;
+                                        let mut flags = vec!();
+                                        for flag in &call.args {
+                                            flags.push(quote_spanned!(flag.span() => #flag));
+                                        }
+                                        mods.push((quote_spanned!(call.span() => #m), quote!(#(#flags)|*)));
+                                    } else if let Expr::Path(m) = arg {
+                                        mods.push((quote_spanned!(m.span() => #m), quote!( O_CFNE )));
+                                    }
+                                }
+                            },
+                            "types"      => {
+                                for ty in call.args {
+                                    types.push(quote_spanned!(ty.span() => #ty));
+                                }
+                            },
+                            "open_flags" => {
+                            },
+                            "allow" => {
+                                for arg in call.args {
+                                    if !if let Expr::Path(ref p) = arg {
+                                        if let Some(op) = p.path.get_ident() {
+                                            match op.to_string().as_str() {
+                                                "overwrite" => { overwrite = true; true},
+                                                // "warnings" => { warnings = false; true},
+                                                _ => false
+                                            }
+                                        } else { false }
+                                    } else { false } {
+                                        abort!(arg.span(), "invalid argument";
+                                            note = "available argument is 'overwrite'";
+                                        );
+                                    }
+                                }
+                            },
+                            "output"     => {
+                                if !if call.args.len() == 1 {
+                                    if let Expr::Lit(lit) = &call.args[0] {
+                                        if let Lit::Str(s) = &lit.lit {
+                                            output = s.value();
+                                            true
+                                        } else { false }
+                                    } else { false }
+                                } else { false } {
+                                    abort!(func.span(), 
+                                        "expected 1 string argument, found {} (probably non-string)", call.args.len()
+                                    )
+                                }
+                            },
+                            _ => {
+                                abort!(op.span(), "invalid option";
+                                    note = "available options are 'mods', 'types', 'open_flags', 'output', and 'allow'"
+                                )
+                            }
+                        }
+                    } else {
+                        abort!(func.span(), "invalid option";
+                            note = "available options are 'mods', 'types', 'open_flags', 'output', and 'allow'";
+                        );
+                    }
+                } else {
+                    abort!(call.span(), "invalid option";
+                        note = "available options are 'mods', 'types', 'open_flags', 'output', and 'allow'";
+                    );
+                }
+            } else {
+                abort!(segment.span(), "invalid input";
+                    note = "cbindings accepts multiple ';'-separated segments";
+                    note = "available options are 'mods', 'types', 'open_flags', 'output', and 'allow'";
+                );
+            }
+        }
+    } else {
+        abort_call_site!("invalid input";
+            note = "cbindings accepts multiple ';'-separated segments";
+            note = "available options are 'mods', 'types', 'open_flags', 'output', and 'allow'";
+        );
+    }
+
+    let recurse = types.iter().map(|name| {
+        let name_str = name.to_string().replace(" ", "");
+        let parts: Vec<&str> = name_str.split("::").collect();
+        let ident = format_ident!("{}", parts.last().unwrap());
+        quote_spanned!(name.span()=> #ident(super::#name<Allocator>))
+    });
+    let types = quote! {
+        #(#recurse,)* 
+    };
+
+    let mut expanded = vec![];
+    for m in &mods {
+
+        // // Generate an expression to sum up the heap size of each field.
+        // let sum = root_all_fields(&name, &input.data);
+        let flags = &m.1;
+        let m = &m.0;
+        let name_str: String = m.to_string();
+        let fn_open = format_ident!("{}_open", name_str);
+        let fn_close = format_ident!("{}_close", name_str);
+        let fn_base = format_ident!("{}_base", name_str);
+        let fn_alloc = format_ident!("{}_alloc", name_str);
+        let fn_dealloc = format_ident!("{}_dealloc", name_str);
+        let fn_allocated = format_ident!("{}_allocated", name_str);
+        let fn_valid = format_ident!("{}_valid", name_str);
+        let fn_txn_begin = format_ident!("{}_txn_begin", name_str);
+        let fn_txn_commit = format_ident!("{}_txn_commit", name_str);
+        let fn_txn_rollback = format_ident!("{}_txn_rollback", name_str);
+        let fn_journal = format_ident!("{}_journal", name_str);
+        let fn_log = format_ident!("{}_log", name_str);
+        let fn_print_info = format_ident!("{}_print_info", name_str);
+        let fn_read64 = format_ident!("{}_read64", name_str);
+        let named_open = format_ident!("{}_named_open", name_str);
+        let named_data_pointer = format_ident!("{}_named_data_pointer", name_str);
+        let named_logged_pointer = format_ident!("{}_named_logged_pointer", name_str);
+        let mod_name = format_ident!("__{}", name_str);
+        let root_name = format_ident!("__{}_root_t", name_str);
+        // let pool_mod = format_ident!("__{}_module", name_str);
+        
+        let mut all_pools = unsafe { match POOLS.lock() {
+            Ok(g) => g,
+            Err(p) => p.into_inner()
+        } };
+        let entry = all_pools.entry(name_str.clone()).or_insert(Contents::default());
+
+        expanded.push(quote! {
+            corundum::pool!(#m);
+
+            pub mod #mod_name {
+                use super::*;
+                use corundum::stm::{Logger, Notifier};
+                use corundum::stl::HashMap as PHashMap;
+                use corundum::gen::ByteObject;
+                use std::collections::hash_map::DefaultHasher;
+                use std::hash::{Hash, Hasher};
+                use core::ffi::c_void;
+                use std::os::raw::c_char;
+                use std::ffi::CStr;
+                use super::#m::*;
+
+                #[allow(non_camel_case_types)]
+                type #m = super::#m::Allocator;
+
+                pub enum Container {
+                    #types
+                    Custom(Named),
+                    None
+                }
+
+                impl Default for Container {
+                    fn default() -> Self {
+                        Container::None
+                    }
+                }
+
+                pub struct #root_name {
+                    pub(crate) objs: PMutex<PHashMap<u64, Container, Allocator>>
+                }
+
+                impl RootObj<Allocator> for #root_name {
+                    fn init(j: &Journal) -> Self {
+                        Self {
+                            objs: PMutex::new(PHashMap::new(j))
+                        }
+                    }
+                }
+
+                #[no_mangle]
+                pub extern "C" fn #fn_open(path: *const c_char, mut flags: u32) -> *const #root_name {
+                    let path = unsafe { CStr::from_ptr(path).to_str().unwrap() };
+                    if flags == 0 { flags = #flags; }
+                    let res = Allocator::open::<#root_name>(path, flags).unwrap();
+                    let p = &*res as *const #root_name;
+                    std::mem::forget(res); // Keep the pool open
+                    p
+                }
+
+                #[no_mangle]
+                pub extern "C" fn #fn_close() -> bool {
+                    if Allocator::is_open() {
+                        unsafe { Allocator::close().unwrap(); }
+                        true
+                    } else {
+                        false
+                    }
+                }
+
+                #[no_mangle]
+                pub extern "C" fn #fn_base() -> usize {
+                    Allocator::start() as usize
+                }
+
+                #[no_mangle]
+                pub extern "C" fn #fn_alloc(size: usize) -> *mut c_void {
+                    let j = unsafe {
+                        Journal::current(false)
+                        .expect(&format!("{} cannot be used outside a transaction", stringify!(#fn_alloc)))
+                    };
+                    unsafe { Allocator::new_uninit_for_layout(size, &*j.0) as *mut c_void }
+                }
+
+                #[no_mangle]
+                pub extern "C" fn #fn_dealloc(ptr: *mut c_void, size: usize) {
+                    assert!(
+                        Journal::is_running(),
+                        "{} cannot be used outside a transaction",
+                        stringify!(#fn_dealloc)
+                    );
+                    unsafe { Allocator::free_slice(std::slice::from_raw_parts_mut(ptr, size)); }
+                }
+
+                #[no_mangle]
+                pub extern "C" fn #fn_allocated(off: u64, size: usize) -> bool {
+                    if Allocator::allocated(off, size) || off == 0 {
+                        true
+                    } else {
+                        eprintln!("off {} (len: {}) is not allocated", off, size);
+                        false
+                    }
+                }
+                #[no_mangle]
+                pub extern "C" fn #fn_valid(ptr: *const c_void) -> bool {
+                    Allocator::valid(ptr)
+                }
+
+                #[no_mangle]
+                pub extern "C" fn #fn_txn_begin() -> *const c_void {
+                    unsafe {
+                        let j = Journal::current(true).unwrap();
+                        *j.1 += 1;
+                        let journal = utils::as_mut(j.0);
+                        journal.unset(corundum::stm::JOURNAL_COMMITTED);
+                        journal as *const _ as *const u8 as *const c_void
+                    }
+                }
+
+                #[no_mangle]
+                pub extern "C" fn #fn_txn_commit() {
+                    unsafe {
+                        corundum::ll::sfence();
+                        Allocator::commit();
+                    }
+                }
+
+                #[no_mangle]
+                pub extern "C" fn #fn_txn_rollback() {
+                    unsafe {
+                        corundum::ll::sfence();
+                        if Allocator::rollback() {
+                            eprintln!("note: transaction rolled back successfully");
+                        }
+                    }
+                }
+
+                #[no_mangle]
+                pub extern "C" fn #fn_journal() -> *const c_void {
+                    unsafe {
+                        if let Some(j) = Journal::current(false) {
+                            let journal = utils::as_mut(j.0);
+                            journal as *const _ as *const u8 as *const c_void
+                        } else {
+                            std::ptr::null()
+                        }
+                    }
+                }
+
+                #[no_mangle]
+                pub extern "C" fn #fn_log(obj: *const c_void, logged: *const u8, size: usize, j: *const c_void) {
+                    assert!(!obj.is_null() && !j.is_null());
+                    unsafe {
+                        if Allocator::valid(obj) {
+                            let slice = std::slice::from_raw_parts(obj as *mut u8, size);
+                            slice.create_log(
+                                corundum::utils::read::<Journal>(j as *mut u8),
+                                if logged.is_null() {
+                                    Notifier::None
+                                } else {
+                                    Notifier::NonAtomic(Ptr::from_raw(logged))
+                                }
+                            );
+                        }
+                    }
+                }
+
+                #[no_mangle]
+                pub extern "C" fn #fn_print_info() {
+                    Allocator::print_info()
+                }
+
+                #[no_mangle]
+                pub extern "C" fn #fn_read64(addr: u64) -> u64 {
+                    unsafe { *Allocator::get_unchecked(addr) }
+                }
+
+                pub struct Named(u8, ByteObject<Allocator>);
+
+                #[no_mangle]
+                pub extern "C" fn #named_open(p: &#root_name, name: *const c_char, size: usize, init: extern fn(*mut c_void)->()) -> *const c_void /* Named */ {
+                    let name = unsafe { CStr::from_ptr(name).to_str().unwrap() };
+                    let mut hasher = DefaultHasher::new();
+                    name.hash(&mut hasher);
+                    let key = hasher.finish();
+
+                    let mut res: *const Named = std::ptr::null();
+                    if transaction(AssertTxInSafe(|j| {
+                        let mut objs = p.objs.lock(j);
+                        if let Container::Custom(named) = objs.get_or_insert(key, || {
+                            let mut obj = ByteObject::new_uninit(size, j);
+                            init(unsafe { obj.as_ptr_mut() });
+                            Container::Custom(Named(0, obj))
+                        }, j) {
+                            res = named as *const Named;
+                        }
+                    })).is_err() {
+                        res = std::ptr::null_mut();
+                    }
+                    res as *const c_void
+                }
+
+                #[no_mangle]
+                pub extern "C" fn #named_data_pointer(obj: *const c_void /* &Named */) -> *const c_void {
+                    let obj = unsafe { corundum::utils::read::<Named>(obj as *mut u8) };
+                    obj.1.as_ptr()
+                }
+
+                #[no_mangle]
+                pub extern "C" fn #named_logged_pointer(obj: *mut c_void /* &Named */) -> *mut c_void {
+                    let obj = unsafe { corundum::utils::read::<Named>(obj as *mut u8) };
+                    &mut obj.0 as *mut u8 as *mut c_void
+                }
+            }
+            #[allow(non_camel_case_types)]
+            pub type #root_name = #mod_name::#root_name;
+        });
+
+
+
+        let contents = format!(
+        "// This file is auto-generated by Corundum. Don't manually modify it.
+#pragma once
+
+#include <pstdlib>
+#include <functional>
+#include <stdio.h>
+#include <execinfo.h>
+#include <signal.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <proot.h>
+
+// forward declarations
+
+template<>
+struct pool_traits<{pool}> {{
+    static size_t base;
+    typedef struct{{}} journal;
+    using handle = {root_name};
+    using void_pointer = corundum::pointer_t<void, {pool}>;
+
+    static void_pointer allocate(size_t size) {{
+        auto res = {pool_alloc}(size);
+        return void_pointer::from_unsafe(res);
+    }}
+    static void deallocate(void_pointer ptr, size_t __n) {{
+        {pool_dealloc}(ptr.get(), __n);
+    }}
+    static bool allocated(size_t off, size_t __n) {{
+        return {pool_allocated}(off, __n);
+    }}
+    static bool valid(const void* ptr) {{
+        return {pool_valid}(ptr);
+    }}
+    static void print_info() {{
+        {pool_print_info}();
+    }}
+    static void cell_log(const void *obj, const u_int8_t *logged, size_t size, const journal *j) {{
+        {pool_log}(obj, logged, size, j);
+    }}
+    static const journal* journal_handle() {{
+        return (const journal*) {pool_journal}();
+    }}
+    static const void *named_open(const {root_name} *p, const char *name, size_t size, void (*init)(void*)) {{
+        return {pool_named_open}(p, name, size, init);
+    }}
+    static const void *named_data_pointer(const void *obj) {{
+        return {pool_named_data_pointer}(obj);
+    }}
+    static void *named_logged_pointer(void *obj) {{
+        return {pool_named_logged_pointer}(obj);
+    }}
+}};
+
+size_t pool_traits<{pool}>::base = 0;
+class {pool}: public corundum::pool_type {{
+    const {root_name} *inner;
+public:
+    typedef pool_traits<{pool}>::journal journal;
+    // type aliases
+    template<class T> using root = proot_t<T, {pool}>;
+    template<class T> using make_persistent = corundum::make_persistent<T, {pool}>;
+    template<class T> using cell = corundum::cell<T, {pool}>;
+    {pool}(const char* path, u_int32_t flags, bool check_open = true) {{
+        if (check_open) assert(pool_traits<{pool}>::base==0, \"{pool} was already open\");
+        inner = {pool_open}(path, flags);
+        pool_traits<{pool}>::base = {pool_base}();
+    }}
+    ~{pool}() {{
+        {pool_close}();
+        pool_traits<{pool}>::base = 0;
+    }}
+    const {root_name} *handle() const {{
+        return inner;
+    }}
+    static bool txn(std::function<void(const journal*)> f) {{
+        auto j = {pool_txn_begin}();
+        try {{
+            f((const journal*)j);
+        {pool_txn_commit}();
+            return true;
+        }} catch (const std::exception& ex) {{
+            std::cerr << \"runtime error: \" << ex.what() << std::endl;
+        }} catch (const std::string& ex) {{
+            std::cerr << \"runtime error: \" << ex << std::endl;
+        }} catch (const char *e) {{
+            std::cerr << \"runtime error: \" << e << std::endl;
+        }} catch (...) {{
+            std::cerr << \"runtime error: unsuccessful transaction\" << std::endl;
+        }}
+        {pool_txn_rollback}();
+        return false;
+    }}
+}};",
+pool = m,
+pool_alloc = fn_alloc.to_string(),
+pool_allocated = fn_allocated.to_string(),
+pool_dealloc = fn_dealloc.to_string(),
+pool_valid = fn_valid.to_string(),
+pool_print_info = fn_print_info.to_string(),
+pool_log = fn_log.to_string(),
+pool_journal = fn_journal.to_string(),
+pool_open = fn_open.to_string(),
+pool_close = fn_close.to_string(),
+pool_base = fn_base.to_string(),
+pool_txn_begin = fn_txn_begin.to_string(),
+pool_txn_commit = fn_txn_commit.to_string(),
+pool_txn_rollback = fn_txn_rollback.to_string(),
+pool_named_open = named_open.to_string(),
+pool_named_data_pointer = named_data_pointer.to_string(),
+pool_named_logged_pointer = named_logged_pointer.to_string(),
+root_name = root_name.to_string(),
+);
+        entry.contents = contents;
+
+        // if let Ok(mut file) = std::fs::File::create(format!("inc/{}.hpp", name_str)) {
+        //     let _=file.write_all(export.as_bytes());
+        // }
+    }
+
+
+
+    let expanded = quote! {
+        #(#expanded)*
+
+        generate!(path=#output, overwrite=#overwrite, warning=false);
+    };
+
+    // Hand the output tokens back to the compiler.
+    TokenStream::from(expanded)
 }

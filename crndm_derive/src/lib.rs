@@ -35,12 +35,6 @@ pub fn derive_root(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_error]
-#[proc_macro_derive(PoolCBindGen, attributes(mods,types,open_flags))]
-pub fn derive_poolcbindgen(input: TokenStream) -> TokenStream {
-    cbinding::derive_poolcbindgen(input)
-}
-
-#[proc_macro_error]
 #[proc_macro_derive(CBindGen, attributes(mods,generics))]
 pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
     cbinding::derive_cbindgen(input)
@@ -73,6 +67,12 @@ fn list(attrs: &Vec<Attribute>, name: &str) -> Vec<proc_macro2::TokenStream> {
     } else {
         ret
     }
+}
+
+#[proc_macro_error]
+#[proc_macro]
+pub fn carbide(input: TokenStream) -> TokenStream {
+    cbinding::carbide(input)
 }
 
 #[proc_macro_error]
