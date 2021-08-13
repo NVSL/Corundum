@@ -11,16 +11,16 @@ use crate::alloc::*;
 use crate::vec::Vec as PVec;
 
 #[repr(C)]
-pub struct Any<T, P: MemPool> {
+pub struct Gen<T, P: MemPool> {
     pub ptr: *const c_void,
     pub len: usize,
     phantom: PhantomData<(T,P)>
 }
 
-unsafe impl<T: TxInSafe, P: MemPool> TxInSafe for Any<T, P> {}
-unsafe impl<T: LooseTxInUnsafe, P: MemPool> LooseTxInUnsafe for Any<T, P> {}
-impl<T: UnwindSafe, P: MemPool> UnwindSafe for Any<T, P> {}
-impl<T: RefUnwindSafe, P: MemPool> RefUnwindSafe for Any<T, P> {}
+unsafe impl<T: TxInSafe, P: MemPool> TxInSafe for Gen<T, P> {}
+unsafe impl<T: LooseTxInUnsafe, P: MemPool> LooseTxInUnsafe for Gen<T, P> {}
+impl<T: UnwindSafe, P: MemPool> UnwindSafe for Gen<T, P> {}
+impl<T: RefUnwindSafe, P: MemPool> RefUnwindSafe for Gen<T, P> {}
 
 /// A byte-vector representation of any type
 /// 
@@ -33,14 +33,14 @@ impl<T: RefUnwindSafe, P: MemPool> RefUnwindSafe for Any<T, P> {}
 /// use pool::*;
 /// type P = Allocator;
 /// 
-/// use corundum::gen::{ByteObject,Any};
+/// use corundum::gen::{ByteObject,Gen};
 /// 
 /// struct ExternalType {
 ///     obj: ByteObject<P>
 /// }
 /// 
 /// #[no_mangle]
-/// pub extern "C" fn new_obj(obj: Any) {
+/// pub extern "C" fn new_obj(obj: Gen) {
 ///     
 /// }
 /// ```
@@ -83,13 +83,13 @@ impl<P: MemPool> ByteObject<P> {
         unsafe { &*(self.bytes.as_ptr() as *const T) }
     }
 
-    pub fn from_any<T>(obj: Any<T, P>, j: &Journal<P>) -> Self {
+    pub fn from_any<T>(obj: Gen<T, P>, j: &Journal<P>) -> Self {
         let bytes = obj.as_slice();
         Self { bytes: PVec::from_slice(bytes, j) }
     }
 
-    pub fn as_any<T>(&self) -> Any<T, P> {
-        Any::<T, P>::from(self.as_ptr::<T>())
+    pub fn as_any<T>(&self) -> Gen<T, P> {
+        Gen::<T, P>::from(self.as_ptr::<T>())
     }
 
     pub unsafe fn as_mut<T>(&self) -> &mut T {
@@ -126,7 +126,7 @@ impl<P: MemPool> ByteObject<P> {
     }
 }
 
-impl<T, P: MemPool> Any<T, P> {
+impl<T, P: MemPool> Gen<T, P> {
     pub fn null() -> Self {
         Self {
             ptr: std::ptr::null(),
@@ -136,13 +136,13 @@ impl<T, P: MemPool> Any<T, P> {
     }
 }
 
-impl<T, P: MemPool> Any<T, P> {
+impl<T, P: MemPool> Gen<T, P> {
     pub fn as_slice(&self) -> &[u8] {
         unsafe { std::slice::from_raw_parts(self.ptr as *mut u8, self.len) }
     }
 }
 
-impl<T, P: MemPool> From<&c_void> for Any<T, P> {
+impl<T, P: MemPool> From<&c_void> for Gen<T, P> {
     fn from(obj: &c_void) -> Self {
         Self {
             ptr: obj as *const c_void,
@@ -152,13 +152,13 @@ impl<T, P: MemPool> From<&c_void> for Any<T, P> {
     }
 }
 
-impl<'a, T, P: MemPool> Into<&'a c_void> for Any<T, P> {
+impl<'a, T, P: MemPool> Into<&'a c_void> for Gen<T, P> {
     fn into(self) -> &'a c_void {
         unsafe { &*self.ptr }
     }
 }
 
-impl<T, P: MemPool> From<*const T> for Any<T, P> {
+impl<T, P: MemPool> From<*const T> for Gen<T, P> {
     fn from(obj: *const T) -> Self {
         Self {
             ptr: obj as *const T as *const c_void,
@@ -168,7 +168,7 @@ impl<T, P: MemPool> From<*const T> for Any<T, P> {
     }
 }
 
-impl<T, P: MemPool> From<&[u8]> for Any<T, P> {
+impl<T, P: MemPool> From<&[u8]> for Gen<T, P> {
     fn from(bytes: &[u8]) -> Self {
         Self {
             ptr: bytes.as_ref().as_ptr() as *const c_void,
@@ -178,7 +178,7 @@ impl<T, P: MemPool> From<&[u8]> for Any<T, P> {
     }
 }
 
-impl<T, P: MemPool> From<ByteObject<P>> for Any<T, P> {
+impl<T, P: MemPool> From<ByteObject<P>> for Gen<T, P> {
     fn from(obj: ByteObject<P>) -> Self {
         Self {
             ptr: obj.as_ptr(),

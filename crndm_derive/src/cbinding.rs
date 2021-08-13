@@ -801,7 +801,7 @@ fn refine_path(m: &TokenStream2, p: &mut Path, tmpl: &Vec<String>, ty_tmpl: &Vec
             PathArguments::AngleBracketed(args) => {
                 for g in &mut args.args {
                     match g {
-                        GenericArgument::Type(ty) => { check_generics(m, ty, &tmpl, ty_tmpl, gen, if s.ident != "Any" && check == 1 { 1 } else { 0 }, modify, has_generics); }
+                        GenericArgument::Type(ty) => { check_generics(m, ty, &tmpl, ty_tmpl, gen, if s.ident != "Gen" && check == 1 { 1 } else { 0 }, modify, has_generics); }
                         GenericArgument::Binding(b) => { check_generics(m, &mut b.ty, &tmpl, ty_tmpl, gen, check, modify, has_generics); }
                         _ => ()
                     }
@@ -876,9 +876,9 @@ fn check_generics(m: &TokenStream2, ty: &mut Type, tmpl: &Vec<String>, ty_tmpl: 
         Type::Ptr(p) => {
             if check_generics(m, &mut *p.elem, tmpl, ty_tmpl, gen, if check == 2 { 0 } else { check }, modify, has_generics) {
                 // update(ty);
-                // *ty = parse2(quote!(corundum::gen::Any)).unwrap();
+                // *ty = parse2(quote!(corundum::gen::Gen)).unwrap();
                 // if modify {
-                //     // *ty = parse2(quote!(corundum::gen::Any)).unwrap();
+                //     // *ty = parse2(quote!(corundum::gen::Gen)).unwrap();
                 //     *p.elem = parse2(quote!(std::ffi::c_void)).unwrap();
                 // }
             }
@@ -887,9 +887,9 @@ fn check_generics(m: &TokenStream2, ty: &mut Type, tmpl: &Vec<String>, ty_tmpl: 
         Type::Reference(r) =>  {
             if check_generics(m, &mut *r.elem, tmpl, ty_tmpl, gen, if check == 2 { 0 } else { check }, modify, has_generics) {
                 // update(ty);
-                // *ty = parse2(quote!(corundum::gen::Any)).unwrap();
+                // *ty = parse2(quote!(corundum::gen::Gen)).unwrap();
                 // if modify {
-                //     // *ty = parse2(quote!(corundum::gen::Any)).unwrap();
+                //     // *ty = parse2(quote!(corundum::gen::Gen)).unwrap();
                 //     *r.elem = parse2(quote!(std::ffi::c_void)).unwrap();
                 // }
             } 
@@ -920,9 +920,9 @@ fn check_generics(m: &TokenStream2, ty: &mut Type, tmpl: &Vec<String>, ty_tmpl: 
     };
     if res && check == 1 {
         let msg = if let Some(p) = ty_tmpl.first() {
-            format!("consider using corundum::gen::Any<{}, {}>", quote!(#ty), p.clone())
+            format!("consider using corundum::gen::Gen<{}, {}>", quote!(#ty), p.clone())
         } else {
-            "consider using corundum::gen::Any".to_owned()
+            "consider using corundum::gen::Gen".to_owned()
         };
         abort!(
             ty.span(), "no bindings found for template parameters";
@@ -1238,7 +1238,7 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
         for (_, _, f, _, _, _, _) in &mut cnt.funcs {
             let re = Regex::new(&format!(r"\#\[no_mangle\].*")).unwrap();
             if re.find(f).is_some() {
-                let re = Regex::new(&format!(r"\bAny\b\s*<\s*(\w+)\s*>")).unwrap();
+                let re = Regex::new(&format!(r"\bGen\b\s*<\s*(\w+)\s*>")).unwrap();
                 *f = re.replace_all(f, "&$1").to_string();
                 cbindfile += &f;
                 cbindfile += "\n";
@@ -1322,7 +1322,7 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
             for (f, args, sig, tmp, _, ret, ret_gen) in &mut cnt.funcs {
                 
                 let (cret, cargs) = parse_c_fn(sig, f);
-                let re = Regex::new(r"\bAny\b").unwrap();
+                let re = Regex::new(r"\bGen\b").unwrap();
                 let cast = if *ret_gen && re.find(&cret).is_none() {
                     format!("({})", cret)
                 } else {
