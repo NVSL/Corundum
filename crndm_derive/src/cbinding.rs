@@ -502,14 +502,14 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
             if *t != pool {
                 emit_warning!(t.span(),
                     "FFI-incompatible generic type parameter";
-                    help = "add {} to the generics list and use corundum::gen::ByteObject instead", t
+                    help = "add {} to the generics list and remove it from here; use corundum::gen::ByteObject instead", t
                 );
                 abort = true;
             }
         }
         if abort {
             abort!(input.ident.span(),
-                "struct {} should have only one generic type parameter as the pool type", input.ident;
+                "struct {} should have exactly one generic type parameter implementing MemPool trait", input.ident;
                 help = "use corundum::gen::ByteObject instead of the generic types, and specify the generic types using `generics(...)` attribute (e.g., #[generics({})])", 
                 ogen.iter().map(|v| v.to_string()).collect::<Vec<String>>().join(", ")
             )
@@ -798,22 +798,22 @@ fn open_flags(attrs: &Vec<Attribute>) -> TokenStream2 {
     quote!{ #(#vflags)|* }
 }
 
-fn refine_path(m: &TokenStream2, p: &mut Path, tmpl: &Vec<String>, ty_tmpl: &Vec<String>, gen: &Vec<String>, check: bool, modify: bool, has_generics: &mut Option<&mut bool>, msg: &str) {
+fn refine_path(m: &TokenStream2, p: &mut Path, tmpl: &Vec<String>, ty_tmpl: &Vec<String>, gen: &Vec<String>, check: bool, modify: bool, has_generics: &mut Option<&mut bool>) {
     for s in &mut p.segments {
         match &mut s.arguments {
             PathArguments::AngleBracketed(args) => {
                 for g in &mut args.args {
                     match g {
-                        GenericArgument::Type(ty) => { check_generics(m, ty, &tmpl, ty_tmpl, gen, s.ident != "Any" && check, modify, has_generics, msg); }
-                        GenericArgument::Binding(b) => { check_generics(m, &mut b.ty, &tmpl, ty_tmpl, gen, check, modify, has_generics, msg); }
+                        GenericArgument::Type(ty) => { check_generics(m, ty, &tmpl, ty_tmpl, gen, s.ident != "Any" && check, modify, has_generics); }
+                        GenericArgument::Binding(b) => { check_generics(m, &mut b.ty, &tmpl, ty_tmpl, gen, check, modify, has_generics); }
                         _ => ()
                     }
                 }
             }
             PathArguments::Parenthesized(args) => {
-                for i in &mut args.inputs { check_generics(m, i, tmpl, ty_tmpl, gen, check, modify, has_generics, msg); }
+                for i in &mut args.inputs { check_generics(m, i, tmpl, ty_tmpl, gen, check, modify, has_generics); }
                 if let ReturnType::Type(_, ty) = &mut args.output {
-                    check_generics(m, ty, tmpl, ty_tmpl, gen, check, modify, has_generics, msg);
+                    check_generics(m, ty, tmpl, ty_tmpl, gen, check, modify, has_generics);
                 }
             }
             _ => ()
@@ -821,19 +821,18 @@ fn refine_path(m: &TokenStream2, p: &mut Path, tmpl: &Vec<String>, ty_tmpl: &Vec
     }
 }
 
-fn check_generics(m: &TokenStream2, ty: &mut Type, tmpl: &Vec<String>, ty_tmpl: &Vec<String>, gen: &Vec<String>, check: bool, modify: bool, has_generics: &mut Option<&mut bool>, msg: &str) -> bool {
-    let msg = if msg.is_empty() { "consider using corundum::gen::Any" } else { msg };
+fn check_generics(m: &TokenStream2, ty: &mut Type, tmpl: &Vec<String>, ty_tmpl: &Vec<String>, gen: &Vec<String>, check: bool, modify: bool, has_generics: &mut Option<&mut bool>) -> bool {
     let res = match ty {
-        Type::Array(a) => check_generics(m, &mut *a.elem, tmpl, ty_tmpl, gen, check, modify, has_generics, msg),
+        Type::Array(a) => check_generics(m, &mut *a.elem, tmpl, ty_tmpl, gen, check, modify, has_generics),
         Type::BareFn(f) => {
-            for i in &mut f.inputs { check_generics(m, &mut i.ty, tmpl, ty_tmpl, gen, false, modify, has_generics, ""); }
+            for i in &mut f.inputs { check_generics(m, &mut i.ty, tmpl, ty_tmpl, gen, false, modify, has_generics); }
             if let ReturnType::Type(_, ty) = &mut f.output {
-                check_generics(m, ty, tmpl, ty_tmpl, gen, false, modify, has_generics, "");
+                check_generics(m, ty, tmpl, ty_tmpl, gen, false, modify, has_generics);
             }
             false
         },
-        Type::Group(g) => check_generics(m, &mut *g.elem, tmpl, ty_tmpl, gen, check, modify, has_generics, msg),
-        Type::Paren(ty) => check_generics(m, &mut *ty.elem, tmpl, ty_tmpl, gen, check, modify, has_generics, msg),
+        Type::Group(g) => check_generics(m, &mut *g.elem, tmpl, ty_tmpl, gen, check, modify, has_generics),
+        Type::Paren(ty) => check_generics(m, &mut *ty.elem, tmpl, ty_tmpl, gen, check, modify, has_generics),
         Type::Path(p) => {
             if p.path.segments.len() == 1 {
                 if p.path.segments[0].arguments == PathArguments::None {
@@ -861,17 +860,17 @@ fn check_generics(m: &TokenStream2, ty: &mut Type, tmpl: &Vec<String>, ty_tmpl: 
                         false
                     }
                 } else {
-                    refine_path(m, &mut p.path, tmpl, ty_tmpl, gen, check, modify, has_generics, msg);
+                    refine_path(m, &mut p.path, tmpl, ty_tmpl, gen, check, modify, has_generics);
                     false
                 }
             } else {
-                refine_path(m, &mut p.path, tmpl, ty_tmpl, gen, check, modify, has_generics, msg);
+                refine_path(m, &mut p.path, tmpl, ty_tmpl, gen, check, modify, has_generics);
                 false
             }
         }
         // tmpl.contains(&p.path.segments.last().unwrap().ident.to_string()),
         Type::Ptr(p) => {
-            if check_generics(m, &mut *p.elem, tmpl, ty_tmpl, gen, check, modify, has_generics, msg) {
+            if check_generics(m, &mut *p.elem, tmpl, ty_tmpl, gen, check, modify, has_generics) {
                 // update(ty);
                 // *ty = parse2(quote!(corundum::gen::Any)).unwrap();
                 // if modify {
@@ -882,7 +881,7 @@ fn check_generics(m: &TokenStream2, ty: &mut Type, tmpl: &Vec<String>, ty_tmpl: 
             false
         },
         Type::Reference(r) =>  {
-            if check_generics(m, &mut *r.elem, tmpl, ty_tmpl, gen, check, modify, has_generics, msg) {
+            if check_generics(m, &mut *r.elem, tmpl, ty_tmpl, gen, check, modify, has_generics) {
                 // update(ty);
                 // *ty = parse2(quote!(corundum::gen::Any)).unwrap();
                 // if modify {
@@ -892,8 +891,8 @@ fn check_generics(m: &TokenStream2, ty: &mut Type, tmpl: &Vec<String>, ty_tmpl: 
             } 
             false
         },
-        Type::Slice(s) => check_generics(m, &mut *s.elem, tmpl, ty_tmpl, gen, check, modify, has_generics, msg),
-        Type::Tuple(t) => t.elems.iter_mut().any(|t| check_generics(m, t, tmpl, ty_tmpl, gen, check, modify, has_generics, msg)),
+        Type::Slice(s) => check_generics(m, &mut *s.elem, tmpl, ty_tmpl, gen, check, modify, has_generics),
+        Type::Tuple(t) => t.elems.iter_mut().any(|t| check_generics(m, t, tmpl, ty_tmpl, gen, check, modify, has_generics)),
         Type::Verbatim(v) => {
             let name = v.to_string();
             if tmpl.contains(&name) {
@@ -918,7 +917,7 @@ fn check_generics(m: &TokenStream2, ty: &mut Type, tmpl: &Vec<String>, ty_tmpl: 
     if res && check {
         abort!(
             ty.span(), "no bindings found for template parameters";
-            note = "{}", msg
+            note = "consider using corundum::gen::Any<{}, {}>"
         );
     }
     res
@@ -939,17 +938,36 @@ pub fn cbindgen(attr: TokenStream, item: TokenStream) -> TokenStream {
     }
     if let Ok(imp) = parse2::<ItemImpl>(item.clone().into()) {
 
-        if let Type::Path(tp) = *imp.self_ty {
+        if let Type::Path(ref tp) = *imp.self_ty {
             let ty_gen: Template = imp.generics.params.iter().map_while(|t| 
                 if let GenericParam::Type(t) = t {
                     if t.bounds.iter().any(|b| if let TypeParamBound::Trait(t) = b {
-                        t.path.segments.last().map_or("".to_owned(), |v| v.ident.to_string()) == "MemPool"
-                    } else {
-                        false
-                    }) {
+                            t.path.segments.last().unwrap().ident == "MemPool"
+                        } else {
+                            false
+                        }
+                    ) {
                         Some(t.ident.to_string())
                     } else {
-                        None
+                        if let Some(w) = &imp.generics.where_clause {
+                            let mut res = None;
+                            for p in &w.predicates {
+                                if let WherePredicate::Type(t) = p {
+                                    for b in &t.bounds {
+                                        if let TypeParamBound::Trait(tr) = b {
+                                            if tr.path.segments.last().unwrap().ident == "MemPool" {
+                                                if let Type::Path(p) = &t.bounded_ty {
+                                                    res = Some(p.path.segments.last().unwrap().ident.to_string());
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            res
+                        } else {
+                            None
+                        }
                     }
                 } else {
                     None
@@ -984,7 +1002,7 @@ pub fn cbindgen(attr: TokenStream, item: TokenStream) -> TokenStream {
                                 if let FnArg::Typed(PatType { pat, ty, .. }) = a {
                                     if let Pat::Ident(PatIdent { ident, .. }) = &**pat {
                                         let mut has_generics = false;
-                                        check_generics(&quote!(), &mut *ty, &gen, &ty_gen, &entry.generics, true, false, &mut Some(&mut has_generics), "");
+                                        check_generics(&quote!(), &mut *ty, &gen, &ty_gen, &entry.generics, true, false, &mut Some(&mut has_generics));
                                         // eprintln!("fn {}: {}", spc.sig.ident, quote!(#ty));
                                         args.push((has_generics, ident.to_string()));
                                     }
@@ -997,7 +1015,7 @@ pub fn cbindgen(attr: TokenStream, item: TokenStream) -> TokenStream {
                     spc.sig.inputs = inputs;
                     let mut output_has_generics = false;
                     if let ReturnType::Type(_, ty) = &mut spc.sig.output {
-                        check_generics(&quote!(), ty, &gen, &ty_gen, &entry.generics, true, false, &mut Some(&mut output_has_generics), "");
+                        check_generics(&quote!(), ty, &gen, &ty_gen, &entry.generics, true, false, &mut Some(&mut output_has_generics));
                     }
                     if let Ok(abi) = parse2::<Abi>(quote!(extern "C")) {
                         spc.sig.abi = Some(abi);
@@ -1037,14 +1055,14 @@ pub fn cbindgen(attr: TokenStream, item: TokenStream) -> TokenStream {
                                 if let FnArg::Typed(PatType { pat, ty, .. }) = arg {
                                     if let Pat::Ident(PatIdent { ident, .. }) = &mut **pat {
                                         if ident != "__self" {
-                                            check_generics(&quote!(#m), ty, &gen, &ty_gen, &entry.generics, true, true, &mut None, "");
+                                            check_generics(&quote!(#m), ty, &gen, &ty_gen, &entry.generics, true, true, &mut None);
                                             args.push(quote!(#ident));
                                         }
                                     }
                                 }
                             }
                             if let ReturnType::Type(_, ty) = &mut ext.sig.output {
-                                check_generics(&quote!(#m), ty, &gen, &ty_gen, &entry.generics, true, true, &mut None, "");
+                                check_generics(&quote!(#m), ty, &gen, &ty_gen, &entry.generics, true, true, &mut None);
                             }
                             ext.block = parse2(quote!{{
                                 __self.#fname(#(#args,)*)
