@@ -27,7 +27,7 @@ pub struct Contents {
     alias: String,
     traits: HashMap<PoolName, String>,
     funcs: Vec<(FuncName, FuncArgs, FuncSig, Template, Template, bool, bool)>,
-    pools: Vec<String>, // or types
+    pools: std::collections::HashSet<String>,
     generics: Vec<String>,
 }
 
@@ -625,7 +625,7 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
 
         includes += &format!("\n#include \"{pool}.hpp\"", pool = pool);
 
-        entry.pools.push(pool.clone());
+        entry.pools.insert(pool.clone());
         entry.traits.insert(pool.clone(), format!("
 template<>
 struct {small_name}_traits<{pool}> {{
