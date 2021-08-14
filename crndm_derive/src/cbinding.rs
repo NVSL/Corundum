@@ -1046,31 +1046,31 @@ pub fn carbide(input: TokenStream) -> TokenStream {
                             },
                             _ => {
                                 abort!(op.span(), "invalid option";
-                                    note = "available options are 'mods', 'types', 'open_flags', 'output', and 'allow'"
+                                    note = "available options are 'mods', 'types', 'output', and 'allow'"
                                 )
                             }
                         }
                     } else {
                         abort!(func.span(), "invalid option";
-                            note = "available options are 'mods', 'types', 'open_flags', 'output', and 'allow'";
+                            note = "available options are 'mods', 'types', 'output', and 'allow'";
                         );
                     }
                 } else {
                     abort!(call.span(), "invalid option";
-                        note = "available options are 'mods', 'types', 'open_flags', 'output', and 'allow'";
+                        note = "available options are 'mods', 'types', 'output', and 'allow'";
                     );
                 }
             } else {
                 abort!(segment.span(), "invalid input";
-                    note = "cbindings accepts multiple ';'-separated segments";
-                    note = "available options are 'mods', 'types', 'open_flags', 'output', and 'allow'";
+                    note = "carbide accepts multiple ';'-separated segments";
+                    note = "available options are 'mods', 'types', 'output', and 'allow'";
                 );
             }
         }
     } else {
         abort_call_site!("invalid input";
-            note = "cbindings accepts multiple ';'-separated segments";
-            note = "available options are 'mods', 'types', 'open_flags', 'output', and 'allow'";
+            note = "carbide accepts multiple ';'-separated segments";
+            note = "available options are 'mods', 'types', 'output', and 'allow'";
         );
     }
 
@@ -1083,6 +1083,12 @@ pub fn carbide(input: TokenStream) -> TokenStream {
     let types = quote! {
         #(#recurse,)* 
     };
+
+    let mut all_pools = unsafe { match POOLS.lock() {
+        Ok(g) => g,
+        Err(p) => p.into_inner()
+    } };
+    all_pools.clear();
 
     let mut expanded = vec![];
     for m in &mods {
@@ -1113,10 +1119,6 @@ pub fn carbide(input: TokenStream) -> TokenStream {
         let root_name = format_ident!("__{}_root_t", name_str);
         // let pool_mod = format_ident!("__{}_module", name_str);
         
-        let mut all_pools = unsafe { match POOLS.lock() {
-            Ok(g) => g,
-            Err(p) => p.into_inner()
-        } };
         let entry = all_pools.entry(name_str.clone()).or_insert(Contents::default());
 
         expanded.push(quote! {
@@ -1451,8 +1453,6 @@ root_name = root_name.to_string(),
         //     let _=file.write_all(export.as_bytes());
         // }
     }
-
-
 
     let expanded = quote! {
         #(#expanded)*

@@ -19,8 +19,8 @@ pub struct Gen<T, P: MemPool> {
 
 unsafe impl<T: TxInSafe, P: MemPool> TxInSafe for Gen<T, P> {}
 unsafe impl<T: LooseTxInUnsafe, P: MemPool> LooseTxInUnsafe for Gen<T, P> {}
-impl<T: UnwindSafe, P: MemPool> UnwindSafe for Gen<T, P> {}
-impl<T: RefUnwindSafe, P: MemPool> RefUnwindSafe for Gen<T, P> {}
+impl<T: TxInSafe, P: MemPool> UnwindSafe for Gen<T, P> {}
+impl<T: TxInSafe, P: MemPool> RefUnwindSafe for Gen<T, P> {}
 
 /// A byte-vector representation of any type
 /// 
@@ -83,12 +83,12 @@ impl<P: MemPool> ByteObject<P> {
         unsafe { &*(self.bytes.as_ptr() as *const T) }
     }
 
-    pub fn from_any<T>(obj: Gen<T, P>, j: &Journal<P>) -> Self {
+    pub fn from_gen<T>(obj: Gen<T, P>, j: &Journal<P>) -> Self {
         let bytes = obj.as_slice();
         Self { bytes: PVec::from_slice(bytes, j) }
     }
 
-    pub fn as_any<T>(&self) -> Gen<T, P> {
+    pub fn as_gen<T>(&self) -> Gen<T, P> {
         Gen::<T, P>::from(self.as_ptr::<T>())
     }
 
