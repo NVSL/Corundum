@@ -58,22 +58,25 @@ impl<P: MemPool> PClone<P> for ByteObject<P> {
 
 impl<P: MemPool> ByteObject<P> {
     pub fn new_uninit(size: usize, j: &Journal<P>) -> Self {
-        Self::new(vec![0; size].as_slice(), j)
+        // Self::new(vec![0; size].as_slice(), j)
+        Self { bytes: PVec::from_slice(vec![0; size].as_slice(), j) }
     }
 
-    pub fn from_bytes(bytes: &[u8], j: &Journal<P>) -> Self {
-        Self { bytes: PVec::from_slice(bytes, j) }
-    }
+    // pub fn from_bytes(bytes: &[u8], j: &Journal<P>) -> Self {
+    //     Self { bytes: PVec::from_slice(bytes, j) }
+    // }
 
-    pub unsafe fn from_raw(ptr: *const c_void, len: usize) -> Self {
-        Self {
-            bytes: PVec::from_raw_parts(ptr as *mut u8, len, len)
-        }
-    }
+    // pub unsafe fn from_raw(ptr: *const c_void, len: usize) -> Self {
+    //     Self {
+    //         bytes: PVec::from_raw_parts(ptr as *mut u8, len, len)
+    //     }
+    // }
 
-    pub fn new<T: PSafe + ?Sized>(obj: &T, j: &Journal<P>) -> Self {
-        Self { bytes: PVec::from_slice(utils::as_slice(obj), j) }
-    }
+    // pub fn new<T: PSafe + ?Sized>(obj: &T, j: &Journal<P>) -> Self {
+    //     let bytes = utils::as_slice(obj);
+    //     eprintln!("{:?}", bytes);
+    //     Self { bytes: PVec::from_slice(bytes, j) }
+    // }
 
     pub fn as_bytes(&self) -> Vec<u8> {
         self.bytes.to_vec()

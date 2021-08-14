@@ -423,6 +423,15 @@ fn check_generics(m: &TokenStream2, ty: &mut Type, tmpl: &Vec<String>, ty_tmpl: 
         Type::Group(g) => check_generics(m, &mut *g.elem, tmpl, ty_tmpl, gen, check, modify, has_generics),
         Type::Paren(ty) => check_generics(m, &mut *ty.elem, tmpl, ty_tmpl, gen, check, modify, has_generics),
         Type::Path(p) => {
+            // if let Some(last) = p.path.segments.last() {
+            //     if last.ident == "Box" {
+            //         if let PathArguments::AngleBracketed(args) = &last.arguments {
+            //             let args = &args.args;
+            //             *ty = parse2(quote!(*const #args)).unwrap();
+            //             return check_generics(m, ty, tmpl, ty_tmpl, gen, check, modify, has_generics);
+            //         }
+            //     }
+            // }
             if p.path.segments.len() == 1 {
                 if p.path.segments[0].arguments == PathArguments::None {
                     let name = p.path.segments[0].ident.to_string();
@@ -459,7 +468,7 @@ fn check_generics(m: &TokenStream2, ty: &mut Type, tmpl: &Vec<String>, ty_tmpl: 
         }
         // tmpl.contains(&p.path.get_ident().unwrap().ident.to_string()),
         Type::Ptr(p) => {
-            if check_generics(m, &mut *p.elem, tmpl, ty_tmpl, gen, if check == 2 { 0 } else { check }, modify, has_generics) {
+            if check_generics(m, &mut *p.elem, tmpl, ty_tmpl, gen, 0, modify, has_generics) {
                 // update(ty);
                 // *ty = parse2(quote!(corundum::gen::Gen)).unwrap();
                 // if modify {
@@ -470,7 +479,7 @@ fn check_generics(m: &TokenStream2, ty: &mut Type, tmpl: &Vec<String>, ty_tmpl: 
             false
         },
         Type::Reference(r) =>  {
-            if check_generics(m, &mut *r.elem, tmpl, ty_tmpl, gen, if check == 2 { 0 } else { check }, modify, has_generics) {
+            if check_generics(m, &mut *r.elem, tmpl, ty_tmpl, gen, 0, modify, has_generics) {
                 // update(ty);
                 // *ty = parse2(quote!(corundum::gen::Gen)).unwrap();
                 // if modify {
@@ -505,7 +514,7 @@ fn check_generics(m: &TokenStream2, ty: &mut Type, tmpl: &Vec<String>, ty_tmpl: 
     };
     if res && check == 1 {
         let msg = if let Some(p) = ty_tmpl.first() {
-            format!("consider using corundum::gen::Gen<{}, {}>", quote!(#ty), p.clone())
+            format!("consider using corundum::gen::Gen<{t}, {p}>", t=quote!(#ty), p=p.clone())
         } else {
             "consider using corundum::gen::Gen".to_owned()
         };
@@ -892,6 +901,13 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
     comma = if args.is_empty() { "" } else { ", " },
     args = args
 ));
+                } 
+                else {
+                    abort_call_site!(
+                        "cbindgen could not find C++ bindings for `{}::{}(...)'", ty, name;
+                        note = "in type `{}'", ty;
+                        note = "in function definition\n{}", *sig;
+                    );
                 }
                 // else {
                 //         emit_call_site_warning!(
