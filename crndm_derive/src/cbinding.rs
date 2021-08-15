@@ -1402,6 +1402,9 @@ struct pool_traits<{pool}> {{
     static void *named_logged_pointer(void *obj) {{
         return {pool_named_logged_pointer}(obj);
     }}
+    static void start_transaction() {{
+        {pool_txn_begin}();
+    }}
 }};
 
 size_t pool_traits<{pool}>::base = 0;
