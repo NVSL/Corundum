@@ -4,6 +4,7 @@ use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 use std::ffi::c_void;
 use std::panic::{UnwindSafe, RefUnwindSafe};
+use std::mem::size_of;
 use crate::*;
 use crate::stm::Journal;
 use crate::clone::PClone;
@@ -62,22 +63,6 @@ impl<P: MemPool> ByteObject<P> {
         Self { bytes: PVec::from_slice(vec![0; size].as_slice(), j) }
     }
 
-    // pub fn from_bytes(bytes: &[u8], j: &Journal<P>) -> Self {
-    //     Self { bytes: PVec::from_slice(bytes, j) }
-    // }
-
-    // pub unsafe fn from_raw(ptr: *const c_void, len: usize) -> Self {
-    //     Self {
-    //         bytes: PVec::from_raw_parts(ptr as *mut u8, len, len)
-    //     }
-    // }
-
-    // pub fn new<T: PSafe + ?Sized>(obj: &T, j: &Journal<P>) -> Self {
-    //     let bytes = utils::as_slice(obj);
-    //     eprintln!("{:?}", bytes);
-    //     Self { bytes: PVec::from_slice(bytes, j) }
-    // }
-
     pub fn as_bytes(&self) -> Vec<u8> {
         self.bytes.to_vec()
     }
@@ -91,8 +76,13 @@ impl<P: MemPool> ByteObject<P> {
         Self { bytes: PVec::from_slice(bytes, j) }
     }
 
-    pub fn as_gen<T>(&self) -> Gen<T, P> {
-        Gen::<T, P>::from(self.as_ptr::<T>())
+    pub fn as_gen<T>(self) -> Gen<T, P> {
+        Gen::from_byte_object(self)
+    }
+
+    pub unsafe fn as_ref_gen<T>(&self) -> Gen<T, P> {
+        assert_eq!(self.len(), size_of::<T>(), "Incompatible type casting");
+        Gen::<T, P>::from_ptr(self.as_ptr::<T>())
     }
 
     pub unsafe fn as_mut<T>(&self) -> &mut T {
@@ -134,55 +124,28 @@ impl<T, P: MemPool> Gen<T, P> {
         Self {
             ptr: std::ptr::null(),
             len: 0,
+            // drop: false,
             phantom: PhantomData
         }
     }
 }
 
 impl<T, P: MemPool> Gen<T, P> {
-    pub fn as_slice(&self) -> &[u8] {
+    fn as_slice(&self) -> &[u8] {
         unsafe { std::slice::from_raw_parts(self.ptr as *mut u8, self.len) }
     }
-}
 
-impl<T, P: MemPool> From<&c_void> for Gen<T, P> {
-    fn from(obj: &c_void) -> Self {
-        Self {
-            ptr: obj as *const c_void,
-            len: std::mem::size_of::<T>(),
-            phantom: PhantomData
-        }
-    }
-}
-
-impl<'a, T, P: MemPool> Into<&'a c_void> for Gen<T, P> {
-    fn into(self) -> &'a c_void {
-        unsafe { &*self.ptr }
-    }
-}
-
-impl<T, P: MemPool> From<*const T> for Gen<T, P> {
-    fn from(obj: *const T) -> Self {
+    fn from_ptr(obj: *const T) -> Self {
         Self {
             ptr: obj as *const T as *const c_void,
-            len: std::mem::size_of::<T>(),
+            len: size_of::<T>(),
+            // drop: false,
             phantom: PhantomData
         }
     }
-}
 
-impl<T, P: MemPool> From<&[u8]> for Gen<T, P> {
-    fn from(bytes: &[u8]) -> Self {
-        Self {
-            ptr: bytes.as_ref().as_ptr() as *const c_void,
-            len: bytes.len(),
-            phantom: PhantomData
-        }
-    }
-}
-
-impl<T, P: MemPool> From<ByteObject<P>> for Gen<T, P> {
-    fn from(obj: ByteObject<P>) -> Self {
+    fn from_byte_object(obj: ByteObject<P>) -> Self {
+        assert_eq!(obj.len(), size_of::<T>(), "Incompatible type casting");
         Self {
             ptr: obj.as_ptr(),
             len: obj.len(),

@@ -941,7 +941,7 @@ where
     }
 
     /// Creates a `DropOnCommit` log for the value `x`
-    unsafe fn free_slice<'a, T: PSafe>(x: &mut [T]) {
+    unsafe fn free_slice<'a, T: PSafe>(x: &[T]) {
         // eprintln!("FREEING {} of size {}", x as *mut u8 as u64, len);
         if x.len() > 0 {
             let off = Self::off_unchecked(x);

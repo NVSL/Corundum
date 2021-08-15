@@ -1011,6 +1011,12 @@ macro_rules! pool {
             /// 
             /// [`pool!()`]: ../macro.pool.html
             pub struct $name {}
+
+            impl std::panic::UnwindSafe for $name {}
+            impl std::panic::RefUnwindSafe for $name {}
+            unsafe impl $crate::TxInSafe for $name {}
+            unsafe impl $crate::PSafe for $name {}
+            unsafe impl $crate::LooseTxInUnsafe for $name {}
     
             pub mod dummy {
                 #[repr(C)]

@@ -276,14 +276,14 @@ root_name = __m.to_string()
 #include <rstl.h>
 #include <assert.h>
 #include <iostream>
-#include <corundum>
+#include <carbide>
 #include <unordered_set>
 #include <pstdlib>
 #include <cstring>
 {includes}
 
 template<class _P>
-using pstring = typename corundum::make_persistent<std::string, _P>::type;
+using pstring = typename carbide::make_persistent<std::string, _P>::type;
 
 template<class _P>
 struct {small_name}_traits {{
@@ -295,12 +295,12 @@ struct {small_name}_traits {{
 }};
 
 template <{generics_list}, class _P>
-class {cname} : public corundum::psafe_type_parameters {{ 
+class {cname} : public carbide::psafe_type_parameters {{ 
 
     typedef pool_traits<_P>                        pool_traits;
     typedef typename pool_traits::handle          handle;
     typedef typename pool_traits::journal         journal;
-    typedef corundum::pointer_t<{name}<_P>, _P>   pointer;
+    typedef carbide::pointer_t<{name}<_P>, _P>   pointer;
 
     pointer inner;
     pstring<_P> name;
@@ -468,7 +468,7 @@ fn check_generics(m: &TokenStream2, ty: &mut Type, tmpl: &Vec<String>, ty_tmpl: 
         }
         // tmpl.contains(&p.path.get_ident().unwrap().ident.to_string()),
         Type::Ptr(p) => {
-            if check_generics(m, &mut *p.elem, tmpl, ty_tmpl, gen, 0, modify, has_generics) {
+            if check_generics(m, &mut *p.elem, tmpl, ty_tmpl, gen, if check == 2 { 0 } else { check }, modify, has_generics) {
                 // update(ty);
                 // *ty = parse2(quote!(corundum::gen::Gen)).unwrap();
                 // if modify {
@@ -479,7 +479,7 @@ fn check_generics(m: &TokenStream2, ty: &mut Type, tmpl: &Vec<String>, ty_tmpl: 
             false
         },
         Type::Reference(r) =>  {
-            if check_generics(m, &mut *r.elem, tmpl, ty_tmpl, gen, 0, modify, has_generics) {
+            if check_generics(m, &mut *r.elem, tmpl, ty_tmpl, gen, if check == 2 { 0 } else { check }, modify, has_generics) {
                 // update(ty);
                 // *ty = parse2(quote!(corundum::gen::Gen)).unwrap();
                 // if modify {
@@ -514,7 +514,7 @@ fn check_generics(m: &TokenStream2, ty: &mut Type, tmpl: &Vec<String>, ty_tmpl: 
     };
     if res && check == 1 {
         let msg = if let Some(p) = ty_tmpl.first() {
-            format!("consider using corundum::gen::Gen<{t}, {p}>", t=quote!(#ty), p=p.clone())
+            format!("consider using corundum::gen::Gen<{}, {}>", quote!(#ty), p.clone())
         } else {
             "consider using corundum::gen::Gen".to_owned()
         };
@@ -1369,7 +1369,7 @@ struct pool_traits<{pool}> {{
     static size_t base;
     typedef struct{{}} journal;
     using handle = {root_name};
-    using void_pointer = corundum::pointer_t<void, {pool}>;
+    using void_pointer = carbide::pointer_t<void, {pool}>;
 
     static void_pointer allocate(size_t size) {{
         auto res = {pool_alloc}(size);
@@ -1405,14 +1405,14 @@ struct pool_traits<{pool}> {{
 }};
 
 size_t pool_traits<{pool}>::base = 0;
-class {pool}: public corundum::pool_type {{
+class {pool}: public carbide::pool_type {{
     const {root_name} *inner;
 public:
     typedef pool_traits<{pool}>::journal journal;
     // type aliases
     template<class T> using root = proot_t<T, {pool}>;
-    template<class T> using make_persistent = corundum::make_persistent<T, {pool}>;
-    template<class T> using cell = corundum::cell<T, {pool}>;
+    template<class T> using make_persistent = carbide::make_persistent<T, {pool}>;
+    template<class T> using cell = carbide::cell<T, {pool}>;
     {pool}(const char* path, u_int32_t flags, bool check_open = true) {{
         if (check_open) assert(pool_traits<{pool}>::base==0, \"{pool} was already open\");
         inner = {pool_open}(path, flags);
