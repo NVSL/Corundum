@@ -1267,9 +1267,9 @@ pub fn carbide(input: TokenStream) -> TokenStream {
                 }
 
                 #[no_mangle]
-                pub extern "C" fn #fn_journal() -> *const c_void {
+                pub extern "C" fn #fn_journal(create: bool) -> *const c_void {
                     unsafe {
-                        if let Some(j) = Journal::current(false) {
+                        if let Some(j) = Journal::current(create) {
                             let journal = utils::as_mut(j.0);
                             journal as *const _ as *const u8 as *const c_void
                         } else {
@@ -1391,7 +1391,7 @@ struct pool_traits<{pool}> {{
         {pool_log}(obj, logged, size, j);
     }}
     static const journal* journal_handle() {{
-        return (const journal*) {pool_journal}();
+        return (const journal*) {pool_journal}(false);
     }}
     static const void *named_open(const {root_name} *p, const char *name, size_t size, void (*init)(void*)) {{
         return {pool_named_open}(p, name, size, init);
@@ -1402,8 +1402,8 @@ struct pool_traits<{pool}> {{
     static void *named_logged_pointer(void *obj) {{
         return {pool_named_logged_pointer}(obj);
     }}
-    static void start_transaction() {{
-        {pool_txn_begin}();
+    static void early_start_transaction() {{
+        {pool_journal}(true);
     }}
 }};
 
