@@ -145,7 +145,7 @@ impl<T, P: MemPool> Gen<T, P> {
     }
 
     fn from_byte_object(obj: ByteObject<P>) -> Self {
-        assert_eq!(obj.len(), size_of::<T>(), "Incompatible type casting");
+        // assert_eq!(obj.len(), size_of::<T>(), "Incompatible type casting");
         Self {
             ptr: obj.as_ptr(),
             len: obj.len(),
