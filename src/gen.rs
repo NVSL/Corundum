@@ -81,7 +81,7 @@ impl<P: MemPool> ByteObject<P> {
     }
 
     pub unsafe fn as_ref_gen<T>(&self) -> Gen<T, P> {
-        assert_eq!(self.len(), size_of::<T>(), "Incompatible type casting");
+        // assert_eq!(self.len(), size_of::<T>(), "Incompatible type casting");
         Gen::<T, P>::from_ptr(self.as_ptr::<T>())
     }
 
