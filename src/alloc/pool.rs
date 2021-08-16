@@ -9,7 +9,7 @@ use std::ops::Range;
 use std::panic::UnwindSafe;
 use std::path::Path;
 use std::thread::ThreadId;
-use std::{alloc::Layout, mem, ptr};
+use std::{mem, ptr};
 
 /// Default pool memory size to be used while creating a new pool
 pub const DEFAULT_POOL_SIZE: u64 = 8 * 1024 * 1024;
@@ -867,7 +867,7 @@ where
     unsafe fn atomic_new_slice<'a, T: 'a + PSafe>(x: &'a [T]) -> (&'a mut [T], u64, usize, usize) {
         log!(Self, White, "ALLOC", "TYPE: [{}; {}]", std::any::type_name::<T>(), x.len());
 
-        let (ptr, off, size, z) = Self::pre_alloc(Layout::for_value(x).size());
+        let (ptr, off, size, z) = Self::pre_alloc(mem::size_of_val(x));
         if ptr.is_null() {
             panic!("Memory exhausted");
         }

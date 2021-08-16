@@ -76,24 +76,6 @@ impl<P: MemPool> ByteObject<P> {
         Self { bytes: PVec::from_slice(bytes, j) }
     }
 
-    /// Creates a new `ByteObject` from [`Gen`] without logging and returning
-    /// the memory zone
-    /// 
-    /// # Safety
-    /// 
-    /// This function does not perform the initiated atomic allocation. The
-    /// returned zone number (second item) can be used in [`perform()`] to
-    /// persist the update.
-    /// 
-    /// Caution: Low-level logging system has limited number of slots. Call
-    /// [`perform()`] at the earliest possible time.
-    /// 
-    pub unsafe fn from_gen_nolog<T>(obj: Gen<T, P>) -> (Self, usize) {
-        let bytes = obj.as_slice();
-        let (bytes, zone) = PVec::from_slice_nolog(bytes);
-        (Self { bytes }, zone)
-    }
-
     pub fn as_gen<T>(self) -> Gen<T, P> {
         Gen::from_byte_object(self)
     }
@@ -180,3 +162,18 @@ impl<T, P: MemPool> Gen<T, P> {
         }
     }
 }
+
+// #[cfg(test)]
+// mod test {
+//     use super::*;
+
+//     impl<T, P: MemPool> From<&T> for Gen<T, P> {
+//         fn from(obj: &T) -> Self {
+//             Self {
+//                 ptr: obj as *const T as *const c_void,
+//                 len: size_of::<T>(),
+//                 phantom: PhantomData
+//             }
+//         }
+//     }
+// }
