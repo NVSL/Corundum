@@ -80,6 +80,11 @@ impl<P: MemPool> ByteObject<P> {
         Gen::from_byte_object(self)
     }
 
+    pub unsafe fn from_ref_gen<T>(mut obj: Gen<T, P>) -> Self {
+        let bytes = obj.as_slice_mut();
+        Self { bytes: PVec::from_raw_parts(bytes.as_mut_ptr(), bytes.len(), bytes.len()) }
+    }
+
     pub unsafe fn as_ref_gen<T>(&self) -> Gen<T, P> {
         // assert_eq!(self.len(), size_of::<T>(), "Incompatible type casting");
         Gen::<T, P>::from_ptr(self.as_ptr::<T>())
@@ -133,6 +138,10 @@ impl<T, P: MemPool> Gen<T, P> {
 impl<T, P: MemPool> Gen<T, P> {
     fn as_slice(&self) -> &[u8] {
         unsafe { std::slice::from_raw_parts(self.ptr as *mut u8, self.len) }
+    }
+
+    fn as_slice_mut(&mut self) -> &mut [u8] {
+        unsafe { std::slice::from_raw_parts_mut(self.ptr as *mut u8, self.len) }
     }
 
     fn from_ptr(obj: *const T) -> Self {

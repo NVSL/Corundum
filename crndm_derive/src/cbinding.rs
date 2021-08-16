@@ -586,103 +586,104 @@ pub fn cbindgen(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
             for item in imp.items {
                 if let ImplItem::Method(func) = item {
-
-                    let mut spc = func.clone();
-                    let mut inputs = Punctuated::<_, Token![,]>::new();
-                    let mut args = vec!();
-                    let gen: Template = spc.sig.generics.params.iter()
-                        .map_while(|i| 
-                            if let GenericParam::Type(t) = i {
-                                Some(t.ident.to_string())
-                            } else {
-                                None
+                    if let Visibility::Public(_) = &func.vis {
+                        let mut spc = func.clone();
+                        let mut inputs = Punctuated::<_, Token![,]>::new();
+                        let mut args = vec!();
+                        let gen: Template = spc.sig.generics.params.iter()
+                            .map_while(|i| 
+                                if let GenericParam::Type(t) = i {
+                                    Some(t.ident.to_string())
+                                } else {
+                                    None
+                                }
+                            ).collect();
+                        {
+                            let mut i = spc.sig.inputs.iter_mut();
+                            if i.next().is_some() {
+                                while let Some(a) = i.next() {
+                                    if let FnArg::Typed(PatType { pat, ty, .. }) = a {
+                                        if let Pat::Ident(PatIdent { ident, .. }) = &**pat {
+                                            let mut has_generics = false;
+                                            check_generics(&quote!(), &mut *ty, &gen, &ty_gen, &entry.generics, 1, false, &mut Some(&mut has_generics));
+                                            // eprintln!("fn {}: {}", spc.sig.ident, quote!(#ty));
+                                            args.push((has_generics, ident.to_string()));
+                                        }
+                                    }
+                                    inputs.push(a.clone());
+                                } 
                             }
-                        ).collect();
-                    {
-                        let mut i = spc.sig.inputs.iter_mut();
-                        if i.next().is_some() {
-                            while let Some(a) = i.next() {
-                                if let FnArg::Typed(PatType { pat, ty, .. }) = a {
-                                    if let Pat::Ident(PatIdent { ident, .. }) = &**pat {
-                                        let mut has_generics = false;
-                                        check_generics(&quote!(), &mut *ty, &gen, &ty_gen, &entry.generics, 1, false, &mut Some(&mut has_generics));
-                                        // eprintln!("fn {}: {}", spc.sig.ident, quote!(#ty));
-                                        args.push((has_generics, ident.to_string()));
+                        }
+                        spc.sig.generics = Generics::default();
+                        spc.sig.inputs = inputs;
+                        let mut output_has_generics = false;
+                        if let ReturnType::Type(_, ty) = &mut spc.sig.output {
+                            check_generics(&quote!(), ty, &gen, &ty_gen, &entry.generics, 1, false, &mut Some(&mut output_has_generics));
+                        }
+                        if let Ok(abi) = parse2::<Abi>(quote!(extern "C")) {
+                            spc.sig.abi = Some(abi);
+                        }
+                        spc.block = parse2(quote!{{
+                            () // no implementation
+                        }}).unwrap();
+                        entry.funcs.push((
+                            spc.sig.ident.to_string(), 
+                            args, quote!(#[no_mangle] #spc).to_string(), 
+                            gen.clone(), 
+                            ty_gen.clone(), 
+                            spc.sig.output != ReturnType::Default, 
+                            output_has_generics));
+    
+                        for m in &entry.pools {
+                            let m = format_ident!("{}", m);
+                            let m_str = m.to_string();
+                            let mut tps = vec![];
+                            let mut ext = func.clone();
+                            for param in &func.sig.generics.params {
+                                if let GenericParam::Type(ty) = param {
+                                    tps.push(ty.ident.clone());
+                                }
+                            }
+                            ext.sig.ident = format_ident!("__{}_{}_{}", m_str, small_name, ext.sig.ident);
+                            if let Ok(abi) = parse2::<Abi>(quote!(extern "C")) {
+                                ext.sig.abi = Some(abi);
+                            }
+                            ext.sig.generics = Generics::default();
+                            let mut has_receiver = false;
+                            if let Some(first) = ext.sig.inputs.first_mut() {
+                                if let FnArg::Receiver(_) = first { has_receiver = true; }
+                                if has_receiver {
+                                    if let Ok(arg) = parse2::<FnArg>(quote!(__self: &#name<#m>)) {
+                                        *first = arg;
                                     }
                                 }
-                                inputs.push(a.clone());
-                            } 
-                        }
-                    }
-                    spc.sig.generics = Generics::default();
-                    spc.sig.inputs = inputs;
-                    let mut output_has_generics = false;
-                    if let ReturnType::Type(_, ty) = &mut spc.sig.output {
-                        check_generics(&quote!(), ty, &gen, &ty_gen, &entry.generics, 1, false, &mut Some(&mut output_has_generics));
-                    }
-                    if let Ok(abi) = parse2::<Abi>(quote!(extern "C")) {
-                        spc.sig.abi = Some(abi);
-                    }
-                    spc.block = parse2(quote!{{
-                        () // no implementation
-                    }}).unwrap();
-                    entry.funcs.push((
-                        spc.sig.ident.to_string(), 
-                        args, quote!(#[no_mangle] #spc).to_string(), 
-                        gen.clone(), 
-                        ty_gen.clone(), 
-                        spc.sig.output != ReturnType::Default, 
-                        output_has_generics));
-
-                    for m in &entry.pools {
-                        let m = format_ident!("{}", m);
-                        let m_str = m.to_string();
-                        let mut tps = vec![];
-                        let mut ext = func.clone();
-                        for param in &func.sig.generics.params {
-                            if let GenericParam::Type(ty) = param {
-                                tps.push(ty.ident.clone());
                             }
-                        }
-                        ext.sig.ident = format_ident!("__{}_{}_{}", m_str, small_name, ext.sig.ident);
-                        if let Ok(abi) = parse2::<Abi>(quote!(extern "C")) {
-                            ext.sig.abi = Some(abi);
-                        }
-                        ext.sig.generics = Generics::default();
-                        let mut has_receiver = false;
-                        if let Some(first) = ext.sig.inputs.first_mut() {
-                            if let FnArg::Receiver(_) = first { has_receiver = true; }
                             if has_receiver {
-                                if let Ok(arg) = parse2::<FnArg>(quote!(__self: &#name<#m>)) {
-                                    *first = arg;
-                                }
-                            }
-                        }
-                        if has_receiver {
-                            let fname = func.sig.ident.clone();
-                            let mut args = vec![];
-                            for arg in &mut ext.sig.inputs {
-                                if let FnArg::Typed(PatType { pat, ty, .. }) = arg {
-                                    if let Pat::Ident(PatIdent { ident, .. }) = &mut **pat {
-                                        if ident != "__self" {
-                                            check_generics(&quote!(#m), ty, &gen, &ty_gen, &entry.generics, 1, true, &mut None);
-                                            args.push(quote!(#ident));
+                                let fname = func.sig.ident.clone();
+                                let mut args = vec![];
+                                for arg in &mut ext.sig.inputs {
+                                    if let FnArg::Typed(PatType { pat, ty, .. }) = arg {
+                                        if let Pat::Ident(PatIdent { ident, .. }) = &mut **pat {
+                                            if ident != "__self" {
+                                                check_generics(&quote!(#m), ty, &gen, &ty_gen, &entry.generics, 1, true, &mut None);
+                                                args.push(quote!(#ident));
+                                            }
                                         }
                                     }
                                 }
+                                if let ReturnType::Type(_, ty) = &mut ext.sig.output {
+                                    check_generics(&quote!(#m), ty, &gen, &ty_gen, &entry.generics, 1, true, &mut None);
+                                }
+                                ext.block = parse2(quote!{{
+                                    __self.#fname(#(#args,)*)
+                                }}).unwrap();
+    
+                                expanded.push(quote!{
+                                    #[no_mangle]
+                                    #[deny(improper_ctypes_definitions)] 
+                                    #ext
+                                });
                             }
-                            if let ReturnType::Type(_, ty) = &mut ext.sig.output {
-                                check_generics(&quote!(#m), ty, &gen, &ty_gen, &entry.generics, 1, true, &mut None);
-                            }
-                            ext.block = parse2(quote!{{
-                                __self.#fname(#(#args,)*)
-                            }}).unwrap();
-
-                            expanded.push(quote!{
-                                #[no_mangle]
-                                #[deny(improper_ctypes_definitions)] 
-                                #ext
-                            });
                         }
                     }
                 }
