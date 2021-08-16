@@ -274,6 +274,56 @@ impl<T: PSafe, A: MemPool> Pbox<T, A> {
             }
         }
     }
+
+    /// Initializes boxed data with closure `f` in-place if it is `None`
+    ///
+    /// This function should not be called from a transaction as it updates
+    /// data without taking high-level logs. If transaction is unsuccessful,
+    /// there is no way to recover data.
+    /// However, it is safe to use it outside a transaction because it uses
+    /// low-level logs to provide safety for a single update without drop.
+    /// A dynamic check at the beginning makes sure of that.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use corundum::default::*;
+    /// 
+    /// type P = Allocator;
+    ///
+    /// let root = P::open::<Option<Pbox<i32>>>("foo.pool", O_CF).unwrap();
+    ///
+    /// Pbox::initialize_with(&*root, || 25);
+    /// 
+    /// let value = **root.as_ref().unwrap();
+    /// assert_eq!(value, 25);
+    /// ```
+    ///
+    pub fn initialize_with<F: FnOnce()->T>(boxed: &Option<Pbox<T, A>>, f: F) -> crate::result::Result<()> {
+        assert!(
+            !Journal::<A>::is_running(),
+            "Pbox::initialize() cannot be used inside a transaction"
+        );
+        match boxed {
+            Some(_) => Err("already initialized".to_string()),
+            None => if A::valid(boxed) {
+                unsafe {
+                    let new = A::atomic_new(f());
+                    let bnew = Some(Pbox::<T, A>::from_raw(new.0));
+                    let src = crate::utils::as_slice64(&bnew);
+                    let mut base = A::off_unchecked(boxed);
+                    for i in src {
+                        A::log64(base, *i, new.3);
+                        base += 8;
+                    }
+                    A::perform(new.3);
+                }
+                Ok(())
+            } else {
+                Err("The object is not in the PM".to_string())
+            }
+        }
+    }
 }
 
 impl<T: PSafe + ?Sized, A: MemPool> Pbox<T, A> {
