@@ -142,16 +142,19 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
     //     entry.pools.push(input.ident.to_string());
     // }
 
-    if generics.is_empty() {
-        abort!(input.ident.span(),
-            "struct {} should have at least one generic type parameter as the data type", input.ident;
-            help = "specify the generic data types using `generics(...)` attribute (e.g., #[generics(T)])"
-        )
-    }
+    let mut generics_list = quote!{ template <#(class #generics,)*;>  }.to_string().replace(", ;", "")+" ";
+    let mut template = quote!{ template <#(class #generics,)* class _P> }.to_string();
+    let mut generics_str = quote!{ #(#generics,)* }.to_string();
 
-    let generics_list = quote!{ #(class #generics,)*; }.to_string();
-    let generics_list = generics_list.replace(", ;", "");
-    let generics_str = quote!{ #(#generics,)*; }.to_string().replace(", ;", "");
+    if generics.is_empty() {
+        emit_warning!(input.ident.span(),
+            "struct {} does not have any generic type parameter as the data type", input.ident;
+            help = "specify the generic data types using `generics(...)` attribute (e.g., #[generics(T)])"
+        );
+        generics_str = "".to_string();
+        generics_list = "".to_string();
+        template = "template<class _P>".to_string();
+    }
 
     // Used in the quasi-quotation below as `#name`.
     let name = input.ident;
@@ -294,7 +297,7 @@ struct {small_name}_traits {{
     // template methods
 }};
 
-template <{generics_list}, class _P>
+{template}
 class {cname} : public carbide::psafe_type_parameters {{ 
 
     typedef pool_traits<_P>                        pool_traits;
@@ -320,9 +323,9 @@ public:
         is_root = false;
     }} 
 
-    {cname}(const {cname} &stk) {{ 
-        inner = stk.inner;
-        name = stk.name;
+    {cname}(const {cname} &obj) {{ 
+        inner = obj.inner;
+        name = obj.name;
         is_root = false;
     }} 
 
@@ -331,8 +334,8 @@ public:
             assert(objs.find(name) == objs.end(), \"'%s' was already open\", name.c_str());
             this->name = name.c_str();
             objs.insert(name);
-            pointer stk = pointer::from_unsafe({small_name}_traits<_P>::open(pool, name.c_str()));
-            memcpy((void*)&inner, (void*)&stk, sizeof(pointer));
+            pointer obj = pointer::from_unsafe({small_name}_traits<_P>::open(pool, name.c_str()));
+            memcpy((void*)&inner, (void*)&obj, sizeof(pointer));
             is_root = true;
         }} );
     }} 
@@ -354,20 +357,20 @@ public:
     // other methods
 }};
 
-template <{generics_list}, class _P> std::unordered_set<std::string> {cname}<{generics}, _P>::objs;
+{template} std::unordered_set<std::string> {cname}<{generics}_P>::objs;
 ",
-generics_list = generics_list,
+template = template,
 generics = generics_str,
 includes = includes,
 small_name = small_name,
 name = name_str,
 cname = cname
 );
-    entry.decl = format!("template<{generics_list}, class _P> class p{name}_t;",
+    entry.decl = format!("{template} class p{name}_t;",
             name = small_name,
-            generics_list = generics_list
+            template = template
         );
-    entry.alias = format!("template<{generics_list}> using {name} = p{name}_t<{generics}, {{pool}}>;",
+    entry.alias = format!("{generics_list}using {name} = p{name}_t<{generics}{{pool}}>;",
             name = small_name,
             generics = generics_str,
             generics_list = generics_list
@@ -1414,9 +1417,9 @@ class {pool}: public carbide::pool_type {{
 public:
     typedef pool_traits<{pool}>::journal journal;
     // type aliases
-    template<class T> using root = proot_t<T, {pool}>;
-    template<class T> using make_persistent = carbide::make_persistent<T, {pool}>;
-    template<class T> using cell = carbide::cell<T, {pool}>;
+    template< class T > using root = proot_t<T, {pool}>;
+    template< class T > using make_persistent = carbide::make_persistent<T, {pool}>;
+    template< class T > using cell = carbide::cell<T, {pool}>;
     {pool}(const char* path, u_int32_t flags, bool check_open = true) {{
         if (check_open) assert(pool_traits<{pool}>::base==0, \"{pool} was already open\");
         inner = {pool_open}(path, flags);
