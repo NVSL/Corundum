@@ -28,6 +28,12 @@ pub struct Contents {
     funcs: Vec<(FuncName, FuncArgs, FuncSig, Template, Template, bool, bool)>,
     pools: std::collections::HashSet<String>,
     generics: Vec<String>,
+    attrs: Attributes
+}
+
+#[derive(Default)]
+pub struct Attributes {
+    concurrent: bool
 }
 
 pub static mut TYPES: SyncLazy<Mutex<HashMap<TypeName, Contents>>> = SyncLazy::new(|| {
@@ -131,6 +137,7 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
 
     let mods = crate::list(&input.attrs, "mods");
     let generics = crate::list(&input.attrs, "generics");
+    let attrs = crate::list(&input.attrs, "attrs");
 
     // let mut all_pools = unsafe { match POOLS.lock() {
     //     Ok(g) => g,
@@ -171,6 +178,26 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
     all_types.remove(&name_str);
     let mut entry = all_types.entry(name_str.clone()).or_insert(Contents::default());
     entry.generics = generics.iter().map(|v| v.to_string()).collect();
+
+
+    let mut conc_decl = "";
+    let mut lock = "";
+
+    for attr in attrs {
+        if attr.to_string() == "concurrent" {
+            entry.attrs.concurrent = true;
+            conc_decl = "
+    std::recursive_mutex __mu;";
+            lock = "
+        carbide::mutex_locker lock(&this->__mu);";
+        } else {
+            abort!(
+                attr.span(), "undefined attribute `{}`", attr.to_string();
+                note = "available attribute is `concurrent`"
+            )
+        }
+    }
+
     for m in &mods {
 
         // // Generate an expression to sum up the heap size of each field.
@@ -307,7 +334,7 @@ class {cname} : public carbide::psafe_type_parameters {{
 
     pointer inner;
     pstring<_P> name;
-    bool is_root;
+    bool is_root;{conc_decl}
 
     static std::unordered_set<std::string> objs;
 
@@ -329,7 +356,7 @@ public:
         is_root = false;
     }} 
 
-    {cname}(const handle *pool, const std::string &name) noexcept(false) {{ 
+    {cname}(const handle *pool, const std::string &name) noexcept(false) {{{lock}
         _P::txn([this,&pool,&name](auto j) {{ 
             assert(objs.find(name) == objs.end(), \"'%s' was already open\", name.c_str());
             this->name = name.c_str();
@@ -338,9 +365,15 @@ public:
             memcpy((void*)&inner, (void*)&obj, sizeof(pointer));
             is_root = true;
         }} );
-    }} 
+    }}
 
-    ~{cname}() noexcept(false) {{ 
+    {cname} &operator= ({cname} &&) = delete;
+    void *operator new (size_t) = delete;
+    void *operator new[] (size_t) = delete;
+    void  operator delete[] (void*) = delete;
+    void  operator delete   (void*) = delete;
+
+    ~{cname}() noexcept(false) {{{lock}
         if (is_root) {{ 
             auto n = name.c_str();
             assert(objs.find(n) != objs.end(), \"'%s' is not open\", n);
@@ -364,7 +397,9 @@ generics = generics_str,
 includes = includes,
 small_name = small_name,
 name = name_str,
-cname = cname
+cname = cname,
+conc_decl = conc_decl,
+lock = lock
 );
     entry.decl = format!("{template} class p{name}_t;",
             name = small_name,
@@ -831,6 +866,8 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
                     &format!("    // type aliases\n    {}", alias));
             }
         }
+        let lock = if cnt.attrs.concurrent { "
+        carbide::mutex_locker lock(&this->__mu);" } else { "" };
         let mut cbindfile = "".to_owned();
         // let mut funcs = vec!();
         for (_, _, f, _, _, _, _) in &mut cnt.funcs {
@@ -893,7 +930,7 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
                             .replace(", )", ")")));
                     let ret_tok = if *has_return { "return " } else { "" };
                         cnt.contents = cnt.contents.replace("    // other methods",
-                            &format!("    // other methods\n    {sig} {{
+                            &format!("    // other methods\n    {sig} {{{lock}
         {ret}{ty}_traits<_P>::{tmp}{fn}{gen}(self(){comma}{args});
     }}\n",
     ret = ret_tok,
@@ -903,7 +940,8 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
     gen = gen,
     fn = name,
     comma = if args.is_empty() { "" } else { ", " },
-    args = args
+    args = args,
+    lock = lock
 ));
                 } 
                 else {
@@ -1185,7 +1223,7 @@ pub fn carbide(input: TokenStream) -> TokenStream {
 
                 #[no_mangle]
                 pub extern "C" fn #fn_open(path: *const c_char, mut flags: u32) -> *const #root_name {
-                    let path = unsafe { CStr::from_ptr(path).to_str().unwrap() };
+                    let path = unsafe { CStr::from_ptr(path).to_str().unwrap() }.clone();
                     if flags == 0 { flags = #flags; }
                     let res = Allocator::open::<#root_name>(path, flags).unwrap();
                     let p = &*res as *const #root_name;
