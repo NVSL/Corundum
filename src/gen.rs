@@ -34,10 +34,10 @@ impl<T: TxInSafe, P: MemPool> RefUnwindSafe for Gen<T, P> {}
 /// use pool::*;
 /// type P = Allocator;
 /// 
-/// use corundum::gen::{ByteObject,Gen};
+/// use corundum::gen::{ByteArray,Gen};
 /// 
 /// struct ExternalType {
-///     obj: ByteObject<P>
+///     obj: ByteArray<P>
 /// }
 /// 
 /// #[no_mangle]
@@ -45,11 +45,11 @@ impl<T: TxInSafe, P: MemPool> RefUnwindSafe for Gen<T, P> {}
 ///     
 /// }
 /// ```
-pub struct ByteObject<P: MemPool> {
+pub struct ByteArray<P: MemPool> {
     bytes: PVec<u8, P>
 }
 
-impl<P: MemPool> PClone<P> for ByteObject<P> {
+impl<P: MemPool> PClone<P> for ByteArray<P> {
     fn pclone(&self, j: &Journal<P>) -> Self {
         Self {
             bytes: self.bytes.pclone(j)
@@ -57,7 +57,7 @@ impl<P: MemPool> PClone<P> for ByteObject<P> {
     }
 }
 
-impl<P: MemPool> ByteObject<P> {
+impl<P: MemPool> ByteArray<P> {
     pub fn new_uninit(size: usize, j: &Journal<P>) -> Self {
         // Self::new(vec![0; size].as_slice(), j)
         Self { bytes: PVec::from_slice(vec![0; size].as_slice(), j) }
@@ -122,6 +122,13 @@ impl<P: MemPool> ByteObject<P> {
     pub fn len(&self) -> usize {
         self.bytes.len()
     }
+
+    pub fn update_from_gen<T>(&self, new: Gen<T, P>, j: &Journal<P>) {
+        unsafe {
+            let slice = crate::utils::as_mut(self).bytes.as_slice_mut(j);
+            std::ptr::copy_nonoverlapping(new.ptr, slice as *mut [u8] as *mut c_void, slice.len())
+        }
+    }
 }
 
 impl<T, P: MemPool> Gen<T, P> {
@@ -153,7 +160,7 @@ impl<T, P: MemPool> Gen<T, P> {
         }
     }
 
-    fn from_byte_object(obj: ByteObject<P>) -> Self {
+    fn from_byte_object(obj: ByteArray<P>) -> Self {
         // assert_eq!(obj.len(), size_of::<T>(), "Incompatible type casting");
         Self {
             ptr: obj.as_ptr(),

@@ -115,7 +115,7 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
             if *t != pool {
                 emit_warning!(t.span(),
                     "FFI-incompatible generic type parameter";
-                    help = "add {} to the generics list and remove it from here; use corundum::gen::ByteObject instead", t
+                    help = "add {} to the generics list and remove it from here; use corundum::gen::ByteArray instead", t
                 );
                 abort = true;
             }
@@ -123,7 +123,7 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
         if abort {
             abort!(input.ident.span(),
                 "struct {} should have exactly one generic type parameter implementing MemPool trait", input.ident;
-                help = "use corundum::gen::ByteObject instead of the generic types, and specify the generic types using `generics(...)` attribute (e.g., #[generics({})])", 
+                help = "use corundum::gen::ByteArray instead of the generic types, and specify the generic types using `generics(...)` attribute (e.g., #[generics({})])", 
                 ogen.iter().map(|v| v.to_string()).collect::<Vec<String>>().join(", ")
             )
         }
@@ -1186,7 +1186,7 @@ pub fn carbide(input: TokenStream) -> TokenStream {
                 use super::*;
                 use corundum::stm::{Logger, Notifier};
                 use corundum::stl::HashMap as PHashMap;
-                use corundum::gen::ByteObject;
+                use corundum::gen::ByteArray;
                 use std::collections::hash_map::DefaultHasher;
                 use std::hash::{Hash, Hasher};
                 use core::ffi::c_void;
@@ -1348,7 +1348,7 @@ pub fn carbide(input: TokenStream) -> TokenStream {
                     unsafe { *Allocator::get_unchecked(addr) }
                 }
 
-                pub struct Named(u8, ByteObject<Allocator>);
+                pub struct Named(u8, ByteArray<Allocator>);
 
                 #[no_mangle]
                 pub extern "C" fn #named_open(p: &#root_name, name: *const c_char, size: usize, init: extern fn(*mut c_void)->()) -> *const c_void /* Named */ {
@@ -1361,7 +1361,7 @@ pub fn carbide(input: TokenStream) -> TokenStream {
                     if transaction(AssertTxInSafe(|j| {
                         let mut objs = p.objs.lock(j);
                         if let Container::Custom(named) = objs.get_or_insert(key, || {
-                            let mut obj = ByteObject::new_uninit(size, j);
+                            let mut obj = ByteArray::new_uninit(size, j);
                             init(unsafe { obj.as_ptr_mut() });
                             Container::Custom(Named(0, obj))
                         }, j) {
