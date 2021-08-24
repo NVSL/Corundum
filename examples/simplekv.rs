@@ -9,18 +9,19 @@
 #![feature(type_name_of_val)]
 #![feature(const_generics)]
 
+use std::mem::MaybeUninit;
 use corundum::default::*;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::panic::RefUnwindSafe;
 
-const BUCKETS_MAX: usize = 16;
+const BUCKETS_MAX: usize = 10;
 
 type P = Allocator;
 
 type Key = PString;
 type Bucket = PVec<(Key, usize)>;
-type BucketArray = PVec<PRefCell<Bucket>>;
+type BucketArray = [PRefCell<Bucket>; BUCKETS_MAX];
 type ValueVector<Value> = PVec<Value>;
 
 pub struct KvStore<V: PSafe> {
@@ -28,15 +29,19 @@ pub struct KvStore<V: PSafe> {
     values: PRefCell<ValueVector<PCell<V>>>,
 }
 
-impl<V: PSafe> RootObj<P> for KvStore<V> {
-    fn init(j: &Journal) -> Self {
-        let mut buckets = PVec::with_capacity(BUCKETS_MAX, j);
-        for _ in 0..BUCKETS_MAX {
-            buckets.push(PRefCell::new(PVec::new()), j)
-        }
-        Self {
-            buckets,
-            values: PRefCell::new(PVec::new()),
+impl<V: PSafe> Default for KvStore<V> {
+    fn default() -> Self {
+        let mut me = MaybeUninit::<BucketArray>::uninit();
+        unsafe {
+            let mut vec = Vec::<PRefCell<Bucket>>::with_capacity(BUCKETS_MAX);
+            for _ in 0..BUCKETS_MAX {
+                vec.push(PRefCell::new(Bucket::new()));
+            }
+            std::ptr::copy_nonoverlapping(vec.as_ptr(), &mut (*me.as_mut_ptr())[0], BUCKETS_MAX);
+            Self {
+                buckets: me.assume_init(),
+                values : PRefCell::new(ValueVector::new())
+            }
         }
     }
 }
