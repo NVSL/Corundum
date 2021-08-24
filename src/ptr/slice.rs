@@ -37,8 +37,8 @@ impl<T: PSafe, A: MemPool> Slice<T, A> {
         }
     }
 
-    /// Sets the capacity to zero
-    pub fn empty() -> Self {
+    /// Create an empty slice
+    pub fn null() -> Self {
         Self::from_off_cap(u64::MAX, 0)
     }
 
@@ -199,7 +199,7 @@ impl<T: PSafe, A: MemPool> Slice<T, A> {
     /// 
     pub unsafe fn dup(&self) -> Slice<T, A> {
         if self.is_empty() {
-            Self::empty()
+            Self::null()
         } else {
             let slice = self.as_slice();
             let (_, off, len, z) = A::atomic_new_slice(slice);
@@ -257,7 +257,7 @@ impl<A: MemPool, T: PSafe> PmemUsage for Slice<T, A> {
 
 impl<A: MemPool, T: PSafe> Default for Slice<T, A> {
     fn default() -> Self {
-        Slice::empty()
+        Slice::null()
     }
 }
 

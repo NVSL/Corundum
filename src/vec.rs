@@ -478,7 +478,7 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
                     // of each individual item
                 }
                 if rem.is_empty() {
-                    self.buf = Slice::empty();
+                    self.buf = Slice::null();
                 } else {
                     let new = A::new_slice(rem, j);
                     self.buf = Slice::from_off_cap(A::off_unchecked(new), new.len());

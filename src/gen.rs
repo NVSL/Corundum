@@ -52,7 +52,7 @@ pub struct ByteArray<P: MemPool> {
     logged: u8
 }
 
-impl<P: MemPool> Copy for ByteArray<P> {}
+// impl<P: MemPool> Copy for ByteArray<P> {}
 
 unsafe impl<P: MemPool> PSafe for ByteArray<P> {}
 unsafe impl<P: MemPool> LooseTxInUnsafe for ByteArray<P> {}
@@ -77,13 +77,15 @@ impl<P: MemPool> PClone<P> for ByteArray<P> {
     }
 }
 
-// impl<P: MemPool> Drop for ByteArray<P> {
-//     fn drop(&mut self) {
-//         unsafe {
-//             P::dealloc(self.bytes.as_mut_ptr(), self.bytes.capacity())
-//         }
-//     }
-// }
+impl<P: MemPool> Drop for ByteArray<P> {
+    fn drop(&mut self) {
+        unsafe {
+            if !self.bytes.is_empty() {
+                P::dealloc(self.bytes.as_mut_ptr(), self.bytes.capacity())
+            }
+        }
+    }
+}
 
 impl<P: MemPool> ByteArray<P> {
     pub fn new_uninit(size: usize, j: &Journal<P>) -> Self {
@@ -91,6 +93,21 @@ impl<P: MemPool> ByteArray<P> {
             let ptr = P::new_uninit_for_layout(size, j);
             Self { bytes: Slice::from_raw_parts(ptr, size), logged: 0 }
         }
+    }
+
+    pub fn null() -> Self {
+        Self {
+            bytes: Default::default(),
+            logged: 0
+        }
+    }
+
+    pub fn move_from(&mut self, other: &Self) {
+        let other = unsafe { utils::as_mut(other) };
+        self.bytes = other.bytes;
+        self.logged = other.logged;
+        other.bytes = Slice::null();
+        other.logged = 0;
     }
 
     // pub fn as_bytes(&self) -> Vec<u8> {
