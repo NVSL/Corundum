@@ -339,7 +339,7 @@ struct {small_name}_traits {{
 {template}
 class {cname} : public carbide::psafe_type_parameters {{ 
 
-    typedef pool_traits<_P>                        pool_traits;
+    typedef pool_traits<_P>                       pool_traits;
     typedef typename pool_traits::handle          handle;
     typedef typename pool_traits::journal         journal;
     typedef carbide::pointer_t<{name}<_P>, _P>   pointer;

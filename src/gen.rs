@@ -14,8 +14,8 @@ use crate::stm::{Logger,Notifier};
 
 #[repr(C)]
 pub struct Gen<T, P: MemPool> {
-    pub ptr: *const c_void,
-    pub len: usize,
+    ptr: *const c_void,
+    len: usize,
     phantom: PhantomData<(T,P)>
 }
 
@@ -203,6 +203,14 @@ impl<T, P: MemPool> Gen<T, P> {
             len: obj.len(),
             phantom: PhantomData
         }
+    }
+
+    pub fn ptr(&self) -> *const c_void {
+        self.ptr
+    }
+
+    pub fn len(&self) -> usize {
+        self.len
     }
 }
 
