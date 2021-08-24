@@ -235,8 +235,12 @@ impl<A: MemPool, T: PSafe + Copy> Copy for Slice<T, A> {}
 impl<A: MemPool, T: PSafe> Clone for Slice<T, A> {
     fn clone(&self) -> Self {
         unsafe {
-            let j = Journal::<A>::current(false).expect("clone function is transactional");
-            self.pclone(&*j.0)
+            if self.cap == 0 {
+                Self::null()
+            } else {
+                let j = Journal::<A>::current(false).expect("clone function is transactional");
+                self.pclone(&*j.0)
+            }
         }
     }
 }
@@ -244,7 +248,11 @@ impl<A: MemPool, T: PSafe> Clone for Slice<T, A> {
 impl<A: MemPool, T: PSafe> PClone<A> for Slice<T, A> {
     fn pclone(&self, j: &Journal<A>) -> Self {
         unsafe {
-            Self::new(A::new_copy_slice(self.as_slice(), j))
+            if self.cap == 0 {
+                Self::null()
+            } else {
+                Self::new(A::new_copy_slice(self.as_slice(), j))
+            }
         }
     }
 }
