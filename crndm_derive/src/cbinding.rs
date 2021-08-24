@@ -178,7 +178,17 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
     all_types.remove(&name_str);
     let mut entry = all_types.entry(name_str.clone()).or_insert(Contents::default());
     entry.generics = generics.iter().map(|v| v.to_string()).collect();
+    let new_sizes: Vec<Ident>  = generics.iter().map(|v| format_ident!("{}_size", v.to_string())).collect();
 
+    let size_list: Vec<String> = new_sizes.iter().map(|v| v.to_string()).collect();
+    let mut size_list = size_list.join(", ");
+    if !new_sizes.is_empty() { size_list += ", "; }
+    let size_list_arg: Vec<String> = new_sizes.iter().map(|v| format!("size_t {}", v)).collect();
+    let mut size_list_arg = size_list_arg.join(", ");
+    if !new_sizes.is_empty() { size_list_arg += ", "; }
+    let sizeof_list: Vec<String> = generics.iter().map(|v| format!("sizeof({})", v)).collect();
+    let mut sizeof_list = sizeof_list.join(", ");
+    if !new_sizes.is_empty() { sizeof_list += ", "; }
 
     let mut conc_decl = "";
     let mut lock = "";
@@ -227,13 +237,13 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
                 type #m = super::#m::Allocator;
 
                 #[no_mangle]
-                pub extern "C" fn #fn_new(j: *const c_void) -> *const #name<#m> {
+                pub extern "C" fn #fn_new(#(#new_sizes: usize,)* j: *const c_void) -> *const #name<#m> {
                     use corundum::boxed::Pbox;
 
                     assert!(!j.is_null(), "transactional operation outside a transaction");
                     unsafe {
                         let j = corundum::utils::read::<corundum::stm::Journal<#m>>(j as *mut u8);
-                        Pbox::leak(Pbox::new(#name::new(), j)) as *mut #name<#m>
+                        Pbox::leak(Pbox::new(#name::new(#(#new_sizes,)* j), j)) as *mut #name<#m>
                     }
                 }
 
@@ -248,7 +258,7 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
                 }
 
                 #[no_mangle]
-                pub extern "C" fn #fn_open(p: &#__m, name: *const c_char) -> *const #name<#m> {
+                pub extern "C" fn #fn_open(p: &#__m, #(#new_sizes: usize,)* name: *const c_char) -> *const #name<#m> {
                     let name = unsafe { CStr::from_ptr(name).to_str().unwrap() };
                     let mut hasher = DefaultHasher::new();
                     name.hash(&mut hasher);
@@ -258,7 +268,7 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
                     if transaction(AssertTxInSafe(|j| {
                         let mut objs = p.objs.lock(j);
                         let obj = objs.get_or_insert(key, || {
-                            #__mod::Container::#name(#name::new())
+                            #__mod::Container::#name(#name::new(#(#new_sizes,)* j))
                         }, j);
                         if let #__mod::Container::#name(obj) = &obj {
                             res = obj as *const #name<#m>;
@@ -278,20 +288,22 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
 template<>
 struct {small_name}_traits<{pool}> {{
     typedef typename pool_traits<{pool}>::journal journal;
-    static const {name}<{pool}>* create(const journal *j) {{
-        return {fn_new}(j);
+    static const {name}<{pool}>* create({size_list_arg}const journal *j) {{
+        return {fn_new}({size_list}j);
     }}
     static void drop({name}<{pool}> *obj) {{
         {fn_drop}(obj);
     }}
-    static const {name}<{pool}>* open(const {root_name} *p, const char *name) {{
-        return {fn_open}(p, name);
+    static const {name}<{pool}>* open(const {root_name} *p, {size_list_arg}const char *name) {{
+        return {fn_open}(p, {size_list}name);
     }}
     // specialized methods
 }};\n",
 small_name = small_name,
 name = name,
 pool = pool,
+size_list = size_list,
+size_list_arg = size_list_arg,
 fn_new = fn_new.to_string(),
 fn_open = fn_open.to_string(),
 fn_drop = fn_drop.to_string(),
@@ -318,9 +330,9 @@ using pstring = typename carbide::make_persistent<std::string, _P>::type;
 template<class _P>
 struct {small_name}_traits {{
     typedef typename pool_traits<_P>::journal journal;
-    static const {name}<_P>* create(const journal *j);
+    static const {name}<_P>* create({size_list_arg}const journal *j);
     static void drop({name}<_P> *obj);
-    static const {name}<_P>* open(const void *p, const char *name);
+    static const {name}<_P>* open(const void *p, {size_list_arg}const char *name);
     // template methods
 }};
 
@@ -345,7 +357,7 @@ private:
 
 public:
     {cname}(const journal *j, const std::string &name = \"(anonymous)\") {{ 
-        inner = pointer::from({small_name}_traits<_P>::create(j));
+        inner = pointer::from({small_name}_traits<_P>::create({sizeof_list}j));
         this->name = name.c_str();
         is_root = false;
     }} 
@@ -361,7 +373,7 @@ public:
             assert(objs.find(name) == objs.end(), \"'%s' was already open\", name.c_str());
             this->name = name.c_str();
             objs.insert(name);
-            pointer obj = pointer::from_unsafe({small_name}_traits<_P>::open(pool, name.c_str()));
+            pointer obj = pointer::from_unsafe({small_name}_traits<_P>::open(pool, {sizeof_list}name.c_str()));
             memcpy((void*)&inner, (void*)&obj, sizeof(pointer));
             is_root = true;
         }} );
@@ -395,6 +407,8 @@ public:
 template = template,
 generics = generics_str,
 includes = includes,
+sizeof_list = sizeof_list,
+size_list_arg = size_list_arg,
 small_name = small_name,
 name = name_str,
 cname = cname,
