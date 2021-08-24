@@ -14,6 +14,7 @@ use crate::cell::LazyCell;
 pub use crate::alloc::*;
 
 /// A pass-through allocator for volatile memory
+#[derive(Clone,Default)]
 pub struct Heap {}
 
 static mut JOURNALS: Option<HashMap<ThreadId, (u64, i32)>> = None;
@@ -22,7 +23,9 @@ static mut MUTEX: Option<Mutex<bool>> = None;
 static mut LOGS: LazyCell<Mutex<Ring<(u64, u64), 8>>> = 
     LazyCell::new(|| Mutex::new(Ring::new()));
 
-unsafe impl MemPool for Heap {
+unsafe impl MemPool for Heap {}
+
+unsafe impl MemPoolTraits for Heap {
     fn name() -> &'static str {
         "heap"
     }

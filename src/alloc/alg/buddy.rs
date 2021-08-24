@@ -1010,13 +1010,10 @@ macro_rules! pool {
             /// use [`pool!()`] macro. 
             /// 
             /// [`pool!()`]: ../macro.pool.html
+            #[derive(Clone,Default)]
             pub struct $name {}
 
-            impl std::panic::UnwindSafe for $name {}
-            impl std::panic::RefUnwindSafe for $name {}
-            unsafe impl $crate::TxInSafe for $name {}
-            unsafe impl $crate::PSafe for $name {}
-            unsafe impl $crate::LooseTxInUnsafe for $name {}
+            unsafe impl MemPool for $name {}
     
             pub mod dummy {
                 #[repr(C)]
@@ -1110,7 +1107,7 @@ macro_rules! pool {
                 }
             }
     
-            unsafe impl MemPool for $name {
+            unsafe impl MemPoolTraits for $name {
                 #[inline]
                 fn name() -> &'static str {
                     stringify!($mod)

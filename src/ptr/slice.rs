@@ -1,3 +1,5 @@
+use crate::default::PClone;
+use crate::stm::Journal;
 use crate::alloc::MemPool;
 use crate::alloc::PmemUsage;
 use crate::*;
@@ -9,7 +11,7 @@ use std::ops::Index;
 pub struct Slice<T: PSafe, A: MemPool> {
     off: u64,
     cap: usize,
-    dummy: [A; 0],
+    dummy: [*const A; 0],
     marker: PhantomData<[T]>,
 }
 
@@ -38,6 +40,15 @@ impl<T: PSafe, A: MemPool> Slice<T, A> {
     /// Sets the capacity to zero
     pub fn empty() -> Self {
         Self::from_off_cap(u64::MAX, 0)
+    }
+
+    /// Creates a new fat pointer given a slice
+    pub unsafe fn from_raw_parts(x: *const u8, len: usize) -> Self {
+        if len == 0 {
+            Self::from_off_cap(u64::MAX, 0)
+        } else {
+            Self::from_off_cap(A::off_unchecked(x), len)
+        }
     }
 
     /// Returns true if the capacity is zero
@@ -219,11 +230,22 @@ impl<A: MemPool, T: PSafe> From<&mut [T]> for Slice<T, A> {
     }
 }
 
-impl<A: MemPool + Copy, T: PSafe + Copy> Copy for Slice<T, A> {}
+impl<A: MemPool, T: PSafe + Copy> Copy for Slice<T, A> {}
 
 impl<A: MemPool, T: PSafe> Clone for Slice<T, A> {
     fn clone(&self) -> Self {
-        Self::from_off_cap(self.off, self.cap)
+        unsafe {
+            let j = Journal::<A>::current(false).expect("clone function is transactional");
+            self.pclone(&*j.0)
+        }
+    }
+}
+
+impl<A: MemPool, T: PSafe> PClone<A> for Slice<T, A> {
+    fn pclone(&self, j: &Journal<A>) -> Self {
+        unsafe {
+            Self::new(A::new_copy_slice(self.as_slice(), j))
+        }
     }
 }
 

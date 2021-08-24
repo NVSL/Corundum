@@ -1,3 +1,4 @@
+use std::panic::RefUnwindSafe;
 use crate::cell::{RootCell, RootObj};
 use crate::result::Result;
 use crate::stm::*;
@@ -193,7 +194,7 @@ macro_rules! static_inner {
 /// 
 /// [`pool!()`]: ./default/macro.pool.html
 /// [`Allocator`]: ../default/struct.Allocator.html
-pub unsafe trait MemPool
+pub unsafe trait MemPoolTraits
 where
     Self: 'static + Sized,
 {
@@ -335,10 +336,10 @@ where
     /// [`PCell`]: ./default/type.PCell.html
     /// [`PRefCell`]: ./default/type.PRefCell.html
     /// [`PMutex`]: ./default/type.PMutex.html
-    fn open<'a, U: 'a + PSafe + RootObj<Self>>(
+    fn open<'a, U: 'a + PSafe + RootObj<Self>> (
         _path: &str,
         _flags: u32,
-    ) -> Result<RootCell<'a, U, Self>> {
+    ) -> Result<RootCell<'a, U, Self>> where Self: MemPool {
         unimplemented!()
     }
 
@@ -791,7 +792,7 @@ where
     }
 
     /// Allocates new memory and then places `x` into it with `DropOnFailure` log
-    unsafe fn new<'a, T: PSafe + 'a>(x: T, j: &Journal<Self>) -> &'a mut T {
+    unsafe fn new<'a, T: PSafe + 'a>(x: T, j: &Journal<Self>) -> &'a mut T where Self: MemPool {
         debug_assert!(mem::size_of::<T>() != 0, "Cannot allocated ZST");
 
         let mut log = Log::drop_on_failure(u64::MAX, 1, j);
@@ -802,7 +803,7 @@ where
     }
 
     /// Allocates a new slice and then places `x` into it with `DropOnAbort` log
-    unsafe fn new_slice<'a, T: PSafe + 'a>(x: &'a [T], journal: &Journal<Self>) -> &'a mut [T] {
+    unsafe fn new_slice<'a, T: PSafe + 'a>(x: &'a [T], journal: &Journal<Self>) -> &'a mut [T] where Self: MemPool {
         debug_assert!(mem::size_of::<T>() != 0, "Cannot allocate ZST");
         debug_assert!(!x.is_empty(), "Cannot allocate empty slice");
 
@@ -815,7 +816,7 @@ where
 
     /// Allocates new memory and then copies `x` into it with `DropOnFailure` log
     unsafe fn new_copy<'a, T: 'a>(x: &T, j: &Journal<Self>) -> &'a mut T 
-    where T: ?Sized {
+    where T: ?Sized, Self: MemPool {
         let s = mem::size_of_val(x);
         debug_assert!(s != 0, "Cannot allocated ZST");
 
@@ -832,7 +833,7 @@ where
     }
 
     /// Allocates new memory and then copies `x` into it with `DropOnFailure` log
-    unsafe fn new_copy_slice<'a, T: 'a>(x: &[T], j: &Journal<Self>) -> &'a mut [T] {
+    unsafe fn new_copy_slice<'a, T: 'a>(x: &[T], j: &Journal<Self>) -> &'a mut [T] where Self: MemPool {
         let s = mem::size_of_val(x);
         debug_assert!(s != 0, "Cannot allocated ZST");
 
@@ -886,7 +887,7 @@ where
     }
 
     /// Allocates new memory without copying data
-    unsafe fn new_uninit<'a, T: PSafe + 'a>(j: &Journal<Self>) -> &'a mut T {
+    unsafe fn new_uninit<'a, T: PSafe + 'a>(j: &Journal<Self>) -> &'a mut T where Self: MemPool {
         let mut log = Log::drop_on_failure(u64::MAX, 1, j);
         let (p, off, size, z) = Self::atomic_new_uninit();
         log.set(off, size, z);
@@ -895,7 +896,7 @@ where
     }
 
     /// Allocates new memory without copying data
-    unsafe fn new_uninit_for_layout(size: usize, journal: &Journal<Self>) -> *mut u8 {
+    unsafe fn new_uninit_for_layout(size: usize, journal: &Journal<Self>) -> *mut u8 where Self: MemPool {
         log!(Self, White, "ALLOC", "{:?}", size);
 
         let mut log = Log::drop_on_abort(u64::MAX, 1, journal);
@@ -929,7 +930,7 @@ where
     }
 
     /// Creates a `DropOnCommit` log for the value `x`
-    unsafe fn free<'a, T: PSafe + ?Sized>(x: &mut T) {
+    unsafe fn free<'a, T: PSafe + ?Sized>(x: &mut T) where Self: MemPool {
         // std::ptr::drop_in_place(x);
         let off = Self::off_unchecked(x);
         let len = mem::size_of_val(x);
@@ -941,7 +942,7 @@ where
     }
 
     /// Creates a `DropOnCommit` log for the value `x`
-    unsafe fn free_slice<'a, T: PSafe>(x: &[T]) {
+    unsafe fn free_slice<'a, T: PSafe>(x: &[T]) where Self: MemPool {
         // eprintln!("FREEING {} of size {}", x as *mut u8 as u64, len);
         if x.len() > 0 {
             let off = Self::off_unchecked(x);
@@ -961,7 +962,7 @@ where
     }
 
     /// Drops a `journal` from memory
-    unsafe fn drop_journal(_journal: &mut Journal<Self>) { }
+    unsafe fn drop_journal(_journal: &mut Journal<Self>) where Self: MemPool { }
 
     /// Returns a reference to the offset of the first journal
     unsafe fn journals_head() -> &'static u64 { unimplemented!() }
@@ -987,7 +988,7 @@ where
     ///
     #[inline]
     #[track_caller]
-    unsafe fn commit() {
+    unsafe fn commit() where Self: MemPool {
         // Self::discard(crate::ll::cpu());
         if let Some(journal) = Journal::<Self>::current(false) {
             *journal.1 -= 1;
@@ -1012,7 +1013,7 @@ where
     ///
     /// This function is for internal use and should not be called elsewhere.
     ///
-    unsafe fn commit_no_clear() {
+    unsafe fn commit_no_clear() where Self: MemPool {
         // Self::discard(crate::ll::cpu());
         if let Some(journal) = Journal::<Self>::current(false) {
             *journal.1 -= 1;
@@ -1035,7 +1036,7 @@ where
     ///
     /// This function is for internal use and should not be called elsewhere.
     ///
-    unsafe fn clear() {
+    unsafe fn clear() where Self: MemPool {
         if let Some(journal) = Journal::<Self>::current(false) {
             *journal.1 -= 1;
 
@@ -1058,7 +1059,7 @@ where
     ///
     /// This function is for internal use and should not be called elsewhere.
     ///
-    unsafe fn rollback() -> bool {
+    unsafe fn rollback() -> bool where Self: MemPool {
         // Self::discard(crate::ll::cpu());
         if let Some(journal) = Journal::<Self>::current(false) {
             *journal.1 -= 1;
@@ -1088,7 +1089,7 @@ where
     ///
     /// This function is for internal use and should not be called elsewhere.
     ///
-    unsafe fn rollback_no_clear() {
+    unsafe fn rollback_no_clear() where Self: MemPool {
         if let Some(journal) = Journal::<Self>::current(false) {
             *journal.1 -= 1;
 
@@ -1146,7 +1147,7 @@ where
     fn transaction<T, F: FnOnce(&'static Journal<Self>) -> T>(body: F) -> Result<T>
     where
         F: TxInSafe + UnwindSafe,
-        T: TxOutSafe,
+        T: TxOutSafe, Self: alloc::pool::MemPool
     {
         #[cfg(feature = "stat_perf")]
         let _perf = crate::stat::Measure::<Self>::Transaction;
@@ -1237,6 +1238,18 @@ where
         0
     }
 }
+
+pub unsafe trait MemPool: 
+    'static + 
+    MemPoolTraits + 
+    Sized + 
+    Default + 
+    Clone + 
+    PSafe + 
+    TxInSafe + 
+    LooseTxInUnsafe + 
+    RefUnwindSafe + 
+    UnwindSafe {}
 
 pub(crate) fn create_file(filename: &str, size: u64) -> Result<()> {
     let file = OpenOptions::new().write(true).create(true).open(filename);

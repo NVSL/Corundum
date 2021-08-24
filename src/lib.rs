@@ -106,7 +106,7 @@
 #![feature(const_fn_trait_bound)]
 #![feature(specialization)]
 #![feature(concat_idents)]
-#![feature(llvm_asm)]
+#![feature(asm)]
 #![feature(core_intrinsics)]
 #![feature(thread_id_value)]
 #![feature(negative_impls)]
