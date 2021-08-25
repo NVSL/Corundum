@@ -59,14 +59,14 @@ unsafe impl<P: MemPool> LooseTxInUnsafe for ByteArray<P> {}
 impl<P: MemPool> UnwindSafe for ByteArray<P> {}
 impl<P: MemPool> RefUnwindSafe for ByteArray<P> {}
 
-// impl<P: MemPool> Default for ByteArray<P> {
-//     fn default() -> Self {
-//         Self {
-//             bytes: Default::default(),
-//             logged: 0
-//         }
-//     }
-// }
+impl<P: MemPool> Default for ByteArray<P> {
+    fn default() -> Self {
+        Self {
+            bytes: Default::default(),
+            logged: 0
+        }
+    }
+}
 
 impl<P: MemPool> PClone<P> for ByteArray<P> {
     fn pclone(&self, j: &Journal<P>) -> Self {
