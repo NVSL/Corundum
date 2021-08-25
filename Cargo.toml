@@ -33,7 +33,7 @@ no_flush_alloc = []
 no_flush_updates = []
 no_pthread = []
 cbindings = []
-default = []
+default = ["cbindings"]
 
 [dependencies]
 memmap = "0.7.0"
