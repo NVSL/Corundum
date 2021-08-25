@@ -321,18 +321,15 @@ where
         j: &Journal,
     ) -> Option<V> {
         let mut ret = None;
-        {
-            let node = node;
-            for i in 0..node.n + 1 {
-                if i != node.n && node.items[i].key == key {
-                    ret = Some(node.items[i].val);
-                    self.remove_from(node, i, j);
+        for i in 0 .. node.n + 1 {
+            if i != node.n && node.items[i].key == key {
+                ret = Some(node.items[i].val);
+                self.remove_from(node, i, j);
+                break;
+            } else if i == node.n || node.items[i].key > key {
+                if let Some(slot) = &node.slots[i] {
+                    ret = self.remove_item(unsafe { slot.as_non_null_mut(j) }, Some(node), key, i, j);
                     break;
-                } else if let Some(slot) = &node.slots[i] {
-                    if i == node.n || node.items[i].key > key {
-                        ret = self.remove_item(unsafe { slot.as_non_null_mut(j) }, Some(node), key, i, j);
-                        break;
-                    }
                 }
             }
         }
