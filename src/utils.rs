@@ -304,7 +304,7 @@ macro_rules! log {
             use term_painter::Color::*;
             use term_painter::ToStyle;
 
-            if $crate::utils::VERBOSE {
+            if *$crate::utils::VERBOSE {
                 println!("{:<8} {}", $p::name().to_owned() + ":",
                     $c.paint(format!("{:>10}  {}", $tag, format!($msg, $($args)*))));
             }
@@ -315,7 +315,7 @@ macro_rules! log {
             use term_painter::Color::*;
             use term_painter::ToStyle;
 
-            if $crate::utils::VERBOSE {
+            if *$crate::utils::VERBOSE {
                 println!("{:<8} {}", "",
                     $c.paint(format!("{:>10}  {}", $tag, format!($msg, $($args)*))));
             }
