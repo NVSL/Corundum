@@ -3,7 +3,6 @@
 //!
 //! [btree example]: https://github.com/pmem/pmdk/blob/master/src/examples/libpmemobj/tree_map/btree_map.c
 
-use corundum::ptr::NonNull;
 use std::panic::UnwindSafe;
 use corundum::default::*;
 use std::fmt::Debug;
@@ -122,30 +121,17 @@ impl<V: PSafe + Default + Copy> Node<V> {
     }
 
     #[inline]
-    unsafe fn lookup<'a>(slf: NonNull<Self>, key: u64) -> Option<&'a V> {
-        for i in 0..slf.n {
-            if i < slf.n {
-                if slf.items[i].key == key {
-                    let slf = slf.clone();
-                    return Some(NonNull::new_unchecked(&slf.items[i].val).as_ref());
-                } else {
-                    if slf.items[i].key > key {
-                        return if let Some(slot) = &slf.slots[i] {
-                            Node::lookup(slot.as_non_null(), key)
-                        } else {
-                            None
-                        };
-                    }
+    unsafe fn lookup<'a>(&self, key: u64) -> bool {
+        for i in 0 .. self.n + 1 {
+            if i != self.n && self.items[i].key == key {
+                return true;
+            } else if i == self.n || self.items[i].key > key {
+                if let Some(child) = &self.slots[i] {
+                    return child.borrow().lookup(key);
                 }
-            } else {
-                return if let Some(slot) = &slf.slots[i] {
-                    Node::lookup(slot.as_non_null(), key)
-                } else {
-                    None
-                };
             }
         }
-        None
+        false
     }
 
     #[inline]
@@ -482,8 +468,8 @@ where
         self.root.borrow().foreach(f)
     }
 
-    fn lookup(&self, key: u64) -> Option<&V> {
-        unsafe { Node::lookup(self.root.as_non_null(), key) }
+    fn lookup(&self, key: u64) -> bool {
+        unsafe { self.root.borrow().lookup(key) }
     }
 }
 

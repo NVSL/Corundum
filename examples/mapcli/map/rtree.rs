@@ -37,12 +37,8 @@ where
         }
         true
     }
-    fn lookup(&self, key: K) -> Option<&V> {
-        if let Some(v) = self.btree.get(&key) {
-            Some(v)
-        } else {
-            None
-        }
+    fn lookup(&self, key: K) -> bool {
+        self.btree.get(&key).is_some()
     }
 }
 

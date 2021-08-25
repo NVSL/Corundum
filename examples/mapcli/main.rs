@@ -65,7 +65,7 @@ fn str_insert_random<T: Map<u64, u64>>(map: &T, buf: &mut String) {
 fn str_check<T: Map<u64, u64>>(map: &T, buf: &mut String) {
     buf.pop();
     let key: u64 = buf.trim().parse().expect("check: invalid syntax");
-    println!("{}", map.lookup(key).is_some() as u8);
+    println!("{}", map.lookup(key) as u8);
 }
 
 fn perform<T: 'static + Map<u64, u64> + RootObj<P> + PSafe>(path: &str) {

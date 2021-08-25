@@ -28,7 +28,7 @@ pub trait Map<K, V> {
     fn foreach<F: Copy + Fn(&K, &V) -> bool>(&self, _f: F) -> bool {
         unimplemented!()
     }
-    fn lookup(&self, _key: K) -> Option<&V> {
-        None
+    fn lookup(&self, _key: K) -> bool {
+        false
     }
 }
