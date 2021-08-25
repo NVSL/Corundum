@@ -296,18 +296,20 @@ fn dump_data<A: MemPool>(tag: &str, off: u64, len: usize) {
     use term_painter::Color::*;
     use term_painter::ToStyle;
 
-    print!("{:<8} {}", A::name().to_owned() + ":", 
-        BrightBlue.paint(format!("{:>10}  ", tag)));
-    for i in 0..len {
-        let d = unsafe { A::get_unchecked::<u8>(off + i as u64) };
-        print!("{}", BrightBlue.paint(format!("{:02x} ", *d)));
-        if i % 16 == 15 && i+1 < len {
-            println!();
-            print!("{:>21}", " ");
+    if *crate::utils::VERBOSE {
+        print!("{:<8} {}", A::name().to_owned() + ":", 
+            BrightBlue.paint(format!("{:>10}  ", tag)));
+        for i in 0..len {
+            let d = unsafe { A::get_unchecked::<u8>(off + i as u64) };
+            print!("{}", BrightBlue.paint(format!("{:02x} ", *d)));
+            if i % 16 == 15 && i+1 < len {
+                println!();
+                print!("{:>21}", " ");
+            }
         }
+    
+        println!();
     }
-
-    println!();
 }
 
 impl<A: MemPool> Log<A> {
