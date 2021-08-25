@@ -5,7 +5,7 @@ use crate::{PSafe, TxOutSafe};
 use std::fmt;
 use std::ops::{Deref, DerefMut};
 
-
+#[derive(Eq)]
 /// An unsafe pointer with dereferencing capability
 /// 
 /// This type is `!PSafe` and its constructor functions are `unsafe`. This is
@@ -33,6 +33,13 @@ impl<T: PSafe + ?Sized> Clone for NonNull<T> {
 impl<T: ?Sized> !TxOutSafe for NonNull<T> {}
 impl<T: ?Sized> !Send for NonNull<T> {}
 impl<T: ?Sized> !Sync for NonNull<T> {}
+
+impl<T: PSafe + ?Sized> PartialEq for NonNull<T> {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        self.ptr == other.ptr
+    }
+}
 
 impl<T: PSafe> NonNull<T> {
     /// Creates a new `NonNull`.
@@ -81,6 +88,7 @@ impl<T: fmt::Debug + PSafe + ?Sized> fmt::Debug for NonNull<T> {
     }
 }
 
+#[derive(Eq)]
 /// An unsafe pointer with dereferencing and logging capability
 /// 
 /// This type is `!PSafe` and its constructor functions are `unsafe`. This is
@@ -158,6 +166,13 @@ impl<T: PSafe + ?Sized, A: MemPool> Clone for LogNonNull<T, A> {
 impl<T: ?Sized, A: MemPool> !TxOutSafe for LogNonNull<T, A> {}
 impl<T: ?Sized, A: MemPool> !Send for LogNonNull<T, A> {}
 impl<T: ?Sized, A: MemPool> !Sync for LogNonNull<T, A> {}
+
+impl<T: PSafe + ?Sized, A: MemPool> PartialEq for LogNonNull<T, A> {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        self.ptr == other.ptr
+    }
+}
 
 impl<T: PSafe, A: MemPool> LogNonNull<T, A> {
     /// Creates a new `LogNonNull`.

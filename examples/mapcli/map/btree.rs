@@ -296,18 +296,16 @@ where
             node.remove(p);
         } else {
             let mut lp = node;
-            let mut same = false;
-            let lm = if let Some(slot) = &node.slots[p + 1] {
-                self.get_leftmost_leaf(unsafe { slot.as_non_null_mut(j) }, &mut lp, j)
+            let lm = if let Some(rchild) = &node.slots[p + 1] {
+                self.get_leftmost_leaf(unsafe { rchild.as_non_null_mut(j) }, &mut lp, j)
             } else {
-                same = true;
                 node
             };
             node.items[p] = lm.items[0];
             self.remove_from(lm, 0, j);
 
             if lm.n < BTREE_MIN {
-                self.rebalance(lm, lp, if same { p + 1 } else { 0 }, j);
+                self.rebalance(lm, lp, if lp == node { p + 1 } else { 0 }, j);
             }
         }
     }
