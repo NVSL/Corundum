@@ -1233,9 +1233,12 @@ where
     /// Prints memory information
     fn print_info() {}
 
-    #[cfg(feature = "stat_footprint")]
     fn stat_footprint() -> usize {
-        0
+        if cfg!(feature = "stat_footprint") {
+            0
+        } else {
+            unimplemented!()
+        }
     }
 }
 

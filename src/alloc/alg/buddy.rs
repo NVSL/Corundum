@@ -351,7 +351,7 @@ impl<A: MemPool> BuddyAlg<A> {
                 }
                 None => {
                     eprintln!(
-                        "No slot with size {} left (avilable= {})",
+                        "Cannot find memory slot of size {} (available: {})",
                         len,
                         self.available()
                     );
@@ -826,6 +826,97 @@ mod test {
     }
 }
 
+#[cfg(feature = "verbose")]
+#[macro_export]
+macro_rules! __cfg_verbose {
+    ($blk:block) => { $blk };
+    ($if:block,$else:block) => { $if };
+}
+
+#[cfg(not(feature = "verbose"))]
+#[macro_export]
+macro_rules! __cfg_verbose {
+    ($blk:block) => { };
+    ($if:block,$else:block) => { $else };
+}
+
+#[cfg(feature = "check_access_violation")]
+#[macro_export]
+macro_rules! __cfg_check_access_violation {
+    ($blk:block) => { $blk };
+    ($if:block,$else:block) => { $if };
+}
+
+#[cfg(not(feature = "check_access_violation"))]
+#[macro_export]
+macro_rules! __cfg_check_access_violation {
+    ($blk:block) => { };
+    ($if:block,$else:block) => { 
+        #[allow(unused_braces)]
+        $else 
+    }
+}
+
+#[cfg(feature = "pin_journals")]
+#[macro_export]
+macro_rules! __cfg_pin_journals {
+    ($blk:block) => { $blk };
+    ($if:block,$else:block) => { $if };
+}
+
+#[cfg(not(feature = "pin_journals"))]
+#[macro_export]
+macro_rules! __cfg_pin_journals {
+    ($blk:block) => { };
+    ($if:block,$else:block) => { $else };
+}
+
+#[cfg(feature = "check_allocator_cyclic_links")]
+#[macro_export]
+macro_rules! __cfg_check_allocator_cyclic_links {
+    ($blk:block) => { $blk };
+    ($if:block,$else:block) => { $if };
+}
+
+#[cfg(not(feature = "check_allocator_cyclic_links"))]
+#[macro_export]
+macro_rules! __cfg_check_allocator_cyclic_links {
+    ($blk:block) => { };
+    ($if:block,$else:block) => { $else };
+}
+
+#[cfg(feature = "stat_perf")]
+#[macro_export]
+macro_rules! __cfg_stat_perf {
+    ($blk:expr) => { $blk };
+    ($if:expr,$else:expr) => { $if }
+}
+
+#[cfg(not(feature = "stat_perf"))]
+#[macro_export]
+macro_rules! __cfg_stat_perf {
+    ($blk:expr) => { () };
+    ($if:expr,$else:expr) => { $else }
+}
+
+#[cfg(feature = "stat_footprint")]
+#[macro_export]
+macro_rules! __cfg_stat_footprint {
+    ($blk:block) => { $blk };
+    ($if:block,$else:block) => { $if };
+}
+
+#[cfg(not(feature = "stat_footprint"))]
+#[macro_export]
+macro_rules! __cfg_stat_footprint {
+    ($blk:block) => { };
+    ($if:block,$else:block) =>  { 
+        #[allow(unused_braces)]
+        $else 
+    }
+}
+
+
 #[macro_export]
 /// This macro creates a new pool module and aliases for persistent types. It
 /// generates type [`Allocator`] which a persistent allocator type. It is
@@ -1208,8 +1299,7 @@ macro_rules! pool {
                 #[allow(unused_unsafe)]
                 #[track_caller]
                 unsafe fn pre_alloc(size: usize) -> (*mut u8, u64, usize, usize) {
-                    #[cfg(feature = "stat_perf")]
-                    let _perf = $crate::stat::Measure::<Self>::Alloc(std::time::Instant::now());
+                    let _perf = $crate::__cfg_stat_perf!($crate::stat::Measure::<Self>::Alloc(std::time::Instant::now()));
     
                     static_inner!(BUDDY_INNER, inner, {
                         let cpu = cpu();
@@ -1232,21 +1322,20 @@ macro_rules! pool {
                 #[allow(unused_unsafe)]
                 #[track_caller]
                 unsafe fn pre_dealloc(ptr: *mut u8, size: usize) -> usize {
-                    #[cfg(feature = "stat_perf")]
-                    let _perf = $crate::stat::Measure::<Self>::Dealloc(std::time::Instant::now());
+                    let _perf = $crate::__cfg_stat_perf!($crate::stat::Measure::<Self>::Dealloc(std::time::Instant::now()));
     
                     static_inner!(BUDDY_INNER, inner, {
                         let off = Self::off(ptr).expect("invalid pointer");
                         let (zone,zidx) = inner.zone.from_off(off);
-                        if cfg!(feature = "check_access_violation") {
+                        $crate::__cfg_check_access_violation!({
                             if zone.is_allocated(off, size) {
                                 zone.dealloc_impl(off, size, false);
                             } else {
                                 panic!("offset @{} ({}) was not allocated", off, size);
                             }
-                        } else {
+                        }, {
                             zone.dealloc_impl(off, size, false);
-                        }
+                        });
                         zidx
                     })
                 }
@@ -1307,16 +1396,16 @@ macro_rules! pool {
                 #[inline]
                 #[allow(unused_unsafe)]
                 #[track_caller]
-                fn allocated(off: u64, len: usize) -> bool {
-                    static_inner!(BUDDY_INNER, inner, {
+                fn allocated(off: u64, _len: usize) -> bool {
+                    static_inner!(BUDDY_INNER, _inner, {
                         if off >= Self::end() {
                             false
                         } else if Self::contains(off + Self::start()) {
-                            if cfg!(feature = "check_access_violation") {
-                                inner.zone.from_off(off).0.is_allocated(off, len)
-                            } else {
+                            $crate::__cfg_check_access_violation!({
+                                _inner.zone.from_off(off).0.is_allocated(off, _len)
+                            }, {
                                 true
-                            }
+                            })
                         } else {
                             false
                         }
@@ -1356,8 +1445,9 @@ macro_rules! pool {
                     static_inner!(BUDDY_INNER, inner, {
                         let off = Self::off(journal).unwrap();
                     
-                        #[cfg(feature = "pin_journals")]
-                        journal.drop_pages();
+                        $crate::__cfg_pin_journals!({
+                            journal.drop_pages();
+                        });
     
                         let z = Self::pre_dealloc(journal as *mut _ as *mut u8, mem::size_of::<Journal>());
                         if inner.journals == off {
@@ -1412,29 +1502,35 @@ macro_rules! pool {
                             inner.zone[i].recover();
                         }
     
-                        #[cfg(feature = "check_allocator_cyclic_links")]
-                        debug_assert!(Self::verify());
+                        $crate::__cfg_check_allocator_cyclic_links!({
+                            debug_assert!(Self::verify());
+                        });
     
                         while let Ok(logs) = Self::deref_mut::<Journal>(inner.journals) {
     
-                            #[cfg(feature = "verbose")]
-                            println!("{:?}", logs);
+                            $crate::__cfg_verbose!({
+                                println!("{:?}", logs);
+                            });
     
-                            #[cfg(feature = "check_allocator_cyclic_links")]
-                            debug_assert!(Self::verify());
+                            $crate::__cfg_check_allocator_cyclic_links!({
+                                debug_assert!(Self::verify());
+                            });
     
                             logs.recover();
     
-                            #[cfg(feature = "check_allocator_cyclic_links")]
-                            debug_assert!(Self::verify());
+                            $crate::__cfg_check_allocator_cyclic_links!({
+                                debug_assert!(Self::verify());
+                            });
     
                             logs.clear();
     
-                            #[cfg(feature = "check_allocator_cyclic_links")]
-                            debug_assert!(Self::verify());
+                            $crate::__cfg_check_allocator_cyclic_links!({
+                                debug_assert!(Self::verify());
+                            });
     
-                            #[cfg(feature = "pin_journals")]
-                            Self::drop_journal(logs);
+                            $crate::__cfg_pin_journals!({
+                                Self::drop_journal(logs);
+                            });
                         }
                     })
                 }
@@ -1530,9 +1626,12 @@ macro_rules! pool {
                     }
                 }
     
-                #[cfg(feature = "stat_footprint")]
                 fn stat_footprint() -> usize {
-                    static_inner!(BUDDY_INNER, inner, { inner.zone.stat_footprint() })
+                    $crate::__cfg_stat_footprint!({
+                        static_inner!(BUDDY_INNER, inner, { inner.zone.stat_footprint() })
+                    }, {
+                        unimplemented!()
+                    })
                 }
     
                 fn print_info() {
@@ -1559,9 +1658,9 @@ macro_rules! pool {
                         Self::close().unwrap();
                     }
     
-                    #[cfg(feature = "stat_perf")] {
+                    $crate::__cfg_stat_perf!({
                         eprintln!("{}", $crate::stat::report());
-                    }
+                    });
                 }
             }
     
