@@ -175,7 +175,7 @@ impl<P: MemPool> ByteArray<P> {
 
     pub fn update_from_gen<T>(&self, new: Gen<T, P>, j: &Journal<P>) {
         unsafe {
-            let slice = crate::utils::as_mut(self).bytes.as_slice_mut();
+            let slice = utils::as_mut(self).bytes.as_slice_mut();
             if self.logged == 0 {
                 slice.create_log(j, Notifier::NonAtomic(Ptr::from_ref(&self.logged)));
             }

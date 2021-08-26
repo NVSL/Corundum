@@ -502,19 +502,21 @@ impl<A: MemPool> BuddyAlg<A> {
             eprintln!("Crashed while the allocator was operating");
 
             #[cfg(feature = "verbose")] {
-                self.aux.foreach(|(off, next)| {
-                    let n = Self::buddy(off);
-                    println!("aux @({:x}) {:x} -> {:x}", off, n.next, next);
-                });
-
-                self.log64.foreach(|(off, next)| {
-                    let n = Self::buddy(off);
-                    println!("log @({:x}) {:x} -> {:x}", off, n.next, next);
-                });
-
-                self.drop_log.foreach(|(off, len)| {
-                    println!("drop ({:x}; {})", off, len);
-                });
+                if *utils::VERBOSE {
+                    self.aux.foreach(|(off, next)| {
+                        let n = Self::buddy(off);
+                        println!("aux @({:x}) {:x} -> {:x}", off, n.next, next);
+                    });
+    
+                    self.log64.foreach(|(off, next)| {
+                        let n = Self::buddy(off);
+                        println!("log @({:x}) {:x} -> {:x}", off, n.next, next);
+                    });
+    
+                    self.drop_log.foreach(|(off, len)| {
+                        println!("drop ({:x}; {})", off, len);
+                    });
+                }
             }
 
             // continue draining
@@ -1509,7 +1511,9 @@ macro_rules! pool {
                         while let Ok(logs) = Self::deref_mut::<Journal>(inner.journals) {
     
                             $crate::__cfg_verbose!({
-                                println!("{:?}", logs);
+                                if *utils::VERBOSE {
+                                    println!("{:?}", logs);
+                                }
                             });
     
                             $crate::__cfg_check_allocator_cyclic_links!({

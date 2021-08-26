@@ -35,39 +35,21 @@ unsafe impl MemPoolTraits for Heap {
         0..u64::MAX
     }
 
-    #[cfg(not(feature = "verbose"))]
     unsafe fn pre_alloc(size: usize) -> (*mut u8, u64, usize, usize) {
         Self::discard(0);
         let x = alloc(Layout::from_size_align_unchecked(size, 1));
         let off = x as u64;
+        log!(Self, Green, "", "PRE: {:<6}  ({:>6x}:{:<6x}) = {:<6} POST = {:<6}",
+            0, off, off + len - 1, len, 0);
         (x, off, size, 0)
     }
 
-    #[cfg(not(feature = "verbose"))]
     unsafe fn pre_dealloc(ptr: *mut u8, size: usize) -> usize {
         Self::discard(0);
-        dealloc(ptr, Layout::from_size_align_unchecked(size, 1));
-        0
-    }
-
-    #[cfg(feature = "verbose")]
-    unsafe fn pre_alloc(size: usize) -> (*mut u8, u64, usize, usize) {
-        Self::discard(0);
-        let r = alloc(Layout::from_size_align_unchecked(size, 1));
-        let addr = r as u64;
-        let len = size as u64;
-        log!(Self, Green, "", "PRE: {:<6}  ({:>6x}:{:<6x}) = {:<6} POST = {:<6}",
-            0, addr, addr + len - 1, len, 0);
-        (r, addr, size, 0)
-    }
-
-    #[cfg(feature = "verbose")]
-    unsafe fn pre_dealloc(ptr: *mut u8, size: usize) -> usize {
-        Self::discard(0);
-        let start = ptr as u64;
-        let end = start + size as u64;
+        let _start = ptr as u64;
+        let _end = _start + size as u64;
         log!(Self, Red, "DEALLOC", "PRE: {:<6}  ({:>6x}:{:<6x}) = {:<6} POST = {:<6}",
-            0, start, end, end - start + 1, 0);
+            0, _start, _end, _end - _start + 1, 0);
         dealloc(ptr, Layout::from_size_align_unchecked(size, 1));
         0
     }

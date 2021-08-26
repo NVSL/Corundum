@@ -48,6 +48,27 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
     // Parse the input tokens into a syntax tree.
     let input = parse_macro_input!(input as DeriveInput);
 
+    let mods = crate::list(&input.attrs, "mods");
+    let generics = crate::list(&input.attrs, "generics");
+    let attrs = crate::list(&input.attrs, "attrs");
+    let mut has_generics = false;
+    let mut warn = true;
+    input.attrs.iter().for_each(|v| {
+        let path = v.path.clone();
+        if quote!(#path).to_string() == "generics" {
+            if !warn {
+                abort!(v.span(), "cannot use `no_generics` and `generics` attributes at a same time");
+            }
+            has_generics = true;
+        }
+        if quote!(#path).to_string() == "no_generics" {
+            if has_generics {
+                abort!(v.span(), "cannot use `no_generics` and `generics` attributes at a same time");
+            }
+            warn = false;
+        }
+    });
+
     let mut found_pool_generic: Option<Ident> = None;
     let mut ogen = vec!();
     if !input.generics.params.is_empty() {
@@ -135,10 +156,6 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
         )
     }
 
-    let mods = crate::list(&input.attrs, "mods");
-    let generics = crate::list(&input.attrs, "generics");
-    let attrs = crate::list(&input.attrs, "attrs");
-
     // let mut all_pools = unsafe { match POOLS.lock() {
     //     Ok(g) => g,
     //     Err(p) => p.into_inner()
@@ -153,11 +170,14 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
     let mut template = quote!{ template <#(class #generics,)* class _P> }.to_string();
     let mut generics_str = quote!{ #(#generics,)* }.to_string();
 
+
     if generics.is_empty() {
-        emit_warning!(input.ident.span(),
-            "struct {} does not have any generic type parameter as the data type", input.ident;
-            help = "specify the generic data types using `generics(...)` attribute (e.g., #[generics(T)])"
-        );
+        if warn {
+            emit_warning!(input.ident.span(),
+                "struct {} does not have any generic type parameter as the data type", input.ident;
+                help = "specify the generic data types using `generics(...)` attribute (e.g., #[generics(T)]), or use `#[no_generics]`"
+            );
+        }
         generics_str = "".to_string();
         generics_list = "".to_string();
         template = "template<class _P>".to_string();
