@@ -40,7 +40,7 @@ unsafe impl MemPoolTraits for Heap {
         let x = alloc(Layout::from_size_align_unchecked(size, 1));
         let off = x as u64;
         log!(Self, Green, "", "PRE: {:<6}  ({:>6x}:{:<6x}) = {:<6} POST = {:<6}",
-            0, off, off + len - 1, len, 0);
+            0, off, off + size as u64 - 1, size, 0);
         (x, off, size, 0)
     }
 

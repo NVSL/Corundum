@@ -502,7 +502,7 @@ impl<A: MemPool> BuddyAlg<A> {
             eprintln!("Crashed while the allocator was operating");
 
             #[cfg(feature = "verbose")] {
-                if *utils::VERBOSE {
+                if *crate::utils::VERBOSE {
                     self.aux.foreach(|(off, next)| {
                         let n = Self::buddy(off);
                         println!("aux @({:x}) {:x} -> {:x}", off, n.next, next);
