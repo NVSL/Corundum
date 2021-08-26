@@ -238,7 +238,7 @@ impl<A: MemPool, T: PSafe> Clone for Slice<T, A> {
             if self.cap == 0 {
                 Self::null()
             } else {
-                let j = Journal::<A>::current(false).expect("clone function is transactional");
+                let j = Journal::<A>::current(false).expect("`Slice::clone()` is transactional");
                 self.pclone(&*j.0)
             }
         }

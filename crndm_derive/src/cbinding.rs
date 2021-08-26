@@ -1394,9 +1394,9 @@ pub fn carbide(input: TokenStream) -> TokenStream {
                     let mut res: *const Named = std::ptr::null();
                     if transaction(AssertTxInSafe(|j| {
                         let mut objs = p.objs.lock(j);
-                        if let Container::Custom(named) = objs.get_or_insert(key, || {
-                            let mut obj = ByteArray::new_uninit(size, j);
-                            init(unsafe { obj.as_ptr_mut() });
+                        if let Container::Custom(named) = objs.get_or_insert(key, || unsafe {
+                            let mut obj = ByteArray::alloc(size, j);
+                            init(obj.get_ptr_mut());
                             Container::Custom(Named(0, obj))
                         }, j) {
                             res = named as *const Named;
@@ -1410,7 +1410,7 @@ pub fn carbide(input: TokenStream) -> TokenStream {
                 #[no_mangle]
                 pub extern "C" fn #named_data_pointer(obj: *const c_void /* &Named */) -> *const c_void {
                     let obj = unsafe { corundum::utils::read::<Named>(obj as *mut u8) };
-                    obj.1.as_ptr()
+                    obj.1.get_ptr()
                 }
 
                 #[no_mangle]

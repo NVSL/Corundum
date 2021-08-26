@@ -88,11 +88,9 @@ impl<P: MemPool> Drop for ByteArray<P> {
 }
 
 impl<P: MemPool> ByteArray<P> {
-    pub fn new_uninit(size: usize, j: &Journal<P>) -> Self {
-        unsafe {
-            let ptr = P::new_uninit_for_layout(size, j);
-            Self { bytes: Slice::from_raw_parts(ptr, size), logged: 0 }
-        }
+    pub unsafe fn alloc(size: usize, j: &Journal<P>) -> Self {
+        let ptr = P::new_uninit_for_layout(size, j);
+        Self { bytes: Slice::from_raw_parts(ptr, size), logged: 0 }
     }
 
     pub fn null() -> Self {
@@ -102,53 +100,45 @@ impl<P: MemPool> ByteArray<P> {
         }
     }
 
-    pub fn move_from(&mut self, other: &Self) {
-        let other = unsafe { utils::as_mut(other) };
-        self.bytes = other.bytes;
-        self.logged = other.logged;
-        other.bytes = Slice::null();
-        other.logged = 0;
-    }
-
-    // pub fn as_bytes(&self) -> Vec<u8> {
-    //     self.bytes.to_vec()
-    // }
-
     pub fn as_ref<T>(&self) -> &T {
         unsafe { &*(self.bytes.as_ptr() as *const T) }
     }
 
-    pub fn from_gen<T>(obj: Gen<T, P>, j: &Journal<P>) -> Self {
-        let bytes = obj.as_slice();
-        unsafe {
-            let bytes = P::new_slice(bytes, j);
-            Self { bytes: Slice::new(bytes), logged: 0 }
+    fn from_gen<T>(obj: Gen<T, P>) -> Self {
+        Self { 
+            bytes: unsafe { Slice::from_raw_parts(obj.ptr as *const u8, obj.len) }, 
+            logged: 0 
         }
     }
 
-    pub fn as_gen<T>(self) -> Gen<T, P> {
+    /// Retrieves an unsafe `Gen` sharing the same pointer and leaks the allocation
+    /// 
+    /// # Safety
+    /// The returned `Gen` shares the same pointer, but does not drop it. 
+    /// Accessing data through the returned `Gen` may have undefined behavior. 
+    pub unsafe fn leak<T>(self) -> Gen<T, P> {
         Gen::from_byte_object(self)
     }
 
-    pub unsafe fn from_ref_gen<T>(mut obj: Gen<T, P>) -> Self {
-        let bytes = obj.as_slice_mut();
-        Self { bytes: Slice::from_raw_parts(bytes.as_mut_ptr(), bytes.len()), logged: 0 }
-    }
-
-    pub unsafe fn as_ref_gen<T>(&self) -> Gen<T, P> {
+    /// Retrieves an unsafe `Gen` sharing the same pointer
+    /// 
+    /// # Safety
+    /// The returned `Gen` shares the same pointer, but does not drop it. 
+    /// Accessing data through the returned `Gen` may have undefined behavior. 
+    pub unsafe fn get_gen<T>(&self) -> Gen<T, P> {
         // assert_eq!(self.len(), size_of::<T>(), "Incompatible type casting");
-        Gen::<T, P>::from_ptr(self.as_ptr::<T>())
+        Gen::<T, P>::from_ptr(self.get_ptr::<T>())
     }
 
     pub unsafe fn as_mut<T>(&self) -> &mut T {
         &mut *(self.bytes.as_ptr() as *mut T)
     }
 
-    pub fn as_ptr<T>(&self) -> *const T {
+    pub fn get_ptr<T>(&self) -> *const T {
         self.bytes.as_ptr() as *const T
     }
 
-    pub fn as_ptr_mut(&mut self) -> *mut c_void {
+    pub fn get_ptr_mut(&mut self) -> *mut c_void {
         self.bytes.as_ptr() as *mut c_void
     }
 
@@ -169,6 +159,13 @@ impl<P: MemPool> ByteArray<P> {
         }
     }
 
+    /// Swaps the contents of two `ByteArray`s
+    pub fn swap(&mut self, other: &mut Self) {
+        let slice = self.bytes;
+        self.bytes = other.bytes;
+        other.bytes = slice;
+    }
+
     pub fn len(&self) -> usize {
         self.bytes.capacity()
     }
@@ -181,6 +178,12 @@ impl<P: MemPool> ByteArray<P> {
             }
             std::ptr::copy_nonoverlapping(new.ptr, slice as *mut [u8] as *mut c_void, slice.len())
         }
+    }
+}
+
+impl<T, P: MemPool> From<Gen<T, P>> for ByteArray<P> {
+    fn from(g: Gen<T, P>) -> Self {
+        Self::from_gen(g)
     }
 }
 
@@ -216,7 +219,7 @@ impl<T, P: MemPool> Gen<T, P> {
     fn from_byte_object(obj: ByteArray<P>) -> Self {
         // assert_eq!(obj.len(), size_of::<T>(), "Incompatible type casting");
         Self {
-            ptr: obj.as_ptr(),
+            ptr: obj.get_ptr(),
             len: obj.len(),
             phantom: PhantomData
         }
