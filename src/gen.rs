@@ -1,5 +1,6 @@
 #![cfg(feature = "cbindings")]
 
+use std::hash::*;
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 use std::ffi::c_void;
@@ -84,6 +85,12 @@ impl<P: MemPool> Drop for ByteArray<P> {
                 P::dealloc(self.bytes.as_mut_ptr(), self.bytes.capacity())
             }
         }
+    }
+}
+
+impl<P: MemPool> Hash for ByteArray<P> {
+    fn hash<H>(&self, hasher: &mut H) where H: Hasher {
+        unsafe { self.bytes.as_slice().hash(hasher) }
     }
 }
 
@@ -195,6 +202,12 @@ impl<T, P: MemPool> Gen<T, P> {
             // drop: false,
             phantom: PhantomData
         }
+    }
+}
+
+impl<T, P: MemPool> Hash for Gen<T, P> {
+    fn hash<H>(&self, hasher: &mut H) where H: Hasher {
+        self.as_slice().hash(hasher)
     }
 }
 
