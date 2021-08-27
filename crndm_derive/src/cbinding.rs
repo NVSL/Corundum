@@ -939,7 +939,7 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
 
             for (name, args, sig, tmp, ty_pool, has_return, _) in &mut cnt.funcs {
                 let tmpl = if tmp.is_empty() { "".to_owned() } else {
-                    format!("template<class {}> ", tmp.join(", class"))
+                    format!("template<class {}> ", tmp.join(", class "))
                 };
                 let tmpl_kw = if tmp.is_empty() { "" } else { "template " }.to_owned();
                 let gen = if tmp.is_empty() { "".to_owned() } else { 
@@ -1023,7 +1023,7 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
                     });
                 }
                 let tmp = if tmp.is_empty() { "".to_owned() } else {
-                    format!("template<class {}> ", tmp.join(", class"))
+                    format!("template<class {}> ", tmp.join(", class "))
                 };
                 let args = arglist.join(", ");
                 let old_sig = sig.clone();

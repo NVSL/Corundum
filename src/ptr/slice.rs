@@ -9,8 +9,8 @@ use std::ops::Index;
 /// A persistent fat pointer with offset and capacity
 #[derive(Eq)]
 pub struct Slice<T: PSafe, A: MemPool> {
-    off: u64,
-    cap: usize,
+    pub(crate) off: u64,
+    pub(crate) cap: usize,
     dummy: [*const A; 0],
     marker: PhantomData<[T]>,
 }
@@ -130,7 +130,7 @@ impl<T: PSafe, A: MemPool> Slice<T, A> {
 
     /// Converts the fat pointer into a slice of type `&[T]`
     #[inline]
-    pub unsafe fn as_slice(&self) -> &[T] {
+    pub fn as_slice(&self) -> &[T] {
         Self::to_slice(self.off, self.cap)
     }
 

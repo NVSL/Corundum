@@ -47,7 +47,7 @@ impl<T, P: MemPool> RefUnwindSafe for Gen<T, P> {}
 ///     
 /// }
 /// ```
-#[derive(Clone)]
+#[derive(Clone,Eq)]
 pub struct ByteArray<P: MemPool> {
     bytes: Slice<u8, P>,
     logged: u8
@@ -90,7 +90,37 @@ impl<P: MemPool> Drop for ByteArray<P> {
 
 impl<P: MemPool> Hash for ByteArray<P> {
     fn hash<H>(&self, hasher: &mut H) where H: Hasher {
-        unsafe { self.bytes.as_slice().hash(hasher) }
+        self.bytes.as_slice().hash(hasher)
+    }
+}
+
+impl<P: MemPool> PartialEq for ByteArray<P> {
+    fn eq(&self, other: &Self) -> bool {
+        self.bytes.as_slice().eq(other.bytes.as_slice())
+    }
+}
+
+impl<T,P: MemPool> PartialEq<Gen<T,P>> for ByteArray<P> {
+    fn eq(&self, other: &Gen<T,P>) -> bool {
+        self.bytes.as_slice().eq(other.as_slice())
+    }
+}
+
+impl<P: MemPool + Eq> PartialOrd for ByteArray<P> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.bytes.as_slice().partial_cmp(other.bytes.as_slice())
+    }
+}
+
+impl<T, P: MemPool + Eq> PartialOrd<Gen<T,P>> for ByteArray<P> {
+    fn partial_cmp(&self, other: &Gen<T,P>) -> Option<std::cmp::Ordering> {
+        self.bytes.as_slice().partial_cmp(other.as_slice())
+    }
+}
+
+impl<P: MemPool + Eq> Ord for ByteArray<P> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.bytes.as_slice().cmp(other.bytes.as_slice())
     }
 }
 
