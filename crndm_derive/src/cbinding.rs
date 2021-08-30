@@ -180,7 +180,7 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
         }
         generics_str = "".to_string();
         generics_list = "".to_string();
-        template = "template<class _P>".to_string();
+        template = "template < class _P >".to_string();
     }
 
     // Used in the quasi-quotation below as `#name`.
@@ -344,10 +344,10 @@ root_name = __m.to_string()
 #include <cstring>
 {includes}
 
-template<class _P>
+template < class _P >
 using pstring = typename carbide::make_persistent<std::string, _P>::type;
 
-template<class _P>
+template < class _P >
 struct {small_name}_traits {{
     typedef typename pool_traits<_P>::journal journal;
     static const {name}<_P>* create({size_list_arg}const journal *j);
@@ -452,22 +452,22 @@ lock = lock
     TokenStream::from(expanded)
 }
 
-fn refine_path(m: &TokenStream2, p: &mut Path, tmpl: &Vec<String>, ty_tmpl: &Vec<String>, gen: &Vec<String>, check: i32, modify: bool, has_generics: &mut Option<&mut bool>) {
+fn refine_path(m: &TokenStream2, p: &mut Path, tmpl: &Vec<String>, ty_tmpl: &Ident, gen: &Vec<String>, check: i32, modify: bool, has_generics: &mut Option<&mut bool>, ident: &Ident) {
     for s in &mut p.segments {
         match &mut s.arguments {
             PathArguments::AngleBracketed(args) => {
                 for g in &mut args.args {
                     match g {
-                        GenericArgument::Type(ty) => { check_generics(m, ty, &tmpl, ty_tmpl, gen, if s.ident != "Gen" && check == 1 { 1 } else { 0 }, modify, has_generics); }
-                        GenericArgument::Binding(b) => { check_generics(m, &mut b.ty, &tmpl, ty_tmpl, gen, check, modify, has_generics); }
+                        GenericArgument::Type(ty) => { check_generics(m, ty, &tmpl, ty_tmpl, gen, if s.ident != "Gen" && check == 1 { 1 } else { 0 }, modify, has_generics, ident); }
+                        GenericArgument::Binding(b) => { check_generics(m, &mut b.ty, &tmpl, ty_tmpl, gen, check, modify, has_generics, ident); }
                         _ => ()
                     }
                 }
             }
             PathArguments::Parenthesized(args) => {
-                for i in &mut args.inputs { check_generics(m, i, tmpl, ty_tmpl, gen, check, modify, has_generics); }
+                for i in &mut args.inputs { check_generics(m, i, tmpl, ty_tmpl, gen, check, modify, has_generics, ident); }
                 if let ReturnType::Type(_, ty) = &mut args.output {
-                    check_generics(m, ty, tmpl, ty_tmpl, gen, check, modify, has_generics);
+                    check_generics(m, ty, tmpl, ty_tmpl, gen, check, modify, has_generics, ident);
                 }
             }
             _ => ()
@@ -475,12 +475,12 @@ fn refine_path(m: &TokenStream2, p: &mut Path, tmpl: &Vec<String>, ty_tmpl: &Vec
     }
 }
 
-fn check_generics(m: &TokenStream2, ty: &mut Type, tmpl: &Vec<String>, ty_tmpl: &Vec<String>, gen: &Vec<String>, check: i32, modify: bool, has_generics: &mut Option<&mut bool>) -> bool {
+fn check_generics(m: &TokenStream2, ty: &mut Type, tmpl: &Vec<String>, ty_tmpl: &Ident, gen: &Vec<String>, check: i32, modify: bool, has_generics: &mut Option<&mut bool>, ident: &Ident) -> bool {
     let res = match ty {
-        Type::Array(a) => check_generics(m, &mut *a.elem, tmpl, ty_tmpl, gen, check, modify, has_generics),
+        Type::Array(a) => check_generics(m, &mut *a.elem, tmpl, ty_tmpl, gen, check, modify, has_generics, ident),
         Type::BareFn(f) => {
             for i in &mut f.inputs { 
-                if check_generics(m, &mut i.ty, tmpl, ty_tmpl, gen, 2, modify, has_generics) {
+                if check_generics(m, &mut i.ty, tmpl, ty_tmpl, gen, 2, modify, has_generics, &format_ident!("j")) {
                     abort!(
                         i.ty.span(), "no bindings found for template parameters";
                         note = "use template types in form of references or pointers"
@@ -488,12 +488,12 @@ fn check_generics(m: &TokenStream2, ty: &mut Type, tmpl: &Vec<String>, ty_tmpl: 
                 } 
             }
             if let ReturnType::Type(_, ty) = &mut f.output {
-                check_generics(m, ty, tmpl, ty_tmpl, gen, 2, modify, has_generics);
+                check_generics(m, ty, tmpl, ty_tmpl, gen, 2, modify, has_generics, ident);
             }
             false
         },
-        Type::Group(g) => check_generics(m, &mut *g.elem, tmpl, ty_tmpl, gen, check, modify, has_generics),
-        Type::Paren(ty) => check_generics(m, &mut *ty.elem, tmpl, ty_tmpl, gen, check, modify, has_generics),
+        Type::Group(g) => check_generics(m, &mut *g.elem, tmpl, ty_tmpl, gen, check, modify, has_generics, ident),
+        Type::Paren(ty) => check_generics(m, &mut *ty.elem, tmpl, ty_tmpl, gen, check, modify, has_generics, ident),
         Type::Path(p) => {
             // if let Some(last) = p.path.segments.last() {
             //     if last.ident == "Box" {
@@ -504,6 +504,18 @@ fn check_generics(m: &TokenStream2, ty: &mut Type, tmpl: &Vec<String>, ty_tmpl: 
             //         }
             //     }
             // }
+            if let Some(last) = p.path.segments.last() {
+                if last.ident == "Journal" {
+                    let args = &last.arguments;
+                    let j = quote!(Journal#args);
+                    if j.to_string() != quote!(Journal<#ty_tmpl>).to_string() {
+                        abort!{
+                            ty.span(), "invalid use of `Journal`";
+                            help = "consider using `Journal<{}>`", ty_tmpl
+                        }
+                    }
+                }
+            }
             if p.path.segments.len() == 1 {
                 if p.path.segments[0].arguments == PathArguments::None {
                     let name = p.path.segments[0].ident.to_string();
@@ -521,26 +533,26 @@ fn check_generics(m: &TokenStream2, ty: &mut Type, tmpl: &Vec<String>, ty_tmpl: 
                             **has_generics = true;
                         }
                         true
-                    } else if ty_tmpl.contains(&name) {
+                    } else if *ty_tmpl == name {
                         if modify {
                             *ty = parse2(quote!(#m)).unwrap();
                         }
-                        true
+                        false
                     } else {
                         false
                     }
                 } else {
-                    refine_path(m, &mut p.path, tmpl, ty_tmpl, gen, check, modify, has_generics);
+                    refine_path(m, &mut p.path, tmpl, ty_tmpl, gen, check, modify, has_generics, ident);
                     false
                 }
             } else {
-                refine_path(m, &mut p.path, tmpl, ty_tmpl, gen, check, modify, has_generics);
+                refine_path(m, &mut p.path, tmpl, ty_tmpl, gen, check, modify, has_generics, ident);
                 false
             }
         }
         // tmpl.contains(&p.path.get_ident().unwrap().ident.to_string()),
         Type::Ptr(p) => {
-            if check_generics(m, &mut *p.elem, tmpl, ty_tmpl, gen, if check == 2 { 0 } else { check }, modify, has_generics) {
+            if check_generics(m, &mut *p.elem, tmpl, ty_tmpl, gen, if check == 2 { 0 } else { check }, modify, has_generics, ident) {
                 // update(ty);
                 // *ty = parse2(quote!(corundum::gen::Gen)).unwrap();
                 // if modify {
@@ -551,7 +563,7 @@ fn check_generics(m: &TokenStream2, ty: &mut Type, tmpl: &Vec<String>, ty_tmpl: 
             false
         },
         Type::Reference(r) =>  {
-            if check_generics(m, &mut *r.elem, tmpl, ty_tmpl, gen, if check == 2 { 0 } else { check }, modify, has_generics) {
+            if check_generics(m, &mut *r.elem, tmpl, ty_tmpl, gen, if check == 2 { 0 } else { check }, modify, has_generics, ident) {
                 // update(ty);
                 // *ty = parse2(quote!(corundum::gen::Gen)).unwrap();
                 // if modify {
@@ -561,8 +573,8 @@ fn check_generics(m: &TokenStream2, ty: &mut Type, tmpl: &Vec<String>, ty_tmpl: 
             } 
             false
         },
-        Type::Slice(s) => check_generics(m, &mut *s.elem, tmpl, ty_tmpl, gen, check, modify, has_generics),
-        Type::Tuple(t) => t.elems.iter_mut().any(|t| check_generics(m, t, tmpl, ty_tmpl, gen, check, modify, has_generics)),
+        Type::Slice(s) => check_generics(m, &mut *s.elem, tmpl, ty_tmpl, gen, check, modify, has_generics, ident),
+        Type::Tuple(t) => t.elems.iter_mut().any(|t| check_generics(m, t, tmpl, ty_tmpl, gen, check, modify, has_generics, ident)),
         Type::Verbatim(v) => {
             let name = v.to_string();
             if tmpl.contains(&name) {
@@ -573,11 +585,11 @@ fn check_generics(m: &TokenStream2, ty: &mut Type, tmpl: &Vec<String>, ty_tmpl: 
                     **has_generics = true;
                 }
                 true
-            } else if ty_tmpl.contains(&name) {
+            } else if *ty_tmpl == name {
                 if modify {
                     *ty = parse2(quote!(#m)).unwrap();
                 }
-                true
+                false
             } else {
                 false
             }
@@ -585,14 +597,9 @@ fn check_generics(m: &TokenStream2, ty: &mut Type, tmpl: &Vec<String>, ty_tmpl: 
         _ => false
     };
     if res && check == 1 {
-        let msg = if let Some(p) = ty_tmpl.first() {
-            format!("consider using corundum::gen::Gen<{}, {}>", quote!(#ty), p.clone())
-        } else {
-            "consider using corundum::gen::Gen".to_owned()
-        };
         abort!(
             ty.span(), "no bindings found for template parameters";
-            note = "{}", msg
+            note = "consider using corundum::gen::Gen<{}, {}>", quote!(#ty), ty_tmpl
         );
     }
     res
@@ -638,6 +645,12 @@ pub fn cbindgen(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     None
                 }
             ).collect();
+
+            if ty_gen.len() > 1 || ty_gen.is_empty() {
+                abort!(imp.generics.span(), "exactly one `MemPool` parameter is needed");
+            }
+            let pool_type = format_ident!("{}", ty_gen.first().unwrap());
+
             let name = &tp.path.segments.last().unwrap().ident;
             let small_name = name.to_string().to_lowercase();
     
@@ -677,7 +690,7 @@ pub fn cbindgen(_attr: TokenStream, item: TokenStream) -> TokenStream {
                                     if let FnArg::Typed(PatType { pat, ty, .. }) = a {
                                         if let Pat::Ident(PatIdent { ident, .. }) = &**pat {
                                             let mut has_generics = false;
-                                            check_generics(&quote!(), &mut *ty, &gen, &ty_gen, &entry.generics, 1, false, &mut Some(&mut has_generics));
+                                            check_generics(&quote!(), &mut *ty, &gen, &pool_type, &entry.generics, 1, false, &mut Some(&mut has_generics), &ident);
                                             // eprintln!("fn {}: {}", spc.sig.ident, quote!(#ty));
                                             args.push((has_generics, ident.to_string()));
                                         }
@@ -690,7 +703,7 @@ pub fn cbindgen(_attr: TokenStream, item: TokenStream) -> TokenStream {
                         spc.sig.inputs = inputs;
                         let mut output_has_generics = false;
                         if let ReturnType::Type(_, ty) = &mut spc.sig.output {
-                            check_generics(&quote!(), ty, &gen, &ty_gen, &entry.generics, 1, false, &mut Some(&mut output_has_generics));
+                            check_generics(&quote!(), ty, &gen, &pool_type, &entry.generics, 1, false, &mut Some(&mut output_has_generics), &spc.sig.ident);
                         }
                         if let Ok(abi) = parse2::<Abi>(quote!(extern "C")) {
                             spc.sig.abi = Some(abi);
@@ -737,14 +750,14 @@ pub fn cbindgen(_attr: TokenStream, item: TokenStream) -> TokenStream {
                                     if let FnArg::Typed(PatType { pat, ty, .. }) = arg {
                                         if let Pat::Ident(PatIdent { ident, .. }) = &mut **pat {
                                             if ident != "__self" {
-                                                check_generics(&quote!(#m), ty, &gen, &ty_gen, &entry.generics, 1, true, &mut None);
+                                                check_generics(&quote!(#m), ty, &gen, &pool_type, &entry.generics, 1, true, &mut None, ident);
                                                 args.push(quote!(#ident));
                                             }
                                         }
                                     }
                                 }
                                 if let ReturnType::Type(_, ty) = &mut ext.sig.output {
-                                    check_generics(&quote!(#m), ty, &gen, &ty_gen, &entry.generics, 1, true, &mut None);
+                                    check_generics(&quote!(#m), ty, &gen, &pool_type, &entry.generics, 1, true, &mut None, &func.sig.ident);
                                 }
                                 ext.block = parse2(quote!{{
                                     __self.#fname(#(#args,)*)
@@ -755,6 +768,8 @@ pub fn cbindgen(_attr: TokenStream, item: TokenStream) -> TokenStream {
                                     #[deny(improper_ctypes_definitions)] 
                                     #ext
                                 });
+                            } else {
+                                abort!(func.span(), "external functions should have a receiver (`self`) argument");
                             }
                         }
                     }
@@ -944,7 +959,7 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
 
             for (name, args, sig, tmp, ty_pool, has_return, _) in &mut cnt.funcs {
                 let tmpl = if tmp.is_empty() { "".to_owned() } else {
-                    format!("template<class {}> ", tmp.join(", class "))
+                    format!("template < class {} > ", tmp.join(", class "))
                 };
                 let tmpl_kw = if tmp.is_empty() { "" } else { "template " }.to_owned();
                 let gen = if tmp.is_empty() { "".to_owned() } else { 
@@ -969,7 +984,7 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
                             .replace(", )", ")")));
                     let ret_tok = if *has_return { "return " } else { "" };
                         cnt.contents = cnt.contents.replace("    // other methods",
-                            &format!("    // other methods\n    {sig} {{{lock}
+                            &format!("    // other methods\n    {sig} const {{{lock}
         {ret}{ty}_traits<_P>::{tmp}{fn}{gen}(self(){comma}{args});
     }}\n",
     ret = ret_tok,
@@ -1028,14 +1043,14 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
                     });
                 }
                 let tmp = if tmp.is_empty() { "".to_owned() } else {
-                    format!("template<class {}> ", tmp.join(", class "))
+                    format!("template < class {} > ", tmp.join(", class "))
                 };
                 let args = arglist.join(", ");
                 let old_sig = sig.clone();
                 let re = Regex::new(r"\b_P\b").unwrap();
                 *sig = re.replace_all(sig, p as &str).to_string();
                 *t = t.replace("    // specialized methods",
-                    &format!("    // specialized methods\n    {}static {}{{\n        {}\n    }}",
+                    &format!("    // specialized methods\n    {}static {} {{\n        {}\n    }}",
                         tmp,
                         sig.replacen(
                             &format!("{}(", f), 
@@ -1446,11 +1461,12 @@ pub fn carbide(input: TokenStream) -> TokenStream {
 #include <proot.h>
 
 // forward declarations
+template < class P > class Journal;
 
 template<>
 struct pool_traits<{pool}> {{
     static size_t base;
-    typedef struct{{}} journal;
+    using journal = Journal<{pool}>;
     using handle = {root_name};
     using void_pointer = carbide::pointer_t<void, {pool}>;
 
@@ -1496,9 +1512,9 @@ class {pool}: public carbide::pool_type {{
 public:
     typedef pool_traits<{pool}>::journal journal;
     // type aliases
-    template< class T > using root = proot_t<T, {pool}>;
-    template< class T > using make_persistent = carbide::make_persistent<T, {pool}>;
-    template< class T > using cell = carbide::cell<T, {pool}>;
+    template < class T > using root = proot_t<T, {pool}>;
+    template < class T > using make_persistent = carbide::make_persistent<T, {pool}>;
+    template < class T > using cell = carbide::cell<T, {pool}>;
     {pool}(const char* path, u_int32_t flags, bool check_open = true) {{
         if (check_open) assert(pool_traits<{pool}>::base==0, \"{pool} was already open\");
         inner = {pool_open}(path, flags);

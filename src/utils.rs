@@ -71,6 +71,7 @@ pub fn as_slice64<T: ?Sized>(x: &T) -> &[u64] {
 
 #[inline(always)]
 pub unsafe fn read<'a, T: ?Sized>(raw: *mut u8) -> &'a mut T {
+    assert_ne!(raw, std::ptr::null_mut(), "null dereferencing");
     union U<T: ?Sized> {
         raw: *mut u8,
         rf: *mut T,
@@ -80,6 +81,7 @@ pub unsafe fn read<'a, T: ?Sized>(raw: *mut u8) -> &'a mut T {
 
 #[inline(always)]
 pub unsafe fn read_addr<'a, T: ?Sized>(addr: u64) -> &'a mut T {
+    assert_ne!(addr, u64::MAX, "null dereferencing");
     union U<T: ?Sized> {
         addr: u64,
         rf: *mut T,
