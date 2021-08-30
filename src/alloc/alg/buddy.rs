@@ -1752,5 +1752,4 @@ pub fn debug_alloc<A: MemPool>(addr: u64, len: usize, pre: usize, post: usize) {
 pub fn debug_dealloc<A: MemPool>(addr: u64, len: usize, pre: usize, post: usize) {
     crate::log!(A, Red, "DEALLOC", "PRE: {:<6}  ({:>6x}:{:<6x}) = {:<6} POST = {:<6}",
         pre, addr, addr + len as u64 - 1, len, post);
-    assert!(addr != 0x10c000 || len < 1000);
 }
