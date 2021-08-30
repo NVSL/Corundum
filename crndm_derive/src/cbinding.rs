@@ -195,7 +195,6 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
         Ok(g) => g,
         Err(p) => p.into_inner()
     } };
-    all_types.remove(&name_str);
     let mut entry = all_types.entry(name_str.clone()).or_insert(Contents::default());
     entry.generics = generics.iter().map(|v| v.to_string()).collect();
     let new_sizes: Vec<Ident>  = generics.iter().map(|v| format_ident!("{}_size", v.to_string())).collect();
@@ -247,6 +246,7 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
         expanded.push(quote! {
             pub mod #mod_name {
                 use super::*;
+                use corundum::*;
                 use std::ffi::c_void;
                 use std::os::raw::c_char;
                 use std::ffi::CStr;
@@ -878,7 +878,12 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
         }
     }
 
-    create_dir_all(&dir)?;
+    if let Err(e) = create_dir_all(&dir) {
+        if warning {
+            emit_warning!(span, "{}", e);
+        }
+    }
+
     let mut pools = unsafe { match POOLS.lock() {
         Ok(g) => g,
         Err(p) => p.into_inner()
@@ -1068,6 +1073,9 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
         }
     }
 
+    pools.clear();
+    types.clear();
+
     Ok(())
 }
 
@@ -1180,8 +1188,6 @@ pub fn carbide(input: TokenStream) -> TokenStream {
         Ok(g) => g,
         Err(p) => p.into_inner()
     } };
-    all_pools.clear();
-
     let mut expanded = vec![];
     for m in &mods {
 
@@ -1218,6 +1224,7 @@ pub fn carbide(input: TokenStream) -> TokenStream {
 
             pub mod #mod_name {
                 use super::*;
+                use corundum::*;
                 use corundum::stm::{Logger, Notifier};
                 use corundum::stl::HashMap as PHashMap;
                 use corundum::gen::ByteArray;

@@ -268,6 +268,10 @@ impl<T, P: MemPool> Gen<T, P> {
         }
     }
 
+    pub fn as_ref(&self) -> &T {
+        unsafe { crate::utils::read(self.ptr as *mut u8) }
+    }
+
     pub fn ptr(&self) -> *const c_void {
         self.ptr
     }

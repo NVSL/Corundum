@@ -517,7 +517,7 @@ impl<A: MemPool> Log<A> {
         debug_assert_ne!(*len, 0);
 
         if *log != u64::MAX && *src != u64::MAX {
-            log!(A, Magenta, "ROLLBACK", "FOR:         ({:>6}:{:<6}) = {:<6} DataLog({})",
+            log!(A, Magenta, "ROLLBACK", "FOR:         ({:>6x}:{:<6x}) = {:<6} DataLog({})",
                 *src, *src as usize + (len - 1), len, log   
             );
             #[cfg(feature = "verbose")] {
@@ -629,7 +629,7 @@ impl<A: MemPool> Log<A> {
     }
 
     /// Commits changes
-    pub(crate) fn commit(&mut self) {
+    pub(crate) fn commit_data(&mut self) {
         #[cfg(feature = "stat_perf")]
         let _perf = crate::stat::Measure::<A>::CommitLog(std::time::Instant::now());
 
@@ -642,6 +642,16 @@ impl<A: MemPool> Log<A> {
                     persist_with_log::<u8,A>(A::get_mut_unchecked(*_src), *_len, false);
                 }
             }
+            _ => {}
+        }
+    }
+
+    /// Commits changes
+    pub(crate) fn commit_dealloc(&mut self) {
+        #[cfg(feature = "stat_perf")]
+        let _perf = crate::stat::Measure::<A>::CommitLog(std::time::Instant::now());
+
+        match &mut self.0 {
             DropOnCommit(src, len) => {
                 if *src != u64::MAX {
                     unsafe {

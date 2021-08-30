@@ -116,9 +116,15 @@ impl<A: MemPool> Page<A> {
         }
     }
 
-    unsafe fn commit(&mut self) {
+    unsafe fn commit_data(&mut self) {
         for i in 0..self.len {
-            self.logs[i].commit();
+            self.logs[i].commit_data();
+        }
+    }
+
+    unsafe fn commit_dealloc(&mut self) {
+        for i in 0..self.len {
+            self.logs[i].commit_dealloc();
         }
     }
 
@@ -126,6 +132,9 @@ impl<A: MemPool> Page<A> {
         for i in 0..self.len {
             self.logs[self.len - i - 1].rollback();
         }
+    }
+
+    unsafe fn rollback_dealloc(&mut self) {
         for i in 0..self.len {
             self.logs[i].rollback_drop_on_abort();
         }
@@ -397,7 +406,12 @@ impl<A: MemPool> Journal<A> {
         }
         let mut curr = self.pages;
         while let Some(page) = curr.as_option() {
-            page.commit();
+            page.commit_data();
+            curr = page.next;
+        }
+        let mut curr = self.pages;
+        while let Some(page) = curr.as_option() {
+            page.commit_dealloc();
             curr = page.next;
         }
         sfence();
@@ -417,6 +431,11 @@ impl<A: MemPool> Journal<A> {
         let mut curr = self.pages;
         while let Some(page) = curr.as_option() {
             page.rollback();
+            curr = page.next;
+        }
+        let mut curr = self.pages;
+        while let Some(page) = curr.as_option() {
+            page.rollback_dealloc();
             curr = page.next;
         }
         sfence();

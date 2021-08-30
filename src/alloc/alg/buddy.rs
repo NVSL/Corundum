@@ -831,91 +831,85 @@ mod test {
 #[cfg(feature = "verbose")]
 #[macro_export]
 macro_rules! __cfg_verbose {
-    ($blk:block) => { $blk };
-    ($if:block,$else:block) => { $if };
+    ($blk:block) => { #[allow(unused_braces)] $blk };
+    ($if:block,$else:block) => { #[allow(unused_braces)] $if };
 }
 
 #[cfg(not(feature = "verbose"))]
 #[macro_export]
 macro_rules! __cfg_verbose {
     ($blk:block) => { };
-    ($if:block,$else:block) => { $else };
+    ($if:block,$else:block) => { #[allow(unused_braces)] $else };
 }
 
 #[cfg(feature = "check_access_violation")]
 #[macro_export]
 macro_rules! __cfg_check_access_violation {
-    ($blk:block) => { $blk };
-    ($if:block,$else:block) => { $if };
+    ($blk:block) => { #[allow(unused_braces)] $blk };
+    ($if:block,$else:block) => { #[allow(unused_braces)] $if };
 }
 
 #[cfg(not(feature = "check_access_violation"))]
 #[macro_export]
 macro_rules! __cfg_check_access_violation {
     ($blk:block) => { };
-    ($if:block,$else:block) => { 
-        #[allow(unused_braces)]
-        $else 
-    }
+    ($if:block,$else:block) => { #[allow(unused_braces)] $else }
 }
 
 #[cfg(feature = "pin_journals")]
 #[macro_export]
 macro_rules! __cfg_pin_journals {
-    ($blk:block) => { $blk };
-    ($if:block,$else:block) => { $if };
+    ($blk:block) => { #[allow(unused_braces)] $blk };
+    ($if:block,$else:block) => { #[allow(unused_braces)] $if };
 }
 
 #[cfg(not(feature = "pin_journals"))]
 #[macro_export]
 macro_rules! __cfg_pin_journals {
     ($blk:block) => { };
-    ($if:block,$else:block) => { $else };
+    ($if:block,$else:block) => { #[allow(unused_braces)] $else };
 }
 
 #[cfg(feature = "check_allocator_cyclic_links")]
 #[macro_export]
 macro_rules! __cfg_check_allocator_cyclic_links {
-    ($blk:block) => { $blk };
-    ($if:block,$else:block) => { $if };
+    ($blk:block) => { #[allow(unused_braces)] $blk };
+    ($if:block,$else:block) => { #[allow(unused_braces)] $if };
 }
 
 #[cfg(not(feature = "check_allocator_cyclic_links"))]
 #[macro_export]
 macro_rules! __cfg_check_allocator_cyclic_links {
     ($blk:block) => { };
-    ($if:block,$else:block) => { $else };
+    ($if:block,$else:block) => { #[allow(unused_braces)] $else };
 }
 
 #[cfg(feature = "stat_perf")]
 #[macro_export]
 macro_rules! __cfg_stat_perf {
-    ($blk:expr) => { $blk };
-    ($if:expr,$else:expr) => { $if }
+    ($blk:expr) => { #[allow(unused_braces)] $blk };
+    ($if:expr,$else:expr) => { #[allow(unused_braces)] $if }
 }
 
 #[cfg(not(feature = "stat_perf"))]
 #[macro_export]
 macro_rules! __cfg_stat_perf {
     ($blk:expr) => { () };
-    ($if:expr,$else:expr) => { $else }
+    ($if:expr,$else:expr) => { #[allow(unused_braces)] $else }
 }
 
 #[cfg(feature = "stat_footprint")]
 #[macro_export]
 macro_rules! __cfg_stat_footprint {
-    ($blk:block) => { $blk };
-    ($if:block,$else:block) => { $if };
+    ($blk:block) => { #[allow(unused_braces)] $blk };
+    ($if:block,$else:block) => { #[allow(unused_braces)] $if };
 }
 
 #[cfg(not(feature = "stat_footprint"))]
 #[macro_export]
 macro_rules! __cfg_stat_footprint {
     ($blk:block) => { };
-    ($if:block,$else:block) =>  { 
-        #[allow(unused_braces)]
-        $else 
-    }
+    ($if:block,$else:block) =>  { #[allow(unused_braces)] $else }
 }
 
 
@@ -1403,11 +1397,9 @@ macro_rules! pool {
                         if off >= Self::end() {
                             false
                         } else if Self::contains(off + Self::start()) {
-                            $crate::__cfg_check_access_violation!({
-                                _inner.zone.from_off(off).0.is_allocated(off, _len)
-                            }, {
-                                true
-                            })
+                            $crate::__cfg_check_access_violation!(
+                                { _inner.zone.from_off(off).0.is_allocated(off, _len) },
+                                { true })
                         } else {
                             false
                         }
@@ -1760,4 +1752,5 @@ pub fn debug_alloc<A: MemPool>(addr: u64, len: usize, pre: usize, post: usize) {
 pub fn debug_dealloc<A: MemPool>(addr: u64, len: usize, pre: usize, post: usize) {
     crate::log!(A, Red, "DEALLOC", "PRE: {:<6}  ({:>6x}:{:<6x}) = {:<6} POST = {:<6}",
         pre, addr, addr + len as u64 - 1, len, post);
+    assert!(addr != 0x10c000 || len < 1000);
 }
