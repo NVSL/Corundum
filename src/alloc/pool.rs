@@ -411,7 +411,7 @@ where
         let _perf = crate::stat::Measure::<Self>::Deref(std::time::Instant::now());
 
         #[cfg(any(feature = "check_access_violation", debug_assertions))]
-        assert!( Self::allocated(off, 1), "Bad address (0x{:x})", off );
+        assert!( Self::allocated(off, 1), "Access Violation (0x{:x})", off );
 
         utils::read_addr(Self::start() + off)
     }
@@ -428,7 +428,7 @@ where
         let _perf = crate::stat::Measure::<Self>::Deref(std::time::Instant::now());
 
         #[cfg(any(feature = "check_access_violation", debug_assertions))]
-        assert!( Self::allocated(off, 1), "Bad address (0x{:x})", off );
+        assert!( Self::allocated(off, 1), "Access Violation (0x{:x})", off );
 
         utils::read_addr(Self::start() + off)
     }
@@ -443,7 +443,7 @@ where
         #[cfg(feature = "stat_perf")]
         let _perf = crate::stat::Measure::<Self>::Deref(std::time::Instant::now());
 
-        if len == 0 {
+        if off == u64::MAX {
             &[]
         } else {
             let ptr = utils::read_addr(Self::start() + off);
@@ -452,9 +452,9 @@ where
             #[cfg(any(feature = "check_access_violation", debug_assertions))]
             assert!(
                 Self::allocated(off, mem::size_of::<T>() * len),
-                "Bad address (0x{:x}..0x{:x})",
+                "Access Violation (0x{:x}..0x{:x})",
                 off,
-                off + (mem::size_of::<T>() * len) as u64 - 1
+                off.checked_add((mem::size_of::<T>() * len) as u64 - 1).unwrap_or_default()
             );
 
             res
@@ -471,7 +471,7 @@ where
         #[cfg(feature = "stat_perf")]
         let _perf = crate::stat::Measure::<Self>::Deref(std::time::Instant::now());
 
-        if len == 0 {
+        if off == u64::MAX {
             &mut []
         } else {
             let ptr = utils::read_addr(Self::start() + off);
@@ -480,7 +480,7 @@ where
             #[cfg(any(feature = "check_access_violation", debug_assertions))]
             assert!(
                 Self::allocated(off, mem::size_of::<T>() * len),
-                "Bad address (0x{:x}..0x{:x})",
+                "Access Violation (0x{:x}..0x{:x})",
                 off,
                 off + (mem::size_of::<T>() * len) as u64 - 1
             );
@@ -495,7 +495,7 @@ where
         if Self::allocated(off, mem::size_of::<T>()) {
             Ok(Self::get_unchecked(off))
         } else {
-            Err(format!("Bad address (0x{:x})", off))
+            Err(format!("Access Violation (0x{:x})", off))
         }
     }
 
@@ -505,7 +505,7 @@ where
         if Self::allocated(off, mem::size_of::<T>()) {
             Ok(Self::get_mut_unchecked(off))
         } else {
-            Err(format!("Bad address (0x{:x})", off))
+            Err(format!("Access Violation (0x{:x})", off))
         }
     }
 
@@ -997,8 +997,14 @@ where
                 log!(Self, White, "COMMIT", "JRNL: {:?}", journal.0);
 
                 let journal = as_mut(journal.0);
-                journal.commit();
-                journal.clear();
+                journal.commit(
+                    #[cfg(feature = "check_double_free")]
+                    &mut *Self::dealloc_history()
+                );
+                journal.clear(
+                    #[cfg(feature = "check_double_free")]
+                    &mut *Self::dealloc_history()
+                );
             }
         }
     }
@@ -1021,7 +1027,10 @@ where
             if *journal.1 == 0 {
                 log!(Self, White, "COMMIT_NC", "JRNL: {:?}", journal.0);
 
-                as_mut(journal.0).commit();
+                as_mut(journal.0).commit(
+                    #[cfg(feature = "check_double_free")]
+                    &mut *Self::dealloc_history()
+                );
             }
         }
     }
@@ -1043,7 +1052,10 @@ where
             if *journal.1 == -1 {
                 log!(Self, White, "CLEAR", "JRNL: {:?}", journal.0);
 
-                as_mut(journal.0).clear();
+                as_mut(journal.0).clear(
+                    #[cfg(feature = "check_double_free")]
+                    &mut *Self::dealloc_history()
+                );
             }
         }
     }
@@ -1068,8 +1080,14 @@ where
                 log!(Self, White, "ROLLBACK", "JRNL: {:?}", journal.0);
 
                 let journal = as_mut(journal.0);
-                journal.rollback();
-                journal.clear();
+                journal.rollback(
+                    #[cfg(feature = "check_double_free")]
+                    &mut *Self::dealloc_history()
+                );
+                journal.clear(
+                    #[cfg(feature = "check_double_free")]
+                    &mut *Self::dealloc_history()
+                );
                 return true;
             } else {
                 // Propagate the panic to the upper transactions
@@ -1096,9 +1114,16 @@ where
             if *journal.1 == 0 {
                 log!(Self, White, "ROLLBACK_NC", "JRNL: {:?}", journal.0);
 
-                as_mut(journal.0).rollback();
+                as_mut(journal.0).rollback(
+                    #[cfg(feature = "check_double_free")]
+                    &mut *Self::dealloc_history()
+                );
             }
         }
+    }
+
+    unsafe fn dealloc_history() -> *mut std::collections::HashSet<u64> {
+        unimplemented!()
     }
 
     /// Executes commands atomically with respect to system crashes

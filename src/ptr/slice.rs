@@ -136,20 +136,12 @@ impl<T: PSafe, A: MemPool> Slice<T, A> {
 
     #[inline]
     pub(crate) fn to_slice<'a>(off: u64, len: usize) -> &'a [T] {
-        if len == 0 {
-            &mut []
-        } else {
-            unsafe { A::deref_slice_unchecked(off, len) }
-        }
+        unsafe { A::deref_slice_unchecked(off, len) }
     }
 
     #[inline]
     pub(crate) fn as_slice_mut(&mut self) -> &mut [T] {
-        if self.cap == 0 {
-            &mut []
-        } else {
-            unsafe { A::deref_slice_unchecked_mut(self.off, self.cap) }
-        }
+        unsafe { A::deref_slice_unchecked_mut(self.off, self.cap) }
     }
 
     /// Divides one slice into two at an index.

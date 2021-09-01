@@ -7,6 +7,8 @@ use crate::*;
 use std::collections::HashMap;
 use std::fmt::{self, Debug, Formatter};
 
+#[cfg(feature = "check_double_free")]
+use std::collections::HashSet;
 
 #[cfg(all(feature = "use_pspd", feature = "use_vspd"))]
 compile_error!("Cannot use both volatile and persistent scratchpad");
@@ -122,9 +124,15 @@ impl<A: MemPool> Page<A> {
         }
     }
 
-    unsafe fn commit_dealloc(&mut self) {
+    unsafe fn commit_dealloc(&mut self, 
+        #[cfg(feature = "check_double_free")]
+        check_double_free: &mut HashSet<u64>
+    ) {
         for i in 0..self.len {
-            self.logs[i].commit_dealloc();
+            self.logs[i].commit_dealloc(
+                #[cfg(feature = "check_double_free")]
+                check_double_free
+            );
         }
     }
 
@@ -134,15 +142,27 @@ impl<A: MemPool> Page<A> {
         }
     }
 
-    unsafe fn rollback_dealloc(&mut self) {
+    unsafe fn rollback_dealloc(&mut self, 
+        #[cfg(feature = "check_double_free")]
+        check_double_free: &mut HashSet<u64>
+    ) {
         for i in 0..self.len {
-            self.logs[i].rollback_drop_on_abort();
+            self.logs[i].rollback_drop_on_abort(
+                #[cfg(feature = "check_double_free")]
+                check_double_free
+            );
         }
     }
 
-    unsafe fn recover(&mut self, rollback: bool) {
+    unsafe fn recover(&mut self, rollback: bool, 
+        #[cfg(feature = "check_double_free")]
+        check_double_free: &mut HashSet<u64>
+    ) {
         for i in 0..self.len {
-            self.logs[self.len - i - 1].recover(rollback);
+            self.logs[self.len - i - 1].recover(rollback, 
+                #[cfg(feature = "check_double_free")]
+                check_double_free
+            );
         }
     }
 
@@ -152,9 +172,15 @@ impl<A: MemPool> Page<A> {
         self.logs = [Default::default(); PAGE_LOG_SLOTS];
     }
 
-    unsafe fn clear(&mut self) {
+    unsafe fn clear(&mut self, 
+        #[cfg(feature = "check_double_free")]
+        check_double_free: &mut HashSet<u64>
+    ) {
         for i in self.head..self.len {
-            self.logs[i].clear();
+            self.logs[i].clear(
+                #[cfg(feature = "check_double_free")]
+                check_double_free
+            );
             self.head += 1;
         }
 
@@ -395,7 +421,10 @@ impl<A: MemPool> Journal<A> {
     }
 
     /// Commits all logs in the journal
-    pub unsafe fn commit(&mut self) {
+    pub unsafe fn commit(&mut self, 
+        #[cfg(feature = "check_double_free")]
+        check_double_free: &mut HashSet<u64>
+    ) {
         #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
             self.spd.commit();
         }
@@ -411,7 +440,10 @@ impl<A: MemPool> Journal<A> {
         }
         let mut curr = self.pages;
         while let Some(page) = curr.as_option() {
-            page.commit_dealloc();
+            page.commit_dealloc(
+                #[cfg(feature = "check_double_free")]
+                check_double_free
+            );
             curr = page.next;
         }
         sfence();
@@ -419,7 +451,10 @@ impl<A: MemPool> Journal<A> {
     }
 
     /// Reverts all changes
-    pub unsafe fn rollback(&mut self) {
+    pub unsafe fn rollback(&mut self, 
+        #[cfg(feature = "check_double_free")]
+        check_double_free: &mut HashSet<u64>
+    ) {
         #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
             self.spd.rollback();
         }
@@ -435,7 +470,10 @@ impl<A: MemPool> Journal<A> {
         }
         let mut curr = self.pages;
         while let Some(page) = curr.as_option() {
-            page.rollback_dealloc();
+            page.rollback_dealloc(
+                #[cfg(feature = "check_double_free")]
+                check_double_free
+            );
             curr = page.next;
         }
         sfence();
@@ -443,7 +481,10 @@ impl<A: MemPool> Journal<A> {
     }
 
     /// Recovers from a crash or power failure
-    pub unsafe fn recover(&mut self) {
+    pub unsafe fn recover(&mut self, 
+        #[cfg(feature = "check_double_free")]
+        check_double_free: &mut HashSet<u64>
+    ) {
         let mut curr = self.pages;
         while let Some(page) = curr.as_option() {
             page.notify();
@@ -461,7 +502,10 @@ impl<A: MemPool> Journal<A> {
                 }
             }
             while let Some(page) = curr.as_option() {
-                page.recover(rollback);
+                page.recover(rollback, 
+                    #[cfg(feature = "check_double_free")]
+                    check_double_free
+                );
                 curr = page.next;
             }
             self.set(JOURNAL_COMMITTED);
@@ -469,7 +513,10 @@ impl<A: MemPool> Journal<A> {
     }
 
     /// Clears all logs and drops itself from the memory pool
-    pub unsafe fn clear(&mut self) {
+    pub unsafe fn clear(&mut self, 
+        #[cfg(feature = "check_double_free")]
+        check_double_free: &mut HashSet<u64>
+    ) {
         #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
             self.spd.clear();
         }
@@ -477,7 +524,10 @@ impl<A: MemPool> Journal<A> {
         {
             let mut page = self.pages.as_option();
             while let Some(p) = page {
-                p.clear();
+                p.clear(
+                    #[cfg(feature = "check_double_free")]
+                    check_double_free
+                );
                 page = p.next.as_option();
             }
             self.current = self.pages;
@@ -486,7 +536,10 @@ impl<A: MemPool> Journal<A> {
         #[cfg(not(feature = "pin_journals"))] {
             while let Some(page) = self.pages.as_option() {
                 let nxt = page.next;
-                page.clear();
+                page.clear(
+                    #[cfg(feature = "check_double_free")]
+                    check_double_free
+                );
                 let z = A::pre_dealloc(page.as_mut_ptr() as *mut u8, std::mem::size_of::<Page<A>>());
                 A::log64(A::off_unchecked(self.pages.off_ref()), nxt.off(), z);
                 A::perform(z);

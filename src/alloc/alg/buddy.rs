@@ -912,6 +912,20 @@ macro_rules! __cfg_stat_footprint {
     ($if:block,$else:block) =>  { #[allow(unused_braces)] $else }
 }
 
+#[cfg(feature = "check_double_free")]
+#[macro_export]
+macro_rules! __cfg_delete_history {
+    ($blk:block) => { $blk };
+    ($if:block,$else:block) => { $if };
+}
+
+#[cfg(not(feature = "check_double_free"))]
+#[macro_export]
+macro_rules! __cfg_delete_history {
+    ($blk:block) => { };
+    ($if:block,$else:block) =>  { $else }
+}
+
 
 #[macro_export]
 /// This macro creates a new pool module and aliases for persistent types. It
@@ -990,7 +1004,7 @@ macro_rules! pool {
         pub mod $mod {
             use memmap::*;
             use std::collections::hash_map::DefaultHasher;
-            use std::collections::HashMap;
+            use std::collections::{HashMap,HashSet};
             use std::fs::OpenOptions;
             use std::hash::{Hash, Hasher};
             use std::mem;
@@ -1032,6 +1046,7 @@ macro_rules! pool {
             struct VData {
                 filename: String,
                 journals: HashMap<ThreadId, (u64, i32)>,
+                check_double_free: HashSet<u64>,
                 mmap: MmapMut,
             }
     
@@ -1040,6 +1055,7 @@ macro_rules! pool {
                     Self {
                         filename: filename.to_string(),
                         journals: HashMap::new(),
+                        check_double_free: HashSet::new(),
                         mmap,
                     }
                 }
@@ -1470,8 +1486,20 @@ macro_rules! pool {
                         panic!("No memory pool is open or the root object is moved to a transaction. Try cloning the root object instead of moving it to a transaction.");
                     }
                 }
+
+                unsafe fn dealloc_history() -> *mut HashSet<u64> {
+                    let mut vdata = match VDATA.lock() {
+                        Ok(g) => g,
+                        Err(p) => p.into_inner()
+                    };
+                    if let Some(vdata) = &mut *vdata {
+                        return &mut vdata.check_double_free;
+                    } else {
+                        panic!("No memory pool is open or the root object is moved to a transaction. Try cloning the root object instead of moving it to a transaction.");
+                    }
+                }
     
-                #[allow(unused_unsafe)]
+                #[allow(unused_unsafe,unused_braces)]
                 unsafe fn recover() {
                     static_inner!(BUDDY_INNER, inner, {
                         let info_level = std::env::var("RECOVERY_INFO")
@@ -1499,6 +1527,12 @@ macro_rules! pool {
                         $crate::__cfg_check_allocator_cyclic_links!({
                             debug_assert!(Self::verify());
                         });
+                        
+                        #[allow(unused_mut,unused_variables)]
+                        let mut check_double_free = __cfg_delete_history!({
+                            std::collections::HashSet::<u64>::new()
+                        }, { () });
+                        
     
                         while let Ok(logs) = Self::deref_mut::<Journal>(inner.journals) {
     
@@ -1512,13 +1546,21 @@ macro_rules! pool {
                                 debug_assert!(Self::verify());
                             });
     
-                            logs.recover();
+                            __cfg_delete_history!({
+                                logs.recover(&mut check_double_free);
+                            }, {
+                                logs.recover();
+                            });
     
                             $crate::__cfg_check_allocator_cyclic_links!({
                                 debug_assert!(Self::verify());
                             });
     
-                            logs.clear();
+                            __cfg_delete_history!({
+                                logs.clear(&mut check_double_free);
+                            }, {
+                                logs.clear();
+                            });
     
                             $crate::__cfg_check_allocator_cyclic_links!({
                                 debug_assert!(Self::verify());

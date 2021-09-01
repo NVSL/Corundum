@@ -96,7 +96,8 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
             Self::empty()
         } else {
             let buf = unsafe { A::new_slice(x, journal) };
-            Self::from_off_len(unsafe { A::off_unchecked(buf) }, buf.len(), buf.len())
+            let offset = unsafe { A::off_unchecked(buf) };
+            Self::from_off_len(offset, buf.len(), buf.len())
         }
     }
 
@@ -409,20 +410,12 @@ impl<T: PSafe, A: MemPool> Vec<T, A> {
 
     #[inline]
     fn to_slice<'a>(off: u64, len: usize) -> &'a [T] {
-        if len == 0 {
-            &mut []
-        } else {
-            unsafe { A::deref_slice_unchecked(off, len) }
-        }
+        unsafe { A::deref_slice_unchecked(off, len) }
     }
 
     #[inline]
     fn __to_slice_mut<'a>(off: u64, len: usize) -> &'a mut [T] {
-        if len == 0 || off == u64::MAX {
-            &mut []
-        } else {
-            unsafe { A::deref_slice_unchecked_mut(off, len) }
-        }
+        unsafe { A::deref_slice_unchecked_mut(off, len) }
     }
 
     #[inline]

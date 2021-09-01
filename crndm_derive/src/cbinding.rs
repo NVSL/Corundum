@@ -25,7 +25,7 @@ pub struct Contents {
     decl: String,
     alias: String,
     traits: HashMap<PoolName, String>,
-    funcs: Vec<(FuncName, FuncArgs, FuncSig, Template, Template, bool, bool)>,
+    funcs: Vec<(FuncName, FuncArgs, FuncSig, Template, Template, bool, bool, bool, bool)>,
     pools: std::collections::HashSet<String>,
     generics: Vec<String>,
     attrs: Attributes
@@ -57,15 +57,17 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
         let path = v.path.clone();
         if quote!(#path).to_string() == "generics" {
             if !warn {
-                abort!(v.span(), "cannot use `no_generics` and `generics` attributes at a same time");
+                emit_error!(v.span(), "cannot use `no_generics` and `generics` attributes at a same time");
+            } else {
+                has_generics = true;
             }
-            has_generics = true;
         }
         if quote!(#path).to_string() == "no_generics" {
             if has_generics {
-                abort!(v.span(), "cannot use `no_generics` and `generics` attributes at a same time");
+                emit_error!(v.span(), "cannot use `no_generics` and `generics` attributes at a same time");
+            } else {
+                warn = false;
             }
-            warn = false;
         }
     });
 
@@ -211,6 +213,7 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
 
     let mut conc_decl = "";
     let mut lock = "";
+    let mut other_lock = "";
 
     for attr in attrs {
         if attr.to_string() == "concurrent" {
@@ -219,6 +222,8 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
     std::recursive_mutex __mu;";
             lock = "
         carbide::mutex_locker lock(&this->__mu);";
+            other_lock = "
+        carbide::mutex_locker lock(&const_cast<Self&>(other).__mu);";
         } else {
             abort!(
                 attr.span(), "undefined attribute `{}`", attr.to_string();
@@ -259,11 +264,12 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
                 #[no_mangle]
                 pub extern "C" fn #fn_new(#(#new_sizes: usize,)* j: *const c_void) -> *const #name<#m> {
                     use corundum::boxed::Pbox;
+                    use corundum::alloc::MemPoolTraits;
 
                     assert!(!j.is_null(), "transactional operation outside a transaction");
                     unsafe {
                         let j = corundum::utils::read::<corundum::stm::Journal<#m>>(j as *mut u8);
-                        Pbox::leak(Pbox::new(#name::new(#(#new_sizes,)* j), j)) as *mut #name<#m>
+                        #m::new(#name::new(#(#new_sizes,)* j), j)
                     }
                 }
 
@@ -308,7 +314,7 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
 template<>
 struct {small_name}_traits<{pool}> {{
     typedef typename pool_traits<{pool}>::journal journal;
-    static const {name}<{pool}>* create({size_list_arg}const journal *j) {{
+    static const {name}<{pool}>* __create({size_list_arg}const journal *j) {{
         return {fn_new}({size_list}j);
     }}
     static void drop({name}<{pool}> *obj) {{
@@ -350,45 +356,52 @@ using pstring = typename carbide::make_persistent<std::string, _P>::type;
 template < class _P >
 struct {small_name}_traits {{
     typedef typename pool_traits<_P>::journal journal;
-    static const {name}<_P>* create({size_list_arg}const journal *j);
+    static const {name}<_P>* __create({size_list_arg}const journal *j);
     static void drop({name}<_P> *obj);
     static const {name}<_P>* open(const void *p, {size_list_arg}const char *name);
+    // template constructor
     // template methods
 }};
 
 {template}
 class {cname} : public carbide::psafe_type_parameters {{ 
 
-    typedef pool_traits<_P>                       pool_traits;
-    typedef typename pool_traits::handle          handle;
-    typedef typename pool_traits::journal         journal;
-    typedef carbide::pointer_t<{name}<_P>, _P>   pointer;
+    typedef pool_traits<_P>  pool_traits;
+    typedef typename pool_traits::handle  handle;
+    typedef typename pool_traits::journal  journal;
+    typedef carbide::pointer_t<{name}<_P>, _P>  pointer;
+    using Self = {cname};
 
     pointer inner;
     pstring<_P> name;
+    bool moved;
     bool is_root;{conc_decl}
 
     static std::unordered_set<std::string> objs;
 
 private:
-    inline const {name}<_P>* self() const {{
-        return inner.operator->();
+    inline {name}<_P>* self() const {{
+        return const_cast<{name}<_P>*>(inner.operator->());
     }}
 
 public:
-    {cname}(const journal *j, const std::string &name = \"(anonymous)\") {{ 
-        inner = pointer::from({small_name}_traits<_P>::create({sizeof_list}j));
+    explicit {cname}(const journal *j, const std::string &name = \"(anonymous)\") {{ 
+        inner = pointer::from({small_name}_traits<_P>::__create({sizeof_list}j));
         this->name = name.c_str();
         is_root = false;
+        moved = false;
     }} 
 
-    {cname}(const {cname} &obj) {{ 
-        inner = obj.inner;
-        name = obj.name;
+    explicit {cname}(const {cname} &other) {{{other_lock}
+        assert(!moved, \"the object was already moved\");
+        inner = other.inner;
+        name = other.name;
         is_root = false;
+        moved = false;
+        const_cast<Self&>(other).moved = true;
     }} 
 
-    {cname}(const handle *pool, const std::string &name) noexcept(false) {{{lock}
+    explicit {cname}(const handle *pool, const std::string &name) noexcept(false) {{{lock}
         _P::txn([this,&pool,&name](auto j) {{ 
             assert(objs.find(name) == objs.end(), \"'%s' was already open\", name.c_str());
             this->name = name.c_str();
@@ -399,6 +412,9 @@ public:
         }} );
     }}
 
+    // other constructors
+
+    {cname}() = delete;
     {cname} &operator= ({cname} &&) = delete;
     void *operator new (size_t) = delete;
     void *operator new[] (size_t) = delete;
@@ -406,17 +422,19 @@ public:
     void  operator delete   (void*) = delete;
 
     ~{cname}() noexcept(false) {{{lock}
-        if (is_root) {{ 
-            auto n = name.c_str();
-            assert(objs.find(n) != objs.end(), \"'%s' is not open\", n);
-            objs.erase(n);
-        }}  else {{ 
-            {small_name}_traits<_P>::drop(
-                static_cast<{name}<_P>*>(
-                    static_cast<void*>(inner)
-                )
-            );
-        }} 
+        if (!moved) {{
+            if (is_root) {{ 
+                auto n = name.c_str();
+                assert(objs.find(n) != objs.end(), \"'%s' is not open\", n);
+                objs.erase(n);
+            }}  else {{ 
+                {small_name}_traits<_P>::drop(
+                    static_cast<{name}<_P>*>(
+                        static_cast<void*>(inner)
+                    )
+                );
+            }} 
+        }}
     }} 
 
     // other methods
@@ -433,7 +451,8 @@ small_name = small_name,
 name = name_str,
 cname = cname,
 conc_decl = conc_decl,
-lock = lock
+lock = lock,
+other_lock = other_lock
 );
     entry.decl = format!("{template} class p{name}_t;",
             name = small_name,
@@ -647,7 +666,8 @@ pub fn cbindgen(_attr: TokenStream, item: TokenStream) -> TokenStream {
             ).collect();
 
             if ty_gen.len() > 1 || ty_gen.is_empty() {
-                abort!(imp.generics.span(), "exactly one `MemPool` parameter is needed");
+                emit_error!(imp.generics.span(), "exactly one `MemPool` parameter is needed");
+                return item;
             }
             let pool_type = format_ident!("{}", ty_gen.first().unwrap());
 
@@ -669,12 +689,23 @@ pub fn cbindgen(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 });
             }
 
-            for item in imp.items {
-                if let ImplItem::Method(func) = item {
+            for fn_item in imp.items {
+                if let ImplItem::Method(func) = fn_item {
                     if let Visibility::Public(_) = &func.vis {
                         let mut spc = func.clone();
                         let mut inputs = Punctuated::<_, Token![,]>::new();
                         let mut args = vec!();
+                        let mut is_constructor = false;
+                        if let ReturnType::Type(_, ty) = &mut spc.sig.output {
+                            if let Type::Path(s) = &**ty {
+                                if let Some(id) = s.path.get_ident() {
+                                    if id == "Self" {
+                                        is_constructor = true;
+                                        **ty = parse2(quote!(std::ffi::c_void)).unwrap();
+                                    }
+                                }
+                            }
+                        }
                         let gen: Template = spc.sig.generics.params.iter()
                             .map_while(|i| 
                                 if let GenericParam::Type(t) = i {
@@ -684,6 +715,19 @@ pub fn cbindgen(_attr: TokenStream, item: TokenStream) -> TokenStream {
                                 }
                             ).collect();
                         {
+                            if is_constructor {
+                                let mut i = spc.sig.inputs.iter_mut();
+                                if let Some(a) = i.nth(0) {
+                                    if let FnArg::Typed(PatType { pat, ty, .. }) = a {
+                                        if let Pat::Ident(PatIdent { ident, .. }) = &**pat {
+                                            let mut has_generics = false;
+                                            check_generics(&quote!(), &mut *ty, &gen, &pool_type, &entry.generics, 1, false, &mut Some(&mut has_generics), &ident);
+                                            args.push((has_generics, ident.to_string()));
+                                        }
+                                    }
+                                    inputs.push(a.clone());
+                                } 
+                            }
                             let mut i = spc.sig.inputs.iter_mut();
                             if i.next().is_some() {
                                 while let Some(a) = i.next() {
@@ -691,33 +735,79 @@ pub fn cbindgen(_attr: TokenStream, item: TokenStream) -> TokenStream {
                                         if let Pat::Ident(PatIdent { ident, .. }) = &**pat {
                                             let mut has_generics = false;
                                             check_generics(&quote!(), &mut *ty, &gen, &pool_type, &entry.generics, 1, false, &mut Some(&mut has_generics), &ident);
-                                            // eprintln!("fn {}: {}", spc.sig.ident, quote!(#ty));
                                             args.push((has_generics, ident.to_string()));
                                         }
                                     }
+                                    // eprintln!("fn {}: {}", spc.sig.ident, quote!(#a));
                                     inputs.push(a.clone());
                                 } 
                             }
                         }
                         spc.sig.generics = Generics::default();
-                        spc.sig.inputs = inputs;
                         let mut output_has_generics = false;
                         if let ReturnType::Type(_, ty) = &mut spc.sig.output {
                             check_generics(&quote!(), ty, &gen, &pool_type, &entry.generics, 1, false, &mut Some(&mut output_has_generics), &spc.sig.ident);
                         }
+                        let mut last_arg_is_journal = false;
+                        if let Some(last) = spc.sig.inputs.last() {
+                            if let FnArg::Typed(ty) = last {
+                                if let Type::Reference(r) = &*ty.ty {
+                                    if let Type::Path(p) = &*r.elem {
+                                        if let Some(last) = p.path.segments.last() {
+                                            if last.ident == "Journal" {
+                                                let args = &last.arguments;
+                                                let j = quote!(Journal#args);
+                                                last_arg_is_journal = j.to_string() == quote!(Journal<#pool_type>).to_string();
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if is_constructor && !last_arg_is_journal {
+                            emit_error! {
+                                spc.sig.span(), "invalid constructor";
+                                note = "the last argument of a constructor should be a `&Journal<{}>`", pool_type
+                            }
+                            continue;
+                        }
+                        let mut is_const = true;
+                        if let Some(first) = spc.sig.inputs.first() {
+                            if let FnArg::Receiver(rc) = first {
+                                if is_constructor {
+                                    emit_error! {
+                                        spc.sig.span(), "ambiguous constructor";
+                                        note = "a constructor cannot have a receiver (`self` argument)"
+                                    }
+                                    continue;
+                                }
+                                is_const = rc.mutability.is_none();
+                                // if rc.mutability.is_some() {
+                                //     emit_error!(rc.span(), "mutable receiver is not allowed");
+                                //     continue;
+                                // }
+                            }
+                        }
+                        spc.sig.inputs = inputs;
+                        
                         if let Ok(abi) = parse2::<Abi>(quote!(extern "C")) {
                             spc.sig.abi = Some(abi);
                         }
                         spc.block = parse2(quote!{{
                             () // no implementation
                         }}).unwrap();
+
                         entry.funcs.push((
                             spc.sig.ident.to_string(), 
-                            args, quote!(#[no_mangle] #spc).to_string(), 
+                            args,
+                            quote!(#[no_mangle] #spc).to_string(), 
                             gen.clone(), 
                             ty_gen.clone(), 
                             spc.sig.output != ReturnType::Default, 
-                            output_has_generics));
+                            output_has_generics,
+                            is_constructor,
+                            is_const
+                        ));
     
                         for m in &entry.pools {
                             let m = format_ident!("{}", m);
@@ -729,21 +819,62 @@ pub fn cbindgen(_attr: TokenStream, item: TokenStream) -> TokenStream {
                                     tps.push(ty.ident.clone());
                                 }
                             }
-                            ext.sig.ident = format_ident!("__{}_{}_{}", m_str, small_name, ext.sig.ident);
+                            let ident = ext.sig.ident.clone();
+                            let fname = format_ident!("__{}_{}_{}", m_str, small_name, ext.sig.ident);
+                            ext.sig.ident = fname.clone();
                             if let Ok(abi) = parse2::<Abi>(quote!(extern "C")) {
                                 ext.sig.abi = Some(abi);
                             }
                             ext.sig.generics = Generics::default();
                             let mut has_receiver = false;
                             if let Some(first) = ext.sig.inputs.first_mut() {
-                                if let FnArg::Receiver(_) = first { has_receiver = true; }
-                                if has_receiver {
-                                    if let Ok(arg) = parse2::<FnArg>(quote!(__self: &#name<#m>)) {
+                                if let FnArg::Receiver(rc) = first { 
+                                    has_receiver = true; 
+                                    let mt = rc.mutability;
+                                    if let Ok(arg) = parse2::<FnArg>(quote!(__self: &#mt #name<#m>)) {
                                         *first = arg;
                                     }
                                 }
                             }
-                            if has_receiver {
+                            if is_constructor {
+                                let args = ext.sig.inputs.iter().collect::<Vec<&FnArg>>();
+                                let args = args.split_last().unwrap().1;
+                                let mut failed = false;
+                                let underline = format_ident!("_");
+                                let vals: Vec<&Ident> = ext.sig.inputs.iter().map(|i| {
+                                    if let FnArg::Typed(PatType {pat, ..}) = i {
+                                        if let Pat::Ident(id) = &**pat {
+                                            &id.ident
+                                        } else {
+                                            failed = true;
+                                            emit_error!(pat.span(), "invalid input");
+                                            &underline
+                                        }
+                                    } else {
+                                        failed = true;
+                                        emit_error!(i.span(), "invalid input");
+                                        &underline
+                                    }
+                                }).collect();
+                                if failed {
+                                    break;
+                                }
+                                let vals = vals.split_last().unwrap().1;
+                                expanded.push(quote!{
+                                    #[no_mangle]
+                                    #[deny(improper_ctypes_definitions)] 
+                                    pub extern "C" fn #fname(#(#args,)* j: *const std::ffi::c_void) -> *mut #name<#m> {
+                                        use corundum::boxed::Pbox;
+                                        use corundum::alloc::MemPoolTraits;
+
+                                        assert!(!j.is_null(), "transactional operation outside a transaction");
+                                        unsafe {
+                                            let j = corundum::utils::read::<corundum::stm::Journal<#m>>(j as *mut u8);
+                                            #m::new(#name::#ident(#(#vals,)* j), j)
+                                        }
+                                    }
+                                });
+                            } else if has_receiver {
                                 let fname = func.sig.ident.clone();
                                 let mut args = vec![];
                                 for arg in &mut ext.sig.inputs {
@@ -769,7 +900,8 @@ pub fn cbindgen(_attr: TokenStream, item: TokenStream) -> TokenStream {
                                     #ext
                                 });
                             } else {
-                                abort!(func.span(), "external functions should have a receiver (`self`) argument");
+                                emit_error!(func.span(), "external functions should have a receiver (i.e., `self` argument)");
+                                break;
                             }
                         }
                     }
@@ -924,7 +1056,7 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
         carbide::mutex_locker lock(&this->__mu);" } else { "" };
         let mut cbindfile = "".to_owned();
         // let mut funcs = vec!();
-        for (_, _, f, _, _, _, _) in &mut cnt.funcs {
+        for (_, _, f, _, _, _, _, _, _) in &mut cnt.funcs {
             let re = Regex::new(&format!(r"\#\[no_mangle\].*")).unwrap();
             if re.find(f).is_some() {
                 let re = Regex::new(&format!(r"\bGen\b\s*<\s*(\w+)\s*>")).unwrap();
@@ -957,7 +1089,7 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
             bindings.write_to_file("/tmp/___corundum_tmp_file.h");
             let s = read_to_string("/tmp/___corundum_tmp_file.h")?;
 
-            for (name, args, sig, tmp, ty_pool, has_return, _) in &mut cnt.funcs {
+            for (name, fn_args, sig, tmp, ty_pool, has_return, _, is_cons, is_const) in &mut cnt.funcs {
                 let tmpl = if tmp.is_empty() { "".to_owned() } else {
                     format!("template < class {} > ", tmp.join(", class "))
                 };
@@ -965,38 +1097,70 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
                 let gen = if tmp.is_empty() { "".to_owned() } else { 
                     format!("<{}>", tmp.join(","))
                 }.to_owned();
-                let args = args.iter().map(|(_, n)| n.to_owned()).collect::<Vec<String>>().join(", ");
+                let args = fn_args.iter().map(|(_, n)| n.to_owned()).collect::<Vec<String>>().join(", ");
                 let re = Regex::new(&format!(r"(.+\W+{}\(.*\));", name)).unwrap();
+                let sig_re = Regex::new(&format!(r".+\W+{}(\(.*\));", name)).unwrap();
                 let re_pool = if ty_pool.is_empty() { None } else { 
                     Some(Regex::new(&format!(r"\b{}\b", ty_pool[0])).unwrap()) 
                 };
                 if let Some(cap) = re.captures(&s) {
                     *sig = cap.get(1).unwrap().as_str().to_owned();
-                    if let Some(re) = re_pool {
+                    if let Some(re) = &re_pool {
                         *sig = re.replace_all(sig, "_P").to_string();
                     }
-                    cnt.contents = cnt.contents.replace("    // template methods",
-                        &format!("    // template methods\n    {}static {};",
-                        tmpl,
-                        sig.replacen(
-                            &format!("{}(", name), 
-                            &format!("{}(const {}<_P> *__self, ", name, ty), 1)
-                            .replace(", )", ")")));
-                    let ret_tok = if *has_return { "return " } else { "" };
+
+                    if *is_cons {
+                        let name_str = ty.to_string();
+                        let small_name = name_str.to_lowercase();
+                        let cname = format!("p{}_t", small_name);
+                        let mut sig = sig_re.captures(&s).unwrap().get(1).unwrap().as_str().to_owned();
+                        if let Some(re) = &re_pool {
+                            sig = re.replace_all(&sig, "_P").to_string();
+                        }
+                        cnt.contents = cnt.contents.replace("    // other constructors",
+                            &format!("    // other constructors\n    {cname}{sig}{{{lock}
+        {ty}_traits<_P>::{tmp}{fn}{gen}(&inner{comma}{args});
+    }}", 
+                            sig=sig,
+                            ty = ty.to_lowercase(),
+                            cname=cname,
+                            tmp = tmpl_kw,
+                            gen = gen,
+                            fn = name,
+                            comma = if args.is_empty() { "" } else { ", " },
+                            args = args,
+                            lock = lock,
+                        ));
+                    } else {
+                        cnt.contents = cnt.contents.replace("    // template methods",
+                            &format!("    // template methods\n    {}static {};",
+                            tmpl,
+                            sig.replacen(
+                                &format!("{}(", name), 
+                                &format!("{name}({const}{ty}<_P> *__self, ", 
+                                name = name, 
+                                ty = ty, 
+                                const = if *is_const { "const " } else { "" }), 1)
+                                .replace(", )", ")")));
+                        let ret_tok = if *has_return { "return " } else { "" };
                         cnt.contents = cnt.contents.replace("    // other methods",
-                            &format!("    // other methods\n    {sig} const {{{lock}
+                            &format!("    // other methods\n    {sig}{const} {{{lock}
         {ret}{ty}_traits<_P>::{tmp}{fn}{gen}(self(){comma}{args});
     }}\n",
-    ret = ret_tok,
-    ty = ty.to_lowercase(),
-    sig = sig,
-    tmp = tmpl_kw,
-    gen = gen,
-    fn = name,
-    comma = if args.is_empty() { "" } else { ", " },
-    args = args,
-    lock = lock
-));
+                            ret = ret_tok,
+                            ty = ty.to_lowercase(),
+                            sig = sig,
+                            tmp = tmpl_kw,
+                            gen = gen,
+                            fn = name,
+                            comma = if args.is_empty() { "" } else { ", " },
+                            const = if *is_const { " const" } else { "" },
+                            // self = if *is_const { "self()".to_owned() } else { format!("const_cast<{}<_P>*>(self())", ty) },
+                            args = args,
+                            lock = lock,
+                        ));
+                    }
+
                 } 
                 else {
                     abort_call_site!(
@@ -1015,9 +1179,8 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
             
         }
 
-        for (p, t) in &mut cnt.traits {
-            for (f, args, sig, tmp, _, ret, ret_gen) in &mut cnt.funcs {
-                
+        for (p, contents) in &mut cnt.traits {
+            for (f, args, sig, tmp, _, ret, ret_gen, is_cons, is_const) in &mut cnt.funcs {
                 let (cret, cargs) = parse_c_fn(sig, f);
                 let re = Regex::new(r"\bGen\b").unwrap();
                 let cast = if *ret_gen && re.find(&cret).is_none() {
@@ -1049,25 +1212,46 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
                 let old_sig = sig.clone();
                 let re = Regex::new(r"\b_P\b").unwrap();
                 *sig = re.replace_all(sig, p as &str).to_string();
-                *t = t.replace("    // specialized methods",
-                    &format!("    // specialized methods\n    {}static {} {{\n        {}\n    }}",
-                        tmp,
-                        sig.replacen(
-                            &format!("{}(", f), 
-                            &format!("{}(const {}<{}> *__self, ", f, ty, p), 1)
-                            .replace(", )", ")"),
-                        &format!("{ret}{cast}__{pool}_{type}_{fn}(__self{comma}{args});",
-                            ret = if *ret { "return " } else { "" },
-                            pool = p,
-                            type = ty.to_lowercase(),
-                            fn = f,
-                            cast = cast,
-                            comma = if args.is_empty() { "" } else { ", " },
-                            args = args)
-                        ));
+                if *is_cons {
+                    *contents = contents.replace("    // specialized methods",
+                        &format!("    // specialized methods\n    {}static {} {{\n        {}\n    }}",
+                            tmp,
+                            sig.replacen(
+                                &format!("{}(", f), 
+                                &format!("{fn}(carbide::pointer_t<{ty}<{pool}>, {pool}>* __self_ptr, ", fn=f, ty=ty, pool=p), 1)
+                                .replace(", )", ")"),
+                            &format!("*__self_ptr = carbide::pointer_t<{ty}<{pool}>, {pool}>::from_unsafe((void*)__{pool}_{type}_{fn}({args}));",
+                                pool = p,
+                                ty = ty,
+                                type = ty.to_lowercase(),
+                                fn = f,
+                                args = args)
+                            ));
+                } else {
+                    *contents = contents.replace("    // specialized methods",
+                        &format!("    // specialized methods\n    {}static {} {{\n        {}\n    }}",
+                            tmp,
+                            sig.replacen(
+                                &format!("{}(", f), 
+                                &format!("{f}({const}{ty}<{p}> *__self, ", 
+                                f=f, 
+                                ty=ty, 
+                                p=p,
+                                const = if *is_const { "const " } else { "" }), 1)
+                                .replace(", )", ")"),
+                            &format!("{ret}{cast}__{pool}_{type}_{fn}(__self{comma}{args});",
+                                ret = if *ret { "return " } else { "" },
+                                pool = p,
+                                type = ty.to_lowercase(),
+                                fn = f,
+                                cast = cast,
+                                comma = if args.is_empty() { "" } else { ", " },
+                                args = args)
+                            ));
+                }
                 *sig = old_sig;
             }
-            cnt.contents += t;
+            cnt.contents += contents;
         }
     }
 
@@ -1205,9 +1389,6 @@ pub fn carbide(input: TokenStream) -> TokenStream {
     } };
     let mut expanded = vec![];
     for m in &mods {
-
-        // // Generate an expression to sum up the heap size of each field.
-        // let sum = root_all_fields(&name, &input.data);
         let flags = &m.1;
         let m = &m.0;
         let name_str: String = m.to_string();
@@ -1218,6 +1399,7 @@ pub fn carbide(input: TokenStream) -> TokenStream {
         let fn_dealloc = format_ident!("{}_dealloc", name_str);
         let fn_allocated = format_ident!("{}_allocated", name_str);
         let fn_valid = format_ident!("{}_valid", name_str);
+        let fn_txn = format_ident!("{}_txn", name_str);
         let fn_txn_begin = format_ident!("{}_txn_begin", name_str);
         let fn_txn_commit = format_ident!("{}_txn_commit", name_str);
         let fn_txn_rollback = format_ident!("{}_txn_rollback", name_str);
@@ -1230,7 +1412,6 @@ pub fn carbide(input: TokenStream) -> TokenStream {
         let named_logged_pointer = format_ident!("{}_named_logged_pointer", name_str);
         let mod_name = format_ident!("__{}", name_str);
         let root_name = format_ident!("__{}_root_t", name_str);
-        // let pool_mod = format_ident!("__{}_module", name_str);
         
         let entry = all_pools.entry(name_str.clone()).or_insert(Contents::default());
 
@@ -1362,6 +1543,13 @@ pub fn carbide(input: TokenStream) -> TokenStream {
                             eprintln!("note: transaction rolled back successfully");
                         }
                     }
+                }
+
+                #[no_mangle]
+                pub extern "C" fn #fn_txn(f: extern fn(*const std::ffi::c_void)->std::ffi::c_void) {
+                    Allocator::transaction(|j| {
+                        f(j as *const _ as *const std::ffi::c_void);
+                    }).unwrap();
                 }
 
                 #[no_mangle]
@@ -1515,23 +1703,27 @@ public:
     template < class T > using root = proot_t<T, {pool}>;
     template < class T > using make_persistent = carbide::make_persistent<T, {pool}>;
     template < class T > using cell = carbide::cell<T, {pool}>;
+    
     {pool}(const char* path, u_int32_t flags, bool check_open = true) {{
         if (check_open) assert(pool_traits<{pool}>::base==0, \"{pool} was already open\");
         inner = {pool_open}(path, flags);
         pool_traits<{pool}>::base = {pool_base}();
     }}
+
     ~{pool}() {{
         {pool_close}();
         pool_traits<{pool}>::base = 0;
     }}
+
     const {root_name} *handle() const {{
         return inner;
     }}
+
     static bool txn(std::function<void(const journal*)> f) {{
         auto j = {pool_txn_begin}();
         try {{
             f((const journal*)j);
-        {pool_txn_commit}();
+            {pool_txn_commit}();
             return true;
         }} catch (const std::exception& ex) {{
             std::cerr << \"runtime error: \" << ex.what() << std::endl;

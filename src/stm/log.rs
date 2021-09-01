@@ -8,6 +8,9 @@ use std::clone::Clone;
 use std::fmt::{self, Debug};
 use std::ptr;
 
+#[cfg(feature = "check_double_free")]
+use std::collections::HashSet;
+
 type Offset = u64;
 
 /// Log Types
@@ -553,13 +556,22 @@ impl<A: MemPool> Log<A> {
         }
     }
 
-    pub(crate) unsafe fn rollback_drop_on_abort(&mut self) {
+    pub(crate) unsafe fn rollback_drop_on_abort(&mut self, 
+        #[cfg(feature = "check_double_free")]
+        check_double_free: &mut HashSet<u64>
+    ) {
         #[cfg(feature = "stat_perf")]
         let _perf = crate::stat::Measure::<A>::RollbackLog(std::time::Instant::now());
 
         match &mut self.0 {
             DropOnAbort(src, len) => {
                 if *src != u64::MAX {
+                    #[cfg(feature = "check_double_free")] {
+                        if check_double_free.contains(&*src) {
+                            return;
+                        }
+                        check_double_free.insert(*src);
+                    }
                     let z = A::pre_dealloc(A::get_mut_unchecked(*src), *len);
                     A::log64(A::off_unchecked(src), u64::MAX, z);
                     A::perform(z);
@@ -573,7 +585,10 @@ impl<A: MemPool> Log<A> {
     }
 
     /// Recovers from the crash or power failure
-    pub(crate) unsafe fn recover(&mut self, rollback: bool) {
+    pub(crate) unsafe fn recover(&mut self, rollback: bool, 
+        #[cfg(feature = "check_double_free")]
+        check_double_free: &mut HashSet<u64>
+    ) {
         match &mut self.0 {
             DataLog(src, log, layout) => {
                 if rollback {
@@ -590,7 +605,13 @@ impl<A: MemPool> Log<A> {
             DropOnFailure(src, len) => {
                 if rollback {
                     if *src != u64::MAX {
-                        debug_assert!(A::allocated(*src, 1), "Access Violation");
+                        #[cfg(feature = "check_double_free")] {
+                            if check_double_free.contains(&*src) {
+                                return;
+                            }
+                            check_double_free.insert(*src);
+                        }
+                        debug_assert!(A::allocated(*src, 1), "Access Violation (0x{:x})", *src);
                         let z = A::pre_dealloc(A::get_mut_unchecked(*src), *len);
                         A::log64(A::off_unchecked(src), u64::MAX, z);
                         A::perform(z);
@@ -647,7 +668,10 @@ impl<A: MemPool> Log<A> {
     }
 
     /// Commits changes
-    pub(crate) fn commit_dealloc(&mut self) {
+    pub(crate) fn commit_dealloc(&mut self, 
+        #[cfg(feature = "check_double_free")]
+        check_double_free: &mut HashSet<u64>
+    ) {
         #[cfg(feature = "stat_perf")]
         let _perf = crate::stat::Measure::<A>::CommitLog(std::time::Instant::now());
 
@@ -655,6 +679,12 @@ impl<A: MemPool> Log<A> {
             DropOnCommit(src, len) => {
                 if *src != u64::MAX {
                     unsafe {
+                        #[cfg(feature = "check_double_free")] {
+                            if check_double_free.contains(&*src) {
+                                return;
+                            }
+                            check_double_free.insert(*src);
+                        }
                         let z = A::pre_dealloc(A::get_mut_unchecked(*src), *len);
                         A::log64(A::off_unchecked(src), u64::MAX, z);
                         A::perform(z);
@@ -675,13 +705,22 @@ impl<A: MemPool> Log<A> {
     /// * If it is a [`UnlockOnCommit`](./enum.LogEnum.html#variant.UnlockOnCommit),
     /// it unlocks the mutex.
     /// 
-    pub unsafe fn clear(&mut self) {
+    pub unsafe fn clear(&mut self, 
+        #[cfg(feature = "check_double_free")]
+        check_double_free: &mut HashSet<u64>
+    ) {
         #[cfg(feature = "stat_perf")]
         let _perf = crate::stat::Measure::<A>::ClearLog(std::time::Instant::now());
 
         match &mut self.0 {
             DataLog(_src, log, len) => {
                 if *log != u64::MAX {
+                    #[cfg(feature = "check_double_free")] {
+                        if check_double_free.contains(&*log) {
+                            return;
+                        }
+                        check_double_free.insert(*log);
+                    }
                     log!(A, Magenta, "DEL LOG", "FOR:         ({:>6x}:{:<6x}) = {:<6} DataLog({})",
                         *_src, *_src as usize + (*len - 1), *len, log
                     );

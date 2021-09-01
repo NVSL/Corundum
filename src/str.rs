@@ -232,7 +232,7 @@ impl<A: MemPool> String<A> {
         (Self { vec }, z)
     }
 
-    pub(crate) unsafe fn off(&self) -> u64 {
+    pub fn off(&self) -> u64 {
         self.vec.off()
     }
 
