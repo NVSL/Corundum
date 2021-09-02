@@ -393,7 +393,7 @@ public:
     }} 
 
     explicit {cname}(const {cname} &other) {{{other_lock}
-        assert(!moved, \"the object was already moved\");
+        assert(!other.moved, \"the object was already moved\");
         inner = other.inner;
         name = other.name;
         is_root = false;
