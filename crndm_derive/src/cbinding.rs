@@ -1118,7 +1118,7 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
                             sig = re.replace_all(&sig, "_P").to_string();
                         }
                         cnt.contents = cnt.contents.replace("    // other constructors",
-                            &format!("    // other constructors\n    {cname}{sig}{{{lock}
+                            &format!("    // other constructors\n    {cname}{sig}: moved(false), is_root(false) {{{lock}
         {ty}_traits<_P>::{tmp}{fn}{gen}(&inner{comma}{args});
     }}", 
                             sig=sig,
