@@ -138,6 +138,9 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
     if !input.generics.params.is_empty() {
         for t in &input.generics.params {
             if let GenericParam::Type(t) = t {
+                if t.ident == "_P" {
+                    emit_error!(t.span(), "`_P` is reserved");
+                }
                 let mut is_pool = false;
                 for b in &t.bounds {
                     if let TypeParamBound::Trait(b) = b {
@@ -705,6 +708,9 @@ pub fn cbindgen(_attr: TokenStream, item: TokenStream) -> TokenStream {
             let mut pool_type = None;
             imp.generics.params.iter().for_each(|t| 
                 if let GenericParam::Type(t) = t {
+                    if t.ident == "_P" {
+                        emit_error!(t.span(), "`_P` is reserved");
+                    }
                     generics.push(t.ident.clone());
                     if t.bounds.iter().any(|b| if let TypeParamBound::Trait(t) = b {
                             if let Some(ident) = t.path.get_ident() {
@@ -745,9 +751,20 @@ pub fn cbindgen(_attr: TokenStream, item: TokenStream) -> TokenStream {
             }
             let pool_type = pool_type.expect(&format!("{}", line!()));
 
-            let name = &tp.path.segments.last().expect(&format!("{}", line!()));
+            let slf = &tp.path.segments.last().expect(&format!("{}", line!()));
+            let name = &slf.ident;
+            let new_name = format_ident!("__{}", name);
+            let small_name = name.to_string().to_lowercase();
+    
+            let mut types = unsafe { match TYPES.lock() {
+                Ok(g) => g,
+                Err(p) => p.into_inner()
+            }};
+    
+            let entry = types.entry(name.to_string()).or_insert(Contents::default());
+
             let mut ty_spec: Vec<&Ident> = vec![];
-            if let PathArguments::AngleBracketed(args) = &name.arguments {
+            if let PathArguments::AngleBracketed(args) = &slf.arguments {
                 args.args.iter().for_each(|v| {
                     if let GenericArgument::Type(t) = v {
                         if let Type::Path(p) = t {
@@ -768,17 +785,6 @@ pub fn cbindgen(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     }
                 });
             }
-
-            let name = &name.ident;
-            let new_name = format_ident!("__{}", name);
-            let small_name = name.to_string().to_lowercase();
-    
-            let mut types = unsafe { match TYPES.lock() {
-                Ok(g) => g,
-                Err(p) => p.into_inner()
-            }};
-    
-            let entry = types.entry(name.to_string()).or_insert(Contents::default());
             
             for pool in &entry.pools {
                 let pool = format_ident!("{}", pool);
@@ -1215,6 +1221,7 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
                         *sig = re.replace_all(sig, "_P").to_string();
                     }
 
+                    let mut append;
                     if *is_cons {
                         let name_str = ty.to_string();
                         let small_name = name_str.to_lowercase();
@@ -1223,8 +1230,7 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
                         if let Some(re) = &re_pool {
                             sig = re.replace_all(&sig, "_P").to_string();
                         }
-                        cnt.contents = cnt.contents.replace("    // other constructors",
-                            &format!("    // other constructors\n    {cname}{sig}: moved(false), is_root(false) {{{lock}
+                        append = format!("    // other constructors\n    {cname}{sig}: moved(false), is_root(false) {{{lock}
         {ty}_traits<_P>::{tmp}{fn}{gen}(&inner{comma}{args});
     }}", 
                             sig=sig,
@@ -1236,7 +1242,7 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
                             comma = if args.is_empty() { "" } else { ", " },
                             args = args,
                             lock = lock,
-                        ));
+                        );
                     } else {
                         cnt.contents = cnt.contents.replace("    // template methods",
                             &format!("    // template methods\n    {}static {};",
@@ -1249,8 +1255,7 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
                                 const = if *is_const { "const " } else { "" }), 1)
                                 .replace(", )", ")")));
                         let ret_tok = if *has_return { "return " } else { "" };
-                        cnt.contents = cnt.contents.replace("    // other methods",
-                            &format!("    // other methods\n    {sig}{const} {{{lock}
+                        append = format!("    // other methods\n    {sig}{const} {{{lock}
         {ret}{ty}_traits<_P>::{tmp}{fn}{gen}(self(){comma}{args});
     }}\n",
                             ret = ret_tok,
@@ -1264,9 +1269,13 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
                             // self = if *is_const { "self()".to_owned() } else { format!("const_cast<{}<_P>*>(self())", ty) },
                             args = args,
                             lock = lock,
-                        ));
+                        );
                     }
-
+                    for i in 0 .. tmp.len() {
+                        let re = Regex::new(&format!(r"\b{}\b", tmp[i])).expect(&format!("{}", line!()));
+                        append = re.replace_all(&append, &cnt.generics[i]).to_string();
+                    }
+                    cnt.contents = cnt.contents.replace("    // other methods", &append);
                 } 
                 else {
                     abort_call_site!(
