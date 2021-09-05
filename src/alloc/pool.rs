@@ -1,3 +1,4 @@
+use std::marker::PhantomData;
 use std::panic::RefUnwindSafe;
 use crate::cell::{RootCell, RootObj};
 use crate::result::Result;
@@ -217,7 +218,7 @@ where
     ///   * O_CFNE: create and format a memory pool file only if not exists
     /// 
     /// See [`open_flags`](./open_flags/index.html) for more options.
-    fn open_no_root(_path: &str, _flags: u32) -> Result<Self> {
+    fn open_no_root(_path: &str, _flags: u32) -> Result<PoolGuard<Self>> {
         unimplemented!()
     }
 
@@ -451,10 +452,10 @@ where
 
             #[cfg(any(feature = "check_access_violation", debug_assertions))]
             assert!(
-                Self::allocated(off, mem::size_of::<T>() * len),
+                Self::allocated(off, mem::size_of::<T>().max(1) * len),
                 "Access Violation (0x{:x}..0x{:x})",
                 off,
-                off.checked_add((mem::size_of::<T>() * len) as u64 - 1).unwrap_or_default()
+                off.checked_add((mem::size_of::<T>().max(1) * len) as u64 - 1).unwrap_or_default()
             );
 
             res
@@ -479,10 +480,10 @@ where
 
             #[cfg(any(feature = "check_access_violation", debug_assertions))]
             assert!(
-                Self::allocated(off, mem::size_of::<T>() * len),
+                Self::allocated(off, mem::size_of::<T>().max(1) * len),
                 "Access Violation (0x{:x}..0x{:x})",
                 off,
-                off + (mem::size_of::<T>() * len) as u64 - 1
+                off + (mem::size_of::<T>().max(1) * len) as u64 - 1
             );
 
             res
@@ -876,7 +877,7 @@ where
         ptr::copy_nonoverlapping(
             x as *const _ as *const u8,
             ptr,
-            x.len() * mem::size_of::<T>(),
+            x.len() * mem::size_of::<T>().max(1),
         );
         (
             std::slice::from_raw_parts_mut(ptr.cast(), x.len()),
@@ -948,7 +949,7 @@ where
             let off = Self::off_unchecked(x);
             Log::drop_on_commit(
                 off,
-                x.len() * mem::size_of::<T>(),
+                x.len() * mem::size_of::<T>().max(1),
                 &*Journal::<Self>::current(true).unwrap().0,
             );
         }
@@ -1267,12 +1268,33 @@ where
     }
 }
 
+pub struct PoolGuard<P: MemPoolTraits>(pub PhantomData<P>);
+
+impl<P: MemPoolTraits> PoolGuard<P> {
+    pub fn new() -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<P: MemPoolTraits> Drop for PoolGuard<P> {
+    fn drop(&mut self) {
+        unsafe {
+            P::close().unwrap();
+        }
+
+        crate::__cfg_stat_perf!({
+            eprintln!("{}", crate::stat::report());
+        });
+    }
+}
+
 pub unsafe trait MemPool: 
     'static + 
     MemPoolTraits + 
     Sized + 
     Default + 
-    Clone + 
+    Clone +
+    Copy +
     PSafe + 
     TxInSafe + 
     LooseTxInUnsafe + 

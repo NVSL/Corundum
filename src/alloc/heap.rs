@@ -14,7 +14,7 @@ use crate::cell::LazyCell;
 pub use crate::alloc::*;
 
 /// A pass-through allocator for volatile memory
-#[derive(Clone,Default)]
+#[derive(Clone,Copy,Default)]
 pub struct Heap {}
 
 static mut JOURNALS: Option<HashMap<ThreadId, (u64, i32)>> = None;
@@ -91,8 +91,8 @@ unsafe impl MemPoolTraits for Heap {
         logs.clear()
     }
 
-    fn open_no_root(_path: &str, _flags: u32) -> Result<Self> {
-        Ok(Self {})
+    fn open_no_root(_path: &str, _flags: u32) -> Result<PoolGuard<Self>> {
+        Ok(PoolGuard::<Self>::new())
     }
 
     #[track_caller]

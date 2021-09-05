@@ -1,6 +1,6 @@
 use std::panic::RefUnwindSafe;
 use std::panic::UnwindSafe;
-use crate::alloc::MemPool;
+use crate::alloc::{MemPool,PoolGuard};
 use crate::*;
 use crate::stm::Journal;
 use std::cmp::*;
@@ -19,7 +19,7 @@ use std::sync::Arc;
 /// provided via interior mutability.
 /// 
 /// [`open()`]: ../alloc/trait.MemPool.html#method.open
-pub struct RootCell<'a, T: 'a, A: MemPool>(&'a T, Arc<A>);
+pub struct RootCell<'a, T: 'a, A: MemPool>(&'a T, Arc<PoolGuard<A>>);
 
 impl<T: ?Sized, A: MemPool> !Sync for RootCell<'_, T, A> {}
 unsafe impl<T: PSafe + Send, A: MemPool> Send for RootCell<'_, T, A> {}
@@ -30,7 +30,7 @@ impl<T, A: MemPool> !TxOutSafe for RootCell<'_, T, A> {}
 impl<T, A: MemPool> !PSafe for RootCell<'_, T, A> {}
 
 impl<'a, T: 'a + PSafe, A: MemPool> RootCell<'a, T, A> {
-    pub fn new(value: &'a T, pool: Arc<A>) -> Self {
+    pub fn new(value: &'a T, pool: Arc<PoolGuard<A>>) -> Self {
         Self(value, pool)
     }
 

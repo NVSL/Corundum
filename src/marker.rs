@@ -263,3 +263,18 @@ unsafe impl<T: ?Sized> VSafe for &mut T {}
     label = "`{Self}` cannot be sent to a another thread safely"
 )]
 pub unsafe auto trait PSend {}
+
+
+
+#[derive(Default)]
+#[allow(non_camel_case_types)]
+pub struct c_void {}
+
+impl Copy for c_void {}
+impl Clone for c_void { 
+    fn clone(&self) -> Self { Self { } }
+}
+
+impl<P: MemPool> crate::clone::PClone<P> for c_void {
+    fn pclone(&self, _: &Journal<P>) -> Self { Self { } }
+}

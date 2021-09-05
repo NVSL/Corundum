@@ -1113,7 +1113,7 @@ macro_rules! pool {
             /// use [`pool!()`] macro. 
             /// 
             /// [`pool!()`]: ../macro.pool.html
-            #[derive(Clone,Default)]
+            #[derive(Clone,Copy,Default)]
             pub struct $name {}
 
             unsafe impl MemPool for $name {}
@@ -1148,7 +1148,7 @@ macro_rules! pool {
                 /// [`Allocator`](#) if success. The pool remains open as long
                 /// as the instance lives.
                 #[track_caller]
-                pub fn open_impl(filename: &str, no_check: bool) -> Result<Self> {
+                pub fn open_impl(filename: &str, no_check: bool) -> Result<PoolGuard<Self>> {
                     let metadata = std::fs::metadata(filename);
                     if let Err(e) = &metadata {
                         Err(format!("{}", e))
@@ -1204,7 +1204,7 @@ macro_rules! pool {
                                 *vdata = Some(VData::new(mmap, filename));
                             }
     
-                            Ok(Self {})
+                            Ok(PoolGuard::<Self>::new())
                         }
                     }
                 }
@@ -1624,7 +1624,7 @@ macro_rules! pool {
     
                 #[allow(unused_unsafe)]
                 #[track_caller]
-                fn open_no_root(path: &str, flags: u32) -> Result<Self> {
+                fn open_no_root(path: &str, flags: u32) -> Result<PoolGuard<Self>> {
                     unsafe {
                         while OPEN.compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed).is_err() {}
                         if !Self::running_transaction() {
@@ -1687,18 +1687,6 @@ macro_rules! pool {
                             inner.zone[i].print();
                         }
                     })
-                }
-            }
-    
-            impl Drop for $name {
-                fn drop(&mut self) {
-                    unsafe {
-                        Self::close().unwrap();
-                    }
-    
-                    $crate::__cfg_stat_perf!({
-                        eprintln!("{}", $crate::stat::report());
-                    });
                 }
             }
     

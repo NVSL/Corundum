@@ -25,7 +25,7 @@ pub struct Contents {
     decl: String,
     alias: String,
     traits: HashMap<PoolName, String>,
-    funcs: Vec<(FuncName, FuncArgs, FuncSig, Template, Template, bool, bool, bool, bool)>,
+    funcs: Vec<(FuncName, FuncArgs, FuncSig, Template, TypeName, bool, bool, bool, bool)>,
     pools: std::collections::HashSet<String>,
     generics: Vec<String>,
     attrs: Attributes
@@ -44,33 +44,95 @@ pub static mut POOLS: SyncLazy<Mutex<HashMap<TypeName, Contents>>> = SyncLazy::n
     Mutex::new(HashMap::new())
 });
 
+fn check_type(ty: &Type, pool_type: &Ident, gen_idents: &Vec<Ident>, warn: bool) {
+    match ty {
+        Type::Slice(s) => check_type(s.elem.as_ref(), pool_type, gen_idents, warn),
+        Type::Array(a) => check_type(a.elem.as_ref(), pool_type, gen_idents, warn),
+        Type::Tuple(t) => {
+            for e in &t.elems {
+                check_type(&e, pool_type, gen_idents, warn);
+            }
+        }
+        Type::Path(p) => {
+            if let Some(id) = p.path.get_ident() {
+                if warn {
+                    if gen_idents.contains(id) && id != pool_type {
+                        emit_warning! {
+                            id.span(), "direct use of template parameter is not safe";
+                            help = "consider using corundum::gen::ByteArray<{}, {}>", id, pool_type;
+                            help = "use `#[attrs(allow_generics)]` to disable this warning"
+                        }
+                    }
+                }
+            } else if let Some(last) = p.path.segments.last() {
+                if last.ident == "ByteArray" {
+                    if let PathArguments::AngleBracketed(args) = &last.arguments {
+                        for arg in &args.args {
+                            if let GenericArgument::Type(t) = arg {
+                                if let Type::Path(p) = t {
+                                    if let Some(id) = p.path.get_ident() {
+                                        if !gen_idents.contains(id) {
+                                            emit_error!(arg.span(), "not a generic parameter")
+                                        } else {
+                                            return;
+                                        }
+                                    } else {
+                                        emit_error!(arg.span(), "not a generic parameter")
+                                    }
+                                } else {
+                                    emit_error!(arg.span(), "not a generic parameter")
+                                }
+                            } else {
+                                emit_error!(arg.span(), "not a generic parameter")
+                            }
+                        }
+                    }
+                }
+            } 
+            for segment in &p.path.segments {
+                if let PathArguments::AngleBracketed(args) = &segment.arguments {
+                    for arg in &args.args {
+                        if let GenericArgument::Type(t) = arg {
+                            check_type(t, pool_type, gen_idents, warn);
+                        }
+                    }
+                }
+            }
+        }
+        Type::Paren(p) => check_type(p.elem.as_ref(), pool_type, gen_idents, warn),
+        Type::Group(g) => check_type(g.elem.as_ref(), pool_type, gen_idents, warn),
+        Type::Macro(m) => emit_error!(m.span(), "cannot evaluate macro type"),
+        _ => emit_error!(ty.span(), "cannot evaluate")
+    }
+}
+
 pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
     // Parse the input tokens into a syntax tree.
     let input = parse_macro_input!(input as DeriveInput);
 
     let mods = crate::list(&input.attrs, "mods");
-    let generics = crate::list(&input.attrs, "generics");
+    // let generics = crate::list(&input.attrs, "generics");
     let attrs = crate::list(&input.attrs, "attrs");
-    let mut has_generics = false;
-    let mut warn = true;
-    input.attrs.iter().for_each(|v| {
-        let path = v.path.clone();
-        if quote!(#path).to_string() == "generics" {
-            if !warn {
-                emit_error!(v.span(), "cannot use `no_generics` and `generics` attributes at a same time");
-            } else {
-                has_generics = true;
-            }
-        }
-        if quote!(#path).to_string() == "no_generics" {
-            if has_generics {
-                emit_error!(v.span(), "cannot use `no_generics` and `generics` attributes at a same time");
-            } else {
-                warn = false;
-            }
+    // let mut has_generics = false;
+    let mut warn_no_generics = true;
+    let mut warn_bare_generics = true;
+    let mut is_concurrent = false;
+    attrs.iter().for_each(|attr| {
+        let s = attr.to_string();
+        if s == "allow_no_generics" {
+            warn_no_generics = false;
+        } else if s == "allow_generics" {
+            warn_bare_generics = false;
+        } else if s == "concurrent" {
+            is_concurrent = true;
+        } else {
+            abort!(
+                attr.span(), "undefined attribute `{}`", attr.to_string();
+                note = "available attributes are `concurrent`, `allow_no_generics`, and `allow_generics`"
+            )
         }
     });
-
+    let mut gen_idents = vec!();
     let mut found_pool_generic: Option<Ident> = None;
     let mut ogen = vec!();
     if !input.generics.params.is_empty() {
@@ -96,13 +158,14 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
                 if !is_pool {
                     ogen.push(t.ident.clone());
                 }
+                gen_idents.push(t.ident.clone());
             } else if let GenericParam::Const(_) = t {
                 abort!(t.span(),
                     "const type parameters are not FFI-compatible";
                     help = "you may want to use type aliasing to statically assign a value to it"
                 );
             }
-         }
+        }
     }
     if found_pool_generic.is_none() {
         if let Some(w) = &input.generics.where_clause {
@@ -131,31 +194,46 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
             }
         }
     }
-    if !ogen.is_empty() {
-        let pool = if let Some(p) = &found_pool_generic { p.to_string() } else { "".to_owned() };
-        let mut abort = false;
-        for t in &ogen {
-            if *t != pool {
-                emit_warning!(t.span(),
-                    "FFI-incompatible generic type parameter";
-                    help = "add {} to the generics list and remove it from here; use corundum::gen::ByteArray instead", t
-                );
-                abort = true;
-            }
-        }
-        if abort {
-            abort!(input.ident.span(),
-                "struct {} should have exactly one generic type parameter implementing MemPool trait", input.ident;
-                help = "use corundum::gen::ByteArray instead of the generic types, and specify the generic types using `generics(...)` attribute (e.g., #[generics({})])", 
-                ogen.iter().map(|v| v.to_string()).collect::<Vec<String>>().join(", ")
-            )
-        }
-    }
+    // if !ogen.is_empty() {
+    //     let pool = if let Some(p) = &found_pool_generic { p.to_string() } else { "".to_owned() };
+    //     let mut abort = false;
+    //     for t in &ogen {
+    //         if *t != pool {
+    //             emit_warning!(t.span(),
+    //                 "FFI-incompatible generic type parameter";
+    //                 help = "add {} to the generics list and remove it from here; use corundum::gen::ByteArray instead", t
+    //             );
+    //             abort = true;
+    //         }
+    //     }
+    //     if abort {
+    //         abort!(input.ident.span(),
+    //             "struct {} should have at least one generic type parameter implementing MemPool trait", input.ident;
+    //             help = "use corundum::gen::ByteArray instead of the generic types, and specify the generic types using `generics(...)` attribute (e.g., #[generics({})])", 
+    //             ogen.iter().map(|v| v.to_string()).collect::<Vec<String>>().join(", ")
+    //         )
+    //     }
+    // }
     if found_pool_generic.is_none() {
         abort!(input.ident.span(),
             "struct {} should be generic with regard to the pool type", input.ident;
             help = "specify a generic type which implements MemPool trait"
         )
+    }
+    let pool_type = found_pool_generic.expect(&format!("{}", line!()));
+
+    if let Data::Struct(s) = input.data {
+        for f in s.fields {
+            check_type(&f.ty, &pool_type, &gen_idents, warn_bare_generics);
+        }
+    } else if let Data::Enum(e) = input.data {
+        for v in e.variants {
+            for f in v.fields {
+                check_type(&f.ty, &pool_type, &gen_idents, warn_bare_generics);
+            }
+        }
+    } else {
+        abort_call_site!("`Export` cannot be derived for `union`")
     }
 
     // let mut all_pools = unsafe { match POOLS.lock() {
@@ -168,16 +246,16 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
     //     entry.pools.push(input.ident.to_string());
     // }
 
+    let generics: Vec<Ident> = gen_idents.iter().filter_map(|v| if *v == pool_type { None } else { Some(v.clone()) }).collect();
     let mut generics_list = quote!{ template <#(class #generics,)*;>  }.to_string().replace(", ;", "")+" ";
     let mut template = quote!{ template <#(class #generics,)* class _P> }.to_string();
     let mut generics_str = quote!{ #(#generics,)* }.to_string();
 
-
     if generics.is_empty() {
-        if warn {
+        if warn_no_generics {
             emit_warning!(input.ident.span(),
                 "struct {} does not have any generic type parameter as the data type", input.ident;
-                help = "specify the generic data types using `generics(...)` attribute (e.g., #[generics(T)]), or use `#[no_generics]`"
+                help = "use `#[attrs(allow_no_generics)]` to disable this warning"
             );
         }
         generics_str = "".to_string();
@@ -187,6 +265,7 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
 
     // Used in the quasi-quotation below as `#name`.
     let name = input.ident;
+    let new_name = format_ident!("__{}", name);
     let name_str = name.to_string();
     let small_name = name_str.to_lowercase();
     let cname = format!("p{}_t", small_name);
@@ -215,21 +294,14 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
     let mut lock = "";
     let mut other_lock = "";
 
-    for attr in attrs {
-        if attr.to_string() == "concurrent" {
-            entry.attrs.concurrent = true;
-            conc_decl = "
+    if is_concurrent {
+        entry.attrs.concurrent = true;
+        conc_decl = "
     std::recursive_mutex __mu;";
-            lock = "
+        lock = "
         carbide::mutex_locker lock(&this->__mu);";
-            other_lock = "
+        other_lock = "
         carbide::mutex_locker lock(&const_cast<Self&>(other).__mu);";
-        } else {
-            abort!(
-                attr.span(), "undefined attribute `{}`", attr.to_string();
-                note = "available attribute is `concurrent`"
-            )
-        }
     }
 
     for m in &mods {
@@ -252,7 +324,6 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
             pub mod #mod_name {
                 use super::*;
                 use corundum::*;
-                use std::ffi::c_void;
                 use std::os::raw::c_char;
                 use std::ffi::CStr;
                 use std::collections::hash_map::DefaultHasher;
@@ -262,42 +333,42 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
                 type #m = super::#m::Allocator;
 
                 #[no_mangle]
-                pub extern "C" fn #fn_new(#(#new_sizes: usize,)* j: *const c_void) -> *const #name<#m> {
+                pub extern "C" fn #fn_new(#(#new_sizes: usize,)* j: *const c_void) -> *const #new_name<#m> {
                     use corundum::boxed::Pbox;
                     use corundum::alloc::MemPoolTraits;
 
                     assert!(!j.is_null(), "transactional operation outside a transaction");
                     unsafe {
                         let j = corundum::utils::read::<corundum::stm::Journal<#m>>(j as *mut u8);
-                        #m::new(#name::new(#(#new_sizes,)* j), j)
+                        #m::new(#new_name::new(#(#new_sizes,)* j), j)
                     }
                 }
 
                 #[no_mangle]
-                pub extern "C" fn #fn_drop(obj: *mut #name<#m>) {
+                pub extern "C" fn #fn_drop(obj: *mut #new_name<#m>) {
                     use corundum::boxed::Pbox;
 
                     assert!(!obj.is_null(),);
                     unsafe {
-                        Pbox::<#name<#m>,#m>::from_raw(obj); // drops when out of scope
+                        Pbox::<#new_name<#m>,#m>::from_raw(obj); // drops when out of scope
                     }
                 }
 
                 #[no_mangle]
-                pub extern "C" fn #fn_open(p: &#__m, #(#new_sizes: usize,)* name: *const c_char) -> *const #name<#m> {
-                    let name = unsafe { CStr::from_ptr(name).to_str().unwrap() };
+                pub extern "C" fn #fn_open(p: &#__m, #(#new_sizes: usize,)* name: *const c_char) -> *const #new_name<#m> {
+                    let name = unsafe { CStr::from_ptr(name).to_str().expect(&format!("{}", line!())) };
                     let mut hasher = DefaultHasher::new();
                     name.hash(&mut hasher);
                     let key = hasher.finish();
 
-                    let mut res: *const #name<#m> = std::ptr::null();
+                    let mut res: *const #new_name<#m> = std::ptr::null();
                     if transaction(AssertTxInSafe(|j| {
                         let mut objs = p.objs.lock(j);
                         let obj = objs.get_or_insert(key, || {
-                            #__mod::Container::#name(#name::new(#(#new_sizes,)* j))
+                            #__mod::Container::#name(#new_name::new(#(#new_sizes,)* j))
                         }, j);
                         if let #__mod::Container::#name(obj) = &obj {
-                            res = obj as *const #name<#m>;
+                            res = obj as *const #new_name<#m>;
                         }
                     })).is_err() {
                         res = std::ptr::null();
@@ -326,7 +397,7 @@ struct {small_name}_traits<{pool}> {{
     // specialized methods
 }};\n",
 small_name = small_name,
-name = name,
+name = new_name,
 pool = pool,
 size_list = size_list,
 size_list_arg = size_list_arg,
@@ -351,9 +422,6 @@ root_name = __m.to_string()
 {includes}
 
 template < class _P >
-using pstring = typename carbide::make_persistent<std::string, _P>::type;
-
-template < class _P >
 struct {small_name}_traits {{
     typedef typename pool_traits<_P>::journal journal;
     static const {name}<_P>* __create({size_list_arg}const journal *j);
@@ -373,7 +441,7 @@ class {cname} : public carbide::psafe_type_parameters {{
     using Self = {cname};
 
     pointer inner;
-    pstring<_P> name;
+    typename carbide::make_persistent<std::string, _P>::type name;
     bool moved;
     bool is_root;{conc_decl}
 
@@ -448,7 +516,7 @@ includes = includes,
 sizeof_list = sizeof_list,
 size_list_arg = size_list_arg,
 small_name = small_name,
-name = name_str,
+name = new_name,
 cname = cname,
 conc_decl = conc_decl,
 lock = lock,
@@ -464,8 +532,11 @@ other_lock = other_lock
             generics_list = generics_list
         );
     
-
-    let expanded = quote! { #(#expanded)* };
+    let gen: Vec<TokenStream2> = gen_idents.iter().map(|v| if *v == pool_type { quote!(P) } else { quote!(corundum::c_void) } ).collect();
+    let expanded = quote! { 
+        pub type #new_name<P: MemPool> = #name<#(#gen,)*>;
+        #(#expanded)* 
+    };
 
     // Hand the output tokens back to the compiler.
     TokenStream::from(expanded)
@@ -518,7 +589,7 @@ fn check_generics(m: &TokenStream2, ty: &mut Type, tmpl: &Vec<String>, ty_tmpl: 
             //     if last.ident == "Box" {
             //         if let PathArguments::AngleBracketed(args) = &last.arguments {
             //             let args = &args.args;
-            //             *ty = parse2(quote!(*const #args)).unwrap();
+            //             *ty = parse2(quote!(*const #args)).expect(&format!("{}", line!()));
             //             return check_generics(m, ty, tmpl, ty_tmpl, gen, check, modify, has_generics);
             //         }
             //     }
@@ -538,15 +609,15 @@ fn check_generics(m: &TokenStream2, ty: &mut Type, tmpl: &Vec<String>, ty_tmpl: 
             if p.path.segments.len() == 1 {
                 if p.path.segments[0].arguments == PathArguments::None {
                     let name = p.path.segments[0].ident.to_string();
-                    if tmpl.contains(&name) {
-                        if !gen.contains(&name) {
-                            abort!(
-                                ty.span(), "template parameter `{}` is not in the generic type list", &name;
-                                note = "consider adding `{}` to the `generics()` attribute of the implementing type, or choose from {}", &name, gen.join(", ")
-                            );
-                        }
+                    if tmpl.contains(&name) && *ty_tmpl != name {
+                        // if !gen.contains(&name) {
+                        //     abort!(
+                        //         ty.span(), "template parameter `{}` is not in the generic type list", &name;
+                        //         note = "consider adding `{}` to the `generics()` attribute of the implementing type, or choose from {}", &name, gen.join(", ")
+                        //     );
+                        // }
                         if modify {
-                            *ty = parse2(quote!(std::ffi::c_void)).unwrap();
+                            *ty = parse2(quote!(corundum::c_void)).expect(&format!("{}", line!()));
                         }
                         if let Some(has_generics) = has_generics {
                             **has_generics = true;
@@ -554,7 +625,7 @@ fn check_generics(m: &TokenStream2, ty: &mut Type, tmpl: &Vec<String>, ty_tmpl: 
                         true
                     } else if *ty_tmpl == name {
                         if modify {
-                            *ty = parse2(quote!(#m)).unwrap();
+                            *ty = parse2(quote!(#m)).expect(&format!("{}", line!()));
                         }
                         false
                     } else {
@@ -569,14 +640,14 @@ fn check_generics(m: &TokenStream2, ty: &mut Type, tmpl: &Vec<String>, ty_tmpl: 
                 false
             }
         }
-        // tmpl.contains(&p.path.get_ident().unwrap().ident.to_string()),
+        // tmpl.contains(&p.path.get_ident().expect(&format!("{}", line!())).ident.to_string()),
         Type::Ptr(p) => {
             if check_generics(m, &mut *p.elem, tmpl, ty_tmpl, gen, if check == 2 { 0 } else { check }, modify, has_generics, ident) {
                 // update(ty);
-                // *ty = parse2(quote!(corundum::gen::Gen)).unwrap();
+                // *ty = parse2(quote!(corundum::gen::Gen)).expect(&format!("{}", line!()));
                 // if modify {
-                //     // *ty = parse2(quote!(corundum::gen::Gen)).unwrap();
-                //     *p.elem = parse2(quote!(std::ffi::c_void)).unwrap();
+                //     // *ty = parse2(quote!(corundum::gen::Gen)).expect(&format!("{}", line!()));
+                //     *p.elem = parse2(quote!(corundum::c_void)).expect(&format!("{}", line!()));
                 // }
             }
             false
@@ -584,10 +655,10 @@ fn check_generics(m: &TokenStream2, ty: &mut Type, tmpl: &Vec<String>, ty_tmpl: 
         Type::Reference(r) =>  {
             if check_generics(m, &mut *r.elem, tmpl, ty_tmpl, gen, if check == 2 { 0 } else { check }, modify, has_generics, ident) {
                 // update(ty);
-                // *ty = parse2(quote!(corundum::gen::Gen)).unwrap();
+                // *ty = parse2(quote!(corundum::gen::Gen)).expect(&format!("{}", line!()));
                 // if modify {
-                //     // *ty = parse2(quote!(corundum::gen::Gen)).unwrap();
-                //     *r.elem = parse2(quote!(std::ffi::c_void)).unwrap();
+                //     // *ty = parse2(quote!(corundum::gen::Gen)).expect(&format!("{}", line!()));
+                //     *r.elem = parse2(quote!(corundum::c_void)).expect(&format!("{}", line!()));
                 // }
             } 
             false
@@ -598,7 +669,7 @@ fn check_generics(m: &TokenStream2, ty: &mut Type, tmpl: &Vec<String>, ty_tmpl: 
             let name = v.to_string();
             if tmpl.contains(&name) {
                 // if modify {
-                //     *ty = parse2(quote!(std::ffi::c_void)).unwrap();
+                //     *ty = parse2(quote!(corundum::c_void)).expect(&format!("{}", line!()));
                 // }
                 if let Some(has_generics) = has_generics {
                     **has_generics = true;
@@ -606,7 +677,7 @@ fn check_generics(m: &TokenStream2, ty: &mut Type, tmpl: &Vec<String>, ty_tmpl: 
                 true
             } else if *ty_tmpl == name {
                 if modify {
-                    *ty = parse2(quote!(#m)).unwrap();
+                    *ty = parse2(quote!(#m)).expect(&format!("{}", line!()));
                 }
                 false
             } else {
@@ -626,52 +697,80 @@ fn check_generics(m: &TokenStream2, ty: &mut Type, tmpl: &Vec<String>, ty_tmpl: 
 
 pub fn cbindgen(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut expanded = vec![];
-    let mut extern_mod = format_ident!("__extern_mod_0");
+    let extern_mod;
     if let Ok(imp) = parse2::<ItemImpl>(item.clone().into()) {
         extern_mod = format_ident!("__extern_mod_{}_{}", imp.span().start().line, imp.span().start().column);
+        let mut generics = vec![];
         if let Type::Path(ref tp) = *imp.self_ty {
-            let ty_gen: Template = imp.generics.params.iter().map_while(|t| 
+            let mut pool_type = None;
+            imp.generics.params.iter().for_each(|t| 
                 if let GenericParam::Type(t) = t {
+                    generics.push(t.ident.clone());
                     if t.bounds.iter().any(|b| if let TypeParamBound::Trait(t) = b {
-                            t.path.get_ident().unwrap() == "MemPool"
+                            if let Some(ident) = t.path.get_ident() {
+                                ident == "MemPool"
+                            } else {
+                                false
+                            }
                         } else {
                             false
                         }
                     ) {
-                        Some(t.ident.to_string())
+                        pool_type = Some(t.ident.clone());
                     } else {
                         if let Some(w) = &imp.generics.where_clause {
-                            let mut res = None;
                             for p in &w.predicates {
                                 if let WherePredicate::Type(t) = p {
                                     for b in &t.bounds {
                                         if let TypeParamBound::Trait(tr) = b {
-                                            if tr.path.get_ident().unwrap() == "MemPool" {
-                                                if let Type::Path(p) = &t.bounded_ty {
-                                                    res = Some(p.path.get_ident().unwrap().to_string());
+                                            if let Some(ident) = tr.path.get_ident() {
+                                                if ident == "MemPool" {
+                                                    if let Type::Path(p) = &t.bounded_ty {
+                                                        pool_type = p.path.get_ident().map(|v| v.clone());
+                                                    }
                                                 }
                                             }
                                         }
                                     }
                                 }
                             }
-                            res
-                        } else {
-                            None
                         }
                     }
-                } else {
-                    None
                 }
-            ).collect();
+            );
 
-            if ty_gen.len() > 1 || ty_gen.is_empty() {
-                emit_error!(imp.generics.span(), "exactly one `MemPool` parameter is needed");
+            if pool_type.is_none() {
+                emit_error!(imp.generics.span(), "At least one parameter is needed that implements `MemPool`");
                 return item;
             }
-            let pool_type = format_ident!("{}", ty_gen.first().unwrap());
+            let pool_type = pool_type.expect(&format!("{}", line!()));
 
-            let name = &tp.path.segments.last().unwrap().ident;
+            let name = &tp.path.segments.last().expect(&format!("{}", line!()));
+            let mut ty_spec: Vec<&Ident> = vec![];
+            if let PathArguments::AngleBracketed(args) = &name.arguments {
+                args.args.iter().for_each(|v| {
+                    if let GenericArgument::Type(t) = v {
+                        if let Type::Path(p) = t {
+                            if let Some(i) = p.path.get_ident() {
+                                if generics.contains(i) {
+                                    ty_spec.push(i);
+                                } else {
+                                    emit_error!(p.span(), "partial specialization is not allowed")
+                                }
+                            } else {
+                                emit_error!(p.span(), "partial specialization is not allowed")
+                            }
+                        } else {
+                            emit_error!(t.span(), "partial specialization is not allowed")
+                        }
+                    } else {
+                        emit_error!(v.span(), "only type generalization is allowed")
+                    }
+                });
+            }
+
+            let name = &name.ident;
+            let new_name = format_ident!("__{}", name);
             let small_name = name.to_string().to_lowercase();
     
             let mut types = unsafe { match TYPES.lock() {
@@ -701,19 +800,24 @@ pub fn cbindgen(_attr: TokenStream, item: TokenStream) -> TokenStream {
                                 if let Some(id) = s.path.get_ident() {
                                     if id == "Self" {
                                         is_constructor = true;
-                                        **ty = parse2(quote!(std::ffi::c_void)).unwrap();
+                                        **ty = parse2(quote!(corundum::c_void)).expect(&format!("{}", line!()));
                                     }
                                 }
                             }
                         }
-                        let gen: Template = spc.sig.generics.params.iter()
-                            .map_while(|i| 
+                        let mut gen: Template = spc.sig.generics.params.iter()
+                            .filter_map(|i| 
                                 if let GenericParam::Type(t) = i {
                                     Some(t.ident.to_string())
                                 } else {
                                     None
                                 }
                             ).collect();
+                        for i in &generics {
+                            if *i != pool_type {
+                                gen.push(i.to_string());
+                            }
+                        }
                         {
                             if is_constructor {
                                 let mut i = spc.sig.inputs.iter_mut();
@@ -795,14 +899,14 @@ pub fn cbindgen(_attr: TokenStream, item: TokenStream) -> TokenStream {
                         }
                         spc.block = parse2(quote!{{
                             () // no implementation
-                        }}).unwrap();
+                        }}).expect(&format!("{}", line!()));
 
                         entry.funcs.push((
                             spc.sig.ident.to_string(), 
                             args,
                             quote!(#[no_mangle] #spc).to_string(), 
                             gen.clone(), 
-                            ty_gen.clone(), 
+                            pool_type.to_string(),
                             spc.sig.output != ReturnType::Default, 
                             output_has_generics,
                             is_constructor,
@@ -822,23 +926,23 @@ pub fn cbindgen(_attr: TokenStream, item: TokenStream) -> TokenStream {
                             let ident = ext.sig.ident.clone();
                             let fname = format_ident!("__{}_{}_{}", m_str, small_name, ext.sig.ident);
                             ext.sig.ident = fname.clone();
+                            ext.sig.generics = Generics::default();
                             if let Ok(abi) = parse2::<Abi>(quote!(extern "C")) {
                                 ext.sig.abi = Some(abi);
                             }
-                            ext.sig.generics = Generics::default();
                             let mut has_receiver = false;
                             if let Some(first) = ext.sig.inputs.first_mut() {
                                 if let FnArg::Receiver(rc) = first { 
                                     has_receiver = true; 
                                     let mt = rc.mutability;
-                                    if let Ok(arg) = parse2::<FnArg>(quote!(__self: &#mt #name<#m>)) {
+                                    if let Ok(arg) = parse2::<FnArg>(quote!(__self: &#mt #new_name<#m>)) {
                                         *first = arg;
                                     }
                                 }
                             }
                             if is_constructor {
                                 let args = ext.sig.inputs.iter().collect::<Vec<&FnArg>>();
-                                let args = args.split_last().unwrap().1;
+                                let args = args.split_last().expect(&format!("{}", line!())).1;
                                 let mut failed = false;
                                 let underline = format_ident!("_");
                                 let vals: Vec<&Ident> = ext.sig.inputs.iter().map(|i| {
@@ -859,18 +963,18 @@ pub fn cbindgen(_attr: TokenStream, item: TokenStream) -> TokenStream {
                                 if failed {
                                     break;
                                 }
-                                let vals = vals.split_last().unwrap().1;
+                                let vals = vals.split_last().expect(&format!("{}", line!())).1;
                                 expanded.push(quote!{
                                     #[no_mangle]
                                     #[deny(improper_ctypes_definitions)] 
-                                    pub extern "C" fn #fname(#(#args,)* j: *const std::ffi::c_void) -> *mut #name<#m> {
+                                    pub extern "C" fn #fname(#(#args,)* j: *const corundum::c_void) -> *mut #new_name<#m> {
                                         use corundum::boxed::Pbox;
                                         use corundum::alloc::MemPoolTraits;
 
                                         assert!(!j.is_null(), "transactional operation outside a transaction");
                                         unsafe {
                                             let j = corundum::utils::read::<corundum::stm::Journal<#m>>(j as *mut u8);
-                                            #m::new(#name::#ident(#(#vals,)* j), j)
+                                            #m::new(#new_name::#ident(#(#vals,)* j), j)
                                         }
                                     }
                                 });
@@ -892,7 +996,7 @@ pub fn cbindgen(_attr: TokenStream, item: TokenStream) -> TokenStream {
                                 }
                                 ext.block = parse2(quote!{{
                                     __self.#fname(#(#args,)*)
-                                }}).unwrap();
+                                }}).expect(&format!("{}", line!()));
     
                                 expanded.push(quote!{
                                     #[no_mangle]
@@ -908,6 +1012,8 @@ pub fn cbindgen(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 }
             }
         }
+    } else {
+        abort_call_site!("`export` attribute can be used only on `impl` items");
     }
     let item: TokenStream2 = item.into();
     let expanded = quote! { 
@@ -1057,9 +1163,9 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
         let mut cbindfile = "".to_owned();
         // let mut funcs = vec!();
         for (_, _, f, _, _, _, _, _, _) in &mut cnt.funcs {
-            let re = Regex::new(&format!(r"\#\[no_mangle\].*")).unwrap();
+            let re = Regex::new(&format!(r"\#\[no_mangle\].*")).expect(&format!("{}", line!()));
             if re.find(f).is_some() {
-                let re = Regex::new(&format!(r"\bGen\b\s*<\s*(\w+)\s*>")).unwrap();
+                let re = Regex::new(&format!(r"\bGen\b\s*<\s*(\w+)\s*>")).expect(&format!("{}", line!()));
                 *f = re.replace_all(f, "&$1").to_string();
                 cbindfile += &f;
                 cbindfile += "\n";
@@ -1098,13 +1204,13 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
                     format!("<{}>", tmp.join(","))
                 }.to_owned();
                 let args = fn_args.iter().map(|(_, n)| n.to_owned()).collect::<Vec<String>>().join(", ");
-                let re = Regex::new(&format!(r"(.+\W+{}\(.*\));", name)).unwrap();
-                let sig_re = Regex::new(&format!(r".+\W+{}(\(.*\));", name)).unwrap();
+                let re = Regex::new(&format!(r"(.+\W+{}\(.*\));", name)).expect(&format!("{}", line!()));
+                let sig_re = Regex::new(&format!(r".+\W+{}(\(.*\));", name)).expect(&format!("{}", line!()));
                 let re_pool = if ty_pool.is_empty() { None } else { 
-                    Some(Regex::new(&format!(r"\b{}\b", ty_pool[0])).unwrap()) 
+                    Some(Regex::new(&format!(r"\b{}\b", ty_pool)).expect(&format!("{}", line!()))) 
                 };
                 if let Some(cap) = re.captures(&s) {
-                    *sig = cap.get(1).unwrap().as_str().to_owned();
+                    *sig = cap.get(1).expect(&format!("{}", line!())).as_str().to_owned();
                     if let Some(re) = &re_pool {
                         *sig = re.replace_all(sig, "_P").to_string();
                     }
@@ -1113,7 +1219,7 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
                         let name_str = ty.to_string();
                         let small_name = name_str.to_lowercase();
                         let cname = format!("p{}_t", small_name);
-                        let mut sig = sig_re.captures(&s).unwrap().get(1).unwrap().as_str().to_owned();
+                        let mut sig = sig_re.captures(&s).expect(&format!("{}", line!())).get(1).expect(&format!("{}", line!())).as_str().to_owned();
                         if let Some(re) = &re_pool {
                             sig = re.replace_all(&sig, "_P").to_string();
                         }
@@ -1137,7 +1243,7 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
                             tmpl,
                             sig.replacen(
                                 &format!("{}(", name), 
-                                &format!("{name}({const}{ty}<_P> *__self, ", 
+                                &format!("{name}({const}__{ty}<_P> *__self, ", 
                                 name = name, 
                                 ty = ty, 
                                 const = if *is_const { "const " } else { "" }), 1)
@@ -1182,7 +1288,7 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
         for (p, contents) in &mut cnt.traits {
             for (f, args, sig, tmp, _, ret, ret_gen, is_cons, is_const) in &mut cnt.funcs {
                 let (cret, cargs) = parse_c_fn(sig, f);
-                let re = Regex::new(r"\bGen\b").unwrap();
+                let re = Regex::new(r"\bGen\b").expect(&format!("{}", line!()));
                 let cast = if *ret_gen && re.find(&cret).is_none() {
                     format!("({})", cret)
                 } else {
@@ -1210,7 +1316,7 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
                 };
                 let args = arglist.join(", ");
                 let old_sig = sig.clone();
-                let re = Regex::new(r"\b_P\b").unwrap();
+                let re = Regex::new(r"\b_P\b").expect(&format!("{}", line!()));
                 *sig = re.replace_all(sig, p as &str).to_string();
                 if *is_cons {
                     *contents = contents.replace("    // specialized methods",
@@ -1218,9 +1324,9 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
                             tmp,
                             sig.replacen(
                                 &format!("{}(", f), 
-                                &format!("{fn}(carbide::pointer_t<{ty}<{pool}>, {pool}>* __self_ptr, ", fn=f, ty=ty, pool=p), 1)
+                                &format!("{fn}(carbide::pointer_t<__{ty}<{pool}>, {pool}>* __self_ptr, ", fn=f, ty=ty, pool=p), 1)
                                 .replace(", )", ")"),
-                            &format!("*__self_ptr = carbide::pointer_t<{ty}<{pool}>, {pool}>::from_unsafe((void*)__{pool}_{type}_{fn}({args}));",
+                            &format!("*__self_ptr = carbide::pointer_t<__{ty}<{pool}>, {pool}>::from_unsafe((void*)__{pool}_{type}_{fn}({args}));",
                                 pool = p,
                                 ty = ty,
                                 type = ty.to_lowercase(),
@@ -1233,7 +1339,7 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
                             tmp,
                             sig.replacen(
                                 &format!("{}(", f), 
-                                &format!("{f}({const}{ty}<{p}> *__self, ", 
+                                &format!("{f}({const}__{ty}<{p}> *__self, ", 
                                 f=f, 
                                 ty=ty, 
                                 p=p,
@@ -1375,9 +1481,14 @@ pub fn carbide(input: TokenStream) -> TokenStream {
 
     let recurse = types.iter().map(|name| {
         let name_str = name.to_string().replace(" ", "");
-        let parts: Vec<&str> = name_str.split("::").collect();
-        let ident = format_ident!("{}", parts.last().unwrap());
-        quote_spanned!(name.span()=> #ident(super::#name<Allocator>))
+        let mut parts: Vec<&str> = name_str.split("::").collect();
+        let ident = format_ident!("{}", parts.last().expect(&format!("{}", line!())));
+        let new_name = format!("__{}", ident);
+        parts.pop();
+        parts.push(&new_name);
+        let parts = parts.join("::");
+        let parts: TokenStream2 = parse_str(&parts).expect(&format!("{}", line!()));
+        quote_spanned!(name.span() => #ident(super::#parts<Allocator>))
     });
     let types = quote! {
         #(#recurse,)* 
@@ -1404,6 +1515,7 @@ pub fn carbide(input: TokenStream) -> TokenStream {
         let fn_txn_commit = format_ident!("{}_txn_commit", name_str);
         let fn_txn_rollback = format_ident!("{}_txn_rollback", name_str);
         let fn_journal = format_ident!("{}_journal", name_str);
+        let fn_txn_running = format_ident!("{}_txn_running", name_str);
         let fn_log = format_ident!("{}_log", name_str);
         let fn_print_info = format_ident!("{}_print_info", name_str);
         let fn_read64 = format_ident!("{}_read64", name_str);
@@ -1426,7 +1538,6 @@ pub fn carbide(input: TokenStream) -> TokenStream {
                 use corundum::gen::ByteArray;
                 use std::collections::hash_map::DefaultHasher;
                 use std::hash::{Hash, Hasher};
-                use core::ffi::c_void;
                 use std::os::raw::c_char;
                 use std::ffi::CStr;
                 use super::#m::*;
@@ -1460,9 +1571,9 @@ pub fn carbide(input: TokenStream) -> TokenStream {
 
                 #[no_mangle]
                 pub extern "C" fn #fn_open(path: *const c_char, mut flags: u32) -> *const #root_name {
-                    let path = unsafe { CStr::from_ptr(path).to_str().unwrap() }.clone();
+                    let path = unsafe { CStr::from_ptr(path).to_str().expect(&format!("{}", line!())) }.clone();
                     if flags == 0 { flags = #flags; }
-                    let res = Allocator::open::<#root_name>(path, flags).unwrap();
+                    let res = Allocator::open::<#root_name>(path, flags).expect(&format!("{}", line!()));
                     let p = &*res as *const #root_name;
                     std::mem::forget(res); // Keep the pool open
                     p
@@ -1471,7 +1582,7 @@ pub fn carbide(input: TokenStream) -> TokenStream {
                 #[no_mangle]
                 pub extern "C" fn #fn_close() -> bool {
                     if Allocator::is_open() {
-                        unsafe { Allocator::close().unwrap(); }
+                        unsafe { Allocator::close().expect(&format!("{}", line!())); }
                         true
                     } else {
                         false
@@ -1519,7 +1630,7 @@ pub fn carbide(input: TokenStream) -> TokenStream {
                 #[no_mangle]
                 pub extern "C" fn #fn_txn_begin() -> *const c_void {
                     unsafe {
-                        let j = Journal::current(true).unwrap();
+                        let j = Journal::current(true).expect(&format!("{}", line!()));
                         *j.1 += 1;
                         let journal = utils::as_mut(j.0);
                         journal.unset(corundum::stm::JOURNAL_COMMITTED);
@@ -1546,10 +1657,10 @@ pub fn carbide(input: TokenStream) -> TokenStream {
                 }
 
                 #[no_mangle]
-                pub extern "C" fn #fn_txn(f: extern fn(*const std::ffi::c_void)->std::ffi::c_void) {
+                pub extern "C" fn #fn_txn(f: extern fn(*const corundum::c_void)->corundum::c_void) {
                     Allocator::transaction(|j| {
-                        f(j as *const _ as *const std::ffi::c_void);
-                    }).unwrap();
+                        f(j as *const _ as *const corundum::c_void);
+                    }).expect(&format!("{}", line!()));
                 }
 
                 #[no_mangle]
@@ -1562,6 +1673,11 @@ pub fn carbide(input: TokenStream) -> TokenStream {
                             std::ptr::null()
                         }
                     }
+                }
+
+                #[no_mangle]
+                pub extern "C" fn #fn_txn_running() -> bool {
+                    Journal::is_running()
                 }
 
                 #[no_mangle]
@@ -1592,11 +1708,11 @@ pub fn carbide(input: TokenStream) -> TokenStream {
                     unsafe { *Allocator::get_unchecked(addr) }
                 }
 
-                pub struct Named(u8, ByteArray<Allocator>);
+                pub struct Named(u8, ByteArray<corundum::c_void, Allocator>);
 
                 #[no_mangle]
                 pub extern "C" fn #named_open(p: &#root_name, name: *const c_char, size: usize, init: extern fn(*mut c_void)->()) -> *const c_void /* Named */ {
-                    let name = unsafe { CStr::from_ptr(name).to_str().unwrap() };
+                    let name = unsafe { CStr::from_ptr(name).to_str().expect(&format!("{}", line!())) };
                     let mut hasher = DefaultHasher::new();
                     name.hash(&mut hasher);
                     let key = hasher.finish();
@@ -1647,6 +1763,7 @@ pub fn carbide(input: TokenStream) -> TokenStream {
 #include <stdlib.h>
 #include <unistd.h>
 #include <proot.h>
+#include <unordered_set>
 
 // forward declarations
 template < class P > class Journal;
@@ -1657,6 +1774,8 @@ struct pool_traits<{pool}> {{
     using journal = Journal<{pool}>;
     using handle = {root_name};
     using void_pointer = carbide::pointer_t<void, {pool}>;
+
+    static std::unordered_set<std::string> objs;
 
     static void_pointer allocate(size_t size) {{
         auto res = {pool_alloc}(size);
@@ -1680,6 +1799,9 @@ struct pool_traits<{pool}> {{
     static const journal* journal_handle() {{
         return (const journal*) {pool_journal}(false);
     }}
+    static bool txn_running() {{
+        return {pool_txn_running}();
+    }}
     static const void *named_open(const {root_name} *p, const char *name, size_t size, void (*init)(void*)) {{
         return {pool_named_open}(p, name, size, init);
     }}
@@ -1693,6 +1815,8 @@ struct pool_traits<{pool}> {{
         {pool_journal}(true);
     }}
 }};
+
+std::unordered_set<std::string> pool_traits<{pool}>::objs;
 
 size_t pool_traits<{pool}>::base = 0;
 class {pool}: public carbide::pool_type {{
@@ -1746,6 +1870,7 @@ pool_valid = fn_valid.to_string(),
 pool_print_info = fn_print_info.to_string(),
 pool_log = fn_log.to_string(),
 pool_journal = fn_journal.to_string(),
+pool_txn_running = fn_txn_running.to_string(),
 pool_open = fn_open.to_string(),
 pool_close = fn_close.to_string(),
 pool_base = fn_base.to_string(),
