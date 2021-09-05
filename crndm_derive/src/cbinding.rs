@@ -139,7 +139,7 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
         for t in &input.generics.params {
             if let GenericParam::Type(t) = t {
                 if t.ident == "_P" {
-                    emit_error!(t.span(), "`_P` is reserved");
+                    emit_error!(t.ident.span(), "`_P` is reserved");
                 }
                 let mut is_pool = false;
                 for b in &t.bounds {
@@ -709,7 +709,7 @@ pub fn cbindgen(_attr: TokenStream, item: TokenStream) -> TokenStream {
             imp.generics.params.iter().for_each(|t| 
                 if let GenericParam::Type(t) = t {
                     if t.ident == "_P" {
-                        emit_error!(t.span(), "`_P` is reserved");
+                        emit_error!(t.ident.span(), "`_P` is reserved");
                     }
                     generics.push(t.ident.clone());
                     if t.bounds.iter().any(|b| if let TypeParamBound::Trait(t) = b {
@@ -1271,9 +1271,12 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
                             lock = lock,
                         );
                     }
-                    for i in 0 .. tmp.len() {
+                    // eprintln!("type: {:?}", cnt.generics);
+                    // eprintln!("func {}: {:?}", name, tmp);
+                    let diff = tmp.len() - cnt.generics.len();
+                    for i in diff .. tmp.len() {
                         let re = Regex::new(&format!(r"\b{}\b", tmp[i])).expect(&format!("{}", line!()));
-                        append = re.replace_all(&append, &cnt.generics[i]).to_string();
+                        append = re.replace_all(&append, &cnt.generics[i-diff]).to_string();
                     }
                     cnt.contents = cnt.contents.replace("    // other methods", &append);
                 } 
