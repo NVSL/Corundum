@@ -88,7 +88,7 @@ fn check_type(ty: &Type, pool_type: &Ident, gen_idents: &Vec<Ident>, warn: bool)
                         }
                     }
                 }
-            } 
+            }
             for segment in &p.path.segments {
                 if let PathArguments::AngleBracketed(args) = &segment.arguments {
                     for arg in &args.args {
@@ -212,7 +212,7 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
     //     if abort {
     //         abort!(input.ident.span(),
     //             "struct {} should have at least one generic type parameter implementing MemPool trait", input.ident;
-    //             help = "use corundum::gen::ByteArray instead of the generic types, and specify the generic types using `generics(...)` attribute (e.g., #[generics({})])", 
+    //             help = "use corundum::gen::ByteArray instead of the generic types, and specify the generic types using `generics(...)` attribute (e.g., #[generics({})])",
     //             ogen.iter().map(|v| v.to_string()).collect::<Vec<String>>().join(", ")
     //         )
     //     }
@@ -319,7 +319,7 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
         let name_str = format!("__{}_{}", mod_demangled, name_str.to_lowercase());
         let fn_new = format_ident!("{}_new", name_str);
         let fn_drop = format_ident!("{}_drop", name_str);
-        let fn_open = format_ident!("{}_open", name_str); 
+        let fn_open = format_ident!("{}_open", name_str);
         let mod_name = format_ident!("{}_{}", name_str, pool);
 
 
@@ -435,7 +435,7 @@ struct {small_name}_traits {{
 }};
 
 {template}
-class {cname} : public carbide::psafe_type_parameters {{ 
+class {cname} : public carbide::psafe_type_parameters {{
 
     typedef pool_traits<_P>  pool_traits;
     typedef typename pool_traits::handle  handle;
@@ -456,12 +456,12 @@ private:
     }}
 
 public:
-    explicit {cname}(const journal *j, const std::string &name = \"(anonymous)\") {{ 
+    explicit {cname}(const journal *j, const std::string &name = \"(anonymous)\") {{
         inner = pointer::from({small_name}_traits<_P>::__create({sizeof_list}j));
         this->name = name.c_str();
         is_root = false;
         moved = false;
-    }} 
+    }}
 
     explicit {cname}(const {cname} &other) {{{other_lock}
         assert(!other.moved, \"the object was already moved\");
@@ -470,10 +470,10 @@ public:
         is_root = false;
         moved = false;
         const_cast<Self&>(other).moved = true;
-    }} 
+    }}
 
     explicit {cname}(const handle *pool, const std::string &name) noexcept(false) {{{lock}
-        _P::txn([this,&pool,&name](auto j) {{ 
+        _P::txn([this,&pool,&name](auto j) {{
             assert(objs.find(name) == objs.end(), \"'%s' was already open\", name.c_str());
             this->name = name.c_str();
             objs.insert(name);
@@ -494,19 +494,19 @@ public:
 
     ~{cname}() noexcept(false) {{{lock}
         if (!moved) {{
-            if (is_root) {{ 
+            if (is_root) {{
                 auto n = name.c_str();
                 assert(objs.find(n) != objs.end(), \"'%s' is not open\", n);
                 objs.erase(n);
-            }}  else {{ 
+            }} else {{
                 {small_name}_traits<_P>::drop(
                     static_cast<{name}<_P>*>(
                         static_cast<void*>(inner)
                     )
                 );
-            }} 
+            }}
         }}
-    }} 
+    }}
 
     // other methods
 }};
@@ -536,9 +536,9 @@ other_lock = other_lock
         );
     
     let gen: Vec<TokenStream2> = gen_idents.iter().map(|v| if *v == pool_type { quote!(P) } else { quote!(corundum::c_void) } ).collect();
-    let expanded = quote! { 
+    let expanded = quote! {
         pub type #new_name<P: MemPool> = #name<#(#gen,)*>;
-        #(#expanded)* 
+        #(#expanded)*
     };
 
     // Hand the output tokens back to the compiler.
@@ -572,13 +572,13 @@ fn check_generics(m: &TokenStream2, ty: &mut Type, tmpl: &Vec<String>, ty_tmpl: 
     let res = match ty {
         Type::Array(a) => check_generics(m, &mut *a.elem, tmpl, ty_tmpl, gen, check, modify, has_generics, ident),
         Type::BareFn(f) => {
-            for i in &mut f.inputs { 
+            for i in &mut f.inputs {
                 if check_generics(m, &mut i.ty, tmpl, ty_tmpl, gen, 2, modify, has_generics, &format_ident!("j")) {
                     abort!(
                         i.ty.span(), "no bindings found for template parameters";
                         note = "use template types in form of references or pointers"
                     );
-                } 
+                }
             }
             if let ReturnType::Type(_, ty) = &mut f.output {
                 check_generics(m, ty, tmpl, ty_tmpl, gen, 2, modify, has_generics, ident);
@@ -663,7 +663,7 @@ fn check_generics(m: &TokenStream2, ty: &mut Type, tmpl: &Vec<String>, ty_tmpl: 
                 //     // *ty = parse2(quote!(corundum::gen::Gen)).expect(&format!("{}", line!()));
                 //     *r.elem = parse2(quote!(corundum::c_void)).expect(&format!("{}", line!()));
                 // }
-            } 
+            }
             false
         },
         Type::Slice(s) => check_generics(m, &mut *s.elem, tmpl, ty_tmpl, gen, check, modify, has_generics, ident),
@@ -706,7 +706,7 @@ pub fn cbindgen(_attr: TokenStream, item: TokenStream) -> TokenStream {
         let mut generics = vec![];
         if let Type::Path(ref tp) = *imp.self_ty {
             let mut pool_type = None;
-            imp.generics.params.iter().for_each(|t| 
+            imp.generics.params.iter().for_each(|t|
                 if let GenericParam::Type(t) = t {
                     if t.ident == "_P" {
                         emit_error!(t.ident.span(), "`_P` is reserved");
@@ -812,7 +812,7 @@ pub fn cbindgen(_attr: TokenStream, item: TokenStream) -> TokenStream {
                             }
                         }
                         let mut gen: Template = spc.sig.generics.params.iter()
-                            .filter_map(|i| 
+                            .filter_map(|i|
                                 if let GenericParam::Type(t) = i {
                                     Some(t.ident.to_string())
                                 } else {
@@ -836,7 +836,7 @@ pub fn cbindgen(_attr: TokenStream, item: TokenStream) -> TokenStream {
                                         }
                                     }
                                     inputs.push(a.clone());
-                                } 
+                                }
                             }
                             let mut i = spc.sig.inputs.iter_mut();
                             if i.next().is_some() {
@@ -850,7 +850,7 @@ pub fn cbindgen(_attr: TokenStream, item: TokenStream) -> TokenStream {
                                     }
                                     // eprintln!("fn {}: {}", spc.sig.ident, quote!(#a));
                                     inputs.push(a.clone());
-                                } 
+                                }
                             }
                         }
                         spc.sig.generics = Generics::default();
@@ -908,12 +908,12 @@ pub fn cbindgen(_attr: TokenStream, item: TokenStream) -> TokenStream {
                         }}).expect(&format!("{}", line!()));
 
                         entry.funcs.push((
-                            spc.sig.ident.to_string(), 
+                            spc.sig.ident.to_string(),
                             args,
-                            quote!(#[no_mangle] #spc).to_string(), 
-                            gen.clone(), 
+                            quote!(#[no_mangle] #spc).to_string(),
+                            gen.clone(),
                             pool_type.to_string(),
-                            spc.sig.output != ReturnType::Default, 
+                            spc.sig.output != ReturnType::Default,
                             output_has_generics,
                             is_constructor,
                             is_const
@@ -938,8 +938,8 @@ pub fn cbindgen(_attr: TokenStream, item: TokenStream) -> TokenStream {
                             }
                             let mut has_receiver = false;
                             if let Some(first) = ext.sig.inputs.first_mut() {
-                                if let FnArg::Receiver(rc) = first { 
-                                    has_receiver = true; 
+                                if let FnArg::Receiver(rc) = first {
+                                    has_receiver = true;
                                     let mt = rc.mutability;
                                     if let Ok(arg) = parse2::<FnArg>(quote!(__self: &#mt #new_name<#m>)) {
                                         *first = arg;
@@ -972,7 +972,7 @@ pub fn cbindgen(_attr: TokenStream, item: TokenStream) -> TokenStream {
                                 let vals = vals.split_last().expect(&format!("{}", line!())).1;
                                 expanded.push(quote!{
                                     #[no_mangle]
-                                    #[deny(improper_ctypes_definitions)] 
+                                    #[deny(improper_ctypes_definitions)]
                                     pub extern "C" fn #fname(#(#args,)* j: *const corundum::c_void) -> *mut #new_name<#m> {
                                         use corundum::boxed::Pbox;
                                         use corundum::alloc::MemPoolTraits;
@@ -1006,7 +1006,7 @@ pub fn cbindgen(_attr: TokenStream, item: TokenStream) -> TokenStream {
     
                                 expanded.push(quote!{
                                     #[no_mangle]
-                                    #[deny(improper_ctypes_definitions)] 
+                                    #[deny(improper_ctypes_definitions)]
                                     #ext
                                 });
                             } else {
@@ -1022,7 +1022,7 @@ pub fn cbindgen(_attr: TokenStream, item: TokenStream) -> TokenStream {
         abort_call_site!("`export` attribute can be used only on `impl` items");
     }
     let item: TokenStream2 = item.into();
-    let expanded = quote! { 
+    let expanded = quote! {
         #item
         mod #extern_mod {
             use super::*;
@@ -1206,14 +1206,14 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
                     format!("template < class {} > ", tmp.join(", class "))
                 };
                 let tmpl_kw = if tmp.is_empty() { "" } else { "template " }.to_owned();
-                let gen = if tmp.is_empty() { "".to_owned() } else { 
+                let gen = if tmp.is_empty() { "".to_owned() } else {
                     format!("<{}>", tmp.join(","))
                 }.to_owned();
                 let args = fn_args.iter().map(|(_, n)| n.to_owned()).collect::<Vec<String>>().join(", ");
                 let re = Regex::new(&format!(r"(.+\W+{}\(.*\));", name)).expect(&format!("{}", line!()));
                 let sig_re = Regex::new(&format!(r".+\W+{}(\(.*\));", name)).expect(&format!("{}", line!()));
-                let re_pool = if ty_pool.is_empty() { None } else { 
-                    Some(Regex::new(&format!(r"\b{}\b", ty_pool)).expect(&format!("{}", line!()))) 
+                let re_pool = if ty_pool.is_empty() { None } else {
+                    Some(Regex::new(&format!(r"\b{}\b", ty_pool)).expect(&format!("{}", line!())))
                 };
                 if let Some(cap) = re.captures(&s) {
                     *sig = cap.get(1).expect(&format!("{}", line!())).as_str().to_owned();
@@ -1232,7 +1232,7 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
                         }
                         append = format!("    // other constructors\n    {cname}{sig}: moved(false), is_root(false) {{{lock}
         {ty}_traits<_P>::{tmp}{fn}{gen}(&inner{comma}{args});
-    }}", 
+    }}",
                             sig=sig,
                             ty = ty.to_lowercase(),
                             cname=cname,
@@ -1248,10 +1248,10 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
                             &format!("    // template methods\n    {}static {};",
                             tmpl,
                             sig.replacen(
-                                &format!("{}(", name), 
-                                &format!("{name}({const}__{ty}<_P> *__self, ", 
-                                name = name, 
-                                ty = ty, 
+                                &format!("{}(", name),
+                                &format!("{name}({const}__{ty}<_P> *__self, ",
+                                name = name,
+                                ty = ty,
                                 const = if *is_const { "const " } else { "" }), 1)
                                 .replace(", )", ")")));
                         let ret_tok = if *has_return { "return " } else { "" };
@@ -1278,8 +1278,12 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
                         let re = Regex::new(&format!(r"\b{}\b", tmp[i])).expect(&format!("{}", line!()));
                         append = re.replace_all(&append, &cnt.generics[i-diff]).to_string();
                     }
-                    cnt.contents = cnt.contents.replace("    // other methods", &append);
-                } 
+                    if *is_cons {
+                        cnt.contents = cnt.contents.replace("    // other constructors", &append);
+                    } else {
+                        cnt.contents = cnt.contents.replace("    // other methods", &append);
+                    }
+                }
                 else {
                     abort_call_site!(
                         "cbindgen could not find C++ bindings for `{}::{}(...)'", ty, name;
@@ -1335,7 +1339,7 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
                         &format!("    // specialized methods\n    {}static {} {{\n        {}\n    }}",
                             tmp,
                             sig.replacen(
-                                &format!("{}(", f), 
+                                &format!("{}(", f),
                                 &format!("{fn}(carbide::pointer_t<__{ty}<{pool}>, {pool}>* __self_ptr, ", fn=f, ty=ty, pool=p), 1)
                                 .replace(", )", ")"),
                             &format!("*__self_ptr = carbide::pointer_t<__{ty}<{pool}>, {pool}>::from_unsafe((void*)__{pool}_{type}_{fn}({args}));",
@@ -1350,10 +1354,10 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
                         &format!("    // specialized methods\n    {}static {} {{\n        {}\n    }}",
                             tmp,
                             sig.replacen(
-                                &format!("{}(", f), 
-                                &format!("{f}({const}__{ty}<{p}> *__self, ", 
-                                f=f, 
-                                ty=ty, 
+                                &format!("{}(", f),
+                                &format!("{f}({const}__{ty}<{p}> *__self, ",
+                                f=f,
+                                ty=ty,
                                 p=p,
                                 const = if *is_const { "const " } else { "" }), 1)
                                 .replace(", )", ")"),
@@ -1456,7 +1460,7 @@ pub fn carbide(input: TokenStream) -> TokenStream {
                                         } else { false }
                                     } else { false }
                                 } else { false } {
-                                    abort!(func.span(), 
+                                    abort!(func.span(),
                                         "expected 1 string argument, found {} (probably non-string)", call.args.len()
                                     )
                                 }
@@ -1503,7 +1507,7 @@ pub fn carbide(input: TokenStream) -> TokenStream {
         quote_spanned!(name.span() => #ident(super::#parts<Allocator>))
     });
     let types = quote! {
-        #(#recurse,)* 
+        #(#recurse,)*
     };
 
     let mut all_pools = unsafe { match POOLS.lock() {
