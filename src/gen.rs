@@ -12,13 +12,13 @@ use crate::alloc::*;
 use crate::ptr::*;
 use crate::stm::{Logger,Notifier};
 
-pub static mut CODE_SEGMENT_BASE: usize = 0;
+pub static mut CODE_SEGMENT_BASE: i64 = 0;
 
 #[repr(C)]
 pub struct Gen<T, P: MemPool> {
     ptr: *const c_void,
     len: usize,
-    destructor_address: usize,
+    destructor_address: i64,
     phantom: PhantomData<(T,P)>
 }
 
@@ -52,7 +52,7 @@ impl<T, P: MemPool> RefUnwindSafe for Gen<T, P> {}
 #[derive(Clone)]
 pub struct ByteArray<T, P: MemPool> {
     bytes: Slice<u8, P>,
-    destructor_address: usize,
+    destructor_address: i64,
     logged: u8,
     phantom: PhantomData<T>
 }
@@ -94,7 +94,7 @@ impl<T, P: MemPool> Drop for ByteArray<T, P> {
                 if self.destructor_address != 0 {
                     let addr = self.destructor_address+CODE_SEGMENT_BASE;
                     union U {
-                        addr: usize,
+                        addr: i64,
                         drop: extern "C" fn(*mut c_void)->()
                     }
                     (U {addr}.drop)(ptr as *mut c_void);
@@ -244,13 +244,14 @@ impl<T, P: MemPool> Gen<T, P> {
     }
 
     fn from_byte_object(obj: ByteArray<T, P>) -> Self {
-        // assert_eq!(obj.len(), size_of::<T>(), "Incompatible type casting");
-        Self {
+        let res = Self {
             ptr: obj.bytes.as_ptr() as *const c_void,
             len: obj.len(),
             destructor_address: obj.destructor_address,
             phantom: PhantomData
-        }
+        };
+        std::mem::forget(obj);
+        res
     }
 
     pub fn as_ref(&self) -> &T {

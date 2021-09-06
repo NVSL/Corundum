@@ -1918,7 +1918,7 @@ root_name = root_name.to_string(),
         if ! CODE_SEGMENT_BASE_SET {
             expanded.push(quote!(
                 #[no_mangle]
-                pub unsafe extern "C" fn __setup_codesegment_base(offset: usize) {
+                pub unsafe extern "C" fn __setup_codesegment_base(offset: i64) {
                     corundum::gen::CODE_SEGMENT_BASE = offset;
                 }
             ));
