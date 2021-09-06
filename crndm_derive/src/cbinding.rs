@@ -1278,6 +1278,11 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
                         let re = Regex::new(&format!(r"\b{}\b", tmp[i])).expect(&format!("{}", line!()));
                         append = re.replace_all(&append, &cnt.generics[i-diff]).to_string();
                     }
+                    let fn_tmp = &tmp.as_slice()[0..diff];
+                    if !fn_tmp.is_empty() {
+                        append = append.replacen("\n",
+                            &format!("\n    template<class {}>\n", fn_tmp.join(", class")), 1);
+                    }
                     if *is_cons {
                         cnt.contents = cnt.contents.replace("    // other constructors", &append);
                     } else {
@@ -1399,6 +1404,8 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
 
     Ok(())
 }
+
+static mut CODE_SEGMENT_BASE_SET: bool = false;
 
 pub fn carbide(input: TokenStream) -> TokenStream {
     let mut types = vec!();
@@ -1779,6 +1786,7 @@ pub fn carbide(input: TokenStream) -> TokenStream {
 #include <stdlib.h>
 #include <unistd.h>
 #include <proot.h>
+#include <gen.h>
 #include <unordered_set>
 
 // forward declarations
@@ -1848,6 +1856,7 @@ public:
         if (check_open) assert(pool_traits<{pool}>::base==0, \"{pool} was already open\");
         inner = {pool_open}(path, flags);
         pool_traits<{pool}>::base = {pool_base}();
+        __setup_codesegment_base(__get_codesegment_base());
     }}
 
     ~{pool}() {{
@@ -1903,6 +1912,18 @@ root_name = root_name.to_string(),
         // if let Ok(mut file) = std::fs::File::create(format!("inc/{}.hpp", name_str)) {
         //     let _=file.write_all(export.as_bytes());
         // }
+    }
+
+    unsafe {
+        if ! CODE_SEGMENT_BASE_SET {
+            expanded.push(quote!(
+                #[no_mangle]
+                pub unsafe extern "C" fn __setup_codesegment_base(offset: usize) {
+                    corundum::gen::CODE_SEGMENT_BASE = offset;
+                }
+            ));
+            CODE_SEGMENT_BASE_SET = true;
+        }
     }
 
     let expanded = quote! {
