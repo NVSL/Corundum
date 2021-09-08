@@ -801,13 +801,13 @@ mod test {
                     if let Some(m) = m.promote(j) {
                         let mut m = m.1.lock(j);
                         let l = (rand::random::<usize>() % 100) + 1;
-                        let s: String = //String::from_utf8(
+                        let s: Vec<u8> = //String::from_utf8(
                             rand::thread_rng()
                                 .sample_iter(&Alphanumeric)
                                 .take(l)
                                 .collect();
                             //).unwrap();
-                        *m = s.to_pstring(j);
+                        *m = str::String::from_utf8(s, j).unwrap();
                     }
                 }).unwrap();
             }));

@@ -120,7 +120,6 @@
 #![feature(trait_alias)]
 #![feature(slice_concat_trait)]
 #![feature(slice_partition_dedup)]
-#![feature(const_generics)]
 #![feature(type_name_of_val)]
 #![feature(pattern)]
 #![feature(try_reserve)]

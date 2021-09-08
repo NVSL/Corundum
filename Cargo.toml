@@ -45,6 +45,6 @@ crndm_derive = { path="crndm_derive" }
 num_cpus = "1.13.0"
 
 # examples
-rand = "0.7.3"
+rand = "0.8.4"
 regex = "1.4.3"
-num = "0.3.1"
+num = "0.4.0"
