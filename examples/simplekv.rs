@@ -7,7 +7,6 @@
 #![allow(dead_code)]
 #![allow(incomplete_features)]
 #![feature(type_name_of_val)]
-#![feature(const_generics)]
 
 use std::mem::MaybeUninit;
 use corundum::default::*;
