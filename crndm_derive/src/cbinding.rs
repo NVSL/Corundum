@@ -368,9 +368,9 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
                     if transaction(AssertTxInSafe(|j| {
                         let mut objs = p.objs.lock(j);
                         let obj = objs.get_or_insert(key, || {
-                            #__mod::Container::#name(#new_name::new(#(#new_sizes,)* j))
+                            #__mod::RootObject::#name(#new_name::new(#(#new_sizes,)* j))
                         }, j);
-                        if let #__mod::Container::#name(obj) = &obj {
+                        if let #__mod::RootObject::#name(obj) = &obj {
                             res = obj as *const #new_name<#m>;
                         }
                     })).is_err() {
@@ -1568,20 +1568,14 @@ pub fn carbide(input: TokenStream) -> TokenStream {
                 #[allow(non_camel_case_types)]
                 type #m = super::#m::Allocator;
 
-                pub enum Container {
+                pub enum RootObject {
                     #types
                     Custom(Named),
                     None
                 }
 
-                impl Default for Container {
-                    fn default() -> Self {
-                        Container::None
-                    }
-                }
-
                 pub struct #root_name {
-                    pub(crate) objs: PMutex<PHashMap<u64, Container, Allocator>>
+                    pub(crate) objs: PMutex<PHashMap<u64, RootObject, Allocator>>
                 }
 
                 impl RootObj<Allocator> for #root_name {
@@ -1743,10 +1737,10 @@ pub fn carbide(input: TokenStream) -> TokenStream {
                     let mut res: *const Named = std::ptr::null();
                     if transaction(AssertTxInSafe(|j| {
                         let mut objs = p.objs.lock(j);
-                        if let Container::Custom(named) = objs.get_or_insert(key, || unsafe {
+                        if let RootObject::Custom(named) = objs.get_or_insert(key, || unsafe {
                             let mut obj = ByteArray::alloc(size, j);
                             init(obj.get_ptr_mut());
-                            Container::Custom(Named(0, obj))
+                            RootObject::Custom(Named(0, obj))
                         }, j) {
                             res = named as *const Named;
                         }
