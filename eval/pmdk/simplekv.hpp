@@ -35,7 +35,7 @@ private:
     value_vector values;
 
 public:
-    simple_kv() = Allocator;
+    simple_kv() = default;
 
     const Value &
     get(const std::string &key) const

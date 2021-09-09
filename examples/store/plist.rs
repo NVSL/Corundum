@@ -4,6 +4,7 @@ use std::fmt::{Debug, Display, Error, Formatter};
 use std::panic::RefUnwindSafe;
 use std::panic::UnwindSafe;
 use std::str::FromStr;
+use corundum::open_flags::*;
 
 type P = Allocator;
 type Link<T> = PRefCell<Option<Pbox<Node<T>>>>;

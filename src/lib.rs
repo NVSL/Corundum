@@ -143,31 +143,40 @@ pub(crate) const PAGE_LOG_SLOTS: usize = 128;
 extern crate crndm_derive;
 extern crate impl_trait_for_tuples;
 
-pub mod alloc;
-pub mod boxed;
-pub mod cell;
-pub mod clone;
 pub mod ll;
 pub mod prc;
 pub mod sync;
 pub mod ptr;
 pub mod stm;
-pub mod str;
-pub mod vec;
-pub mod convert;
 pub mod stat;
 pub mod utils;
 pub mod stl;
 pub mod gen;
 
+mod alloc;
+mod boxed;
+mod cell;
+mod clone;
+mod str;
+pub mod vec;
+mod convert;
 mod marker;
 mod tests;
 
 pub use cell::RootObj;
-pub use marker::*;
-
-pub use crndm_derive::*;
 pub use stm::transaction;
+pub use marker::*;
+pub use crndm_derive::*;
+pub use boxed::*;
+pub use prc::Prc;
+pub use sync::{Parc,PMutex};
+pub use clone::*;
+pub use vec::Vec as PVec;
+pub use self::str::{String as PString, ToPString, ToPStringSlice};
+pub use cell::*;
+pub use alloc::*;
+pub use convert::*;
+pub use stm::Journal;
 
 // This is an example of defining a new buddy allocator type
 // `Allocator` is the default allocator with Buddy Allocation algorithm

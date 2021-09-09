@@ -1,10 +1,12 @@
 #[cfg(test)]
 pub(crate) mod problems {
+    use crate::MemPool;
     use crate::default::*;
     use crate::boxed::Pbox;
     use crate::cell::*;
     use crate::stm::*;
     use crate::stm::Journal;
+    use crate::open_flags::*;
 
     #[test]
     fn vec_to_slice_test() {
@@ -591,6 +593,7 @@ pub(crate) mod test {
     use crate::stm::Journal;
     use crate::sync::PMutex;
     use crate::*;
+    use crate::open_flags::*;
 
     type A = Allocator;
 

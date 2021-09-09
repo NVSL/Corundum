@@ -1,5 +1,6 @@
-use corundum::alloc::*;
+use corundum::*;
 use std::env;
+use corundum::open_flags::*;
 
 type P = corundum::default::Allocator;
 

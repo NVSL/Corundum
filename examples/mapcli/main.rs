@@ -8,6 +8,7 @@ mod skiplist;
 use crate::map::*;
 use hashmap::*;
 use corundum::default::*;
+use corundum::open_flags::*;
 use skiplist::*;
 use std::env;
 use std::io::prelude::*;

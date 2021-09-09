@@ -1,4 +1,5 @@
 use std::time::Instant;
+use corundum::open_flags::*;
 
 fn main() {
     use corundum::default::*;

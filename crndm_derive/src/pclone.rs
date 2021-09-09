@@ -26,7 +26,7 @@ pub fn derive_pclone(input: TokenStream) -> TokenStream {
         expanded.push(quote! {
             #[automatically_derived]
             #[allow(unused_qualifications)]
-            impl#impl_generics corundum::clone::PClone<#p> for #name #ty_generics #where_clause {
+            impl#impl_generics corundum::PClone<#p> for #name #ty_generics #where_clause {
                 #[inline]
                 fn pclone(&self, j: &corundum::stm::Journal<#p>) -> Self {
                     #sum
@@ -48,7 +48,7 @@ fn add_trait_bounds(mut generics: Generics, pool: &Vec<TokenStream2>, p: &TokenS
             let ident = type_param.ident.clone();
             let me = ident.to_string();
             if !pool.iter().any(|p| p.to_string() == me) {
-                type_param.bounds.push(parse_quote!(corundum::clone::PClone<#p>));
+                type_param.bounds.push(parse_quote!(corundum::PClone<#p>));
             }
         }
     }
@@ -64,7 +64,7 @@ fn pclone_all_fields(ident: &Ident, data: &Data) -> TokenStream2 {
                     let recurse = fields.named.iter().map(|f| {
                         let name = &f.ident;
                         quote_spanned! {f.span()=>
-                            #name: corundum::clone::PClone::pclone(&self.#name, j)
+                            #name: corundum::PClone::pclone(&self.#name, j)
                         }
                     });
                     quote! {
@@ -80,7 +80,7 @@ fn pclone_all_fields(ident: &Ident, data: &Data) -> TokenStream2 {
                     let recurse = fields.unnamed.iter().enumerate().map(|(i, f)| {
                         let index = Index::from(i);
                         quote_spanned! {f.span()=>
-                            corundum::clone::PClone::pclone(&self.#index, j)
+                            corundum::PClone::pclone(&self.#index, j)
                         }
                     });
                     quote! {
@@ -110,7 +110,7 @@ fn pclone_all_fields(ident: &Ident, data: &Data) -> TokenStream2 {
                         let clones = recurse.clone();
                         quote! {
                             #ident::#variant(#(#recurse,)*) => 
-                                #ident::#variant(#(corundum::clone::PClone::pclone(&#clones, j),)*)
+                                #ident::#variant(#(corundum::PClone::pclone(&#clones, j),)*)
                         }
                     },
                     Fields::Named(ref fields) => {
@@ -125,7 +125,7 @@ fn pclone_all_fields(ident: &Ident, data: &Data) -> TokenStream2 {
                             let name = &f.ident;
                             let varname = format_ident!("__self_{}", i);
                             quote_spanned! {f.span()=>
-                                #name: corundum::clone::PClone::pclone(&#varname, j)
+                                #name: corundum::PClone::pclone(&#varname, j)
                             }
                         });
                         quote! {

@@ -26,7 +26,7 @@ impl<K: PartialEq + Hash + PSafe, V: PSafe, P: MemPool> RootObj<P> for HashMap<K
     }
 }
 
-impl<K: PSafe, V: PSafe + Copy, P: MemPool> HashMap<K, V, P> {
+impl<K: PSafe, V: PSafe, P: MemPool> HashMap<K, V, P> {
     pub fn foreach<F: FnMut(&K, &V) -> ()>(&self, mut f: F) {
         for i in 0..BUCKETS_MAX {
             for e in &*self.buckets[i].borrow() {
@@ -66,6 +66,19 @@ where
         None
     }
 
+    pub fn get_with_hash<Key>(&self, key: Key, key_hash: u64) -> Option<&V>
+    where K: PartialEq<Key> {
+        let index = (key_hash as usize) % BUCKETS_MAX;
+
+        for e in &*self.buckets[index].borrow() {
+            let e = e.borrow();
+            if e.0 == key {
+                return Some(unsafe { &*(&*self.values[e.1].borrow() as *const V) });
+            }
+        }
+        None
+    }
+
     pub fn put(&mut self, key: K, val: V, j: &Journal<P>) {
         let mut hasher = DefaultHasher::new();
         key.hash(&mut hasher);
@@ -82,6 +95,23 @@ where
 
         self.values.push(PRefCell::new(val), j);
         bucket.push(PRefCell::new((key, self.values.len() - 1)), j);
+    }
+
+    pub fn put_with_hash<Key>(&mut self, key: Key, key_hash: u64, val: V, j: &Journal<P>)
+    where K: PartialEq<Key> + PFrom<Key, P> {
+        let index = (key_hash as usize) % BUCKETS_MAX;
+        let mut bucket = self.buckets[index].borrow_mut(j);
+
+        for e in &*bucket {
+            let e = e.borrow();
+            if e.0 == key {
+                *self.values[e.1].borrow_mut(j) = val;
+                return;
+            }
+        }
+
+        self.values.push(PRefCell::new(val), j);
+        bucket.push(PRefCell::new((K::pfrom(key, j), self.values.len() - 1)), j);
     }
 
     pub fn get_or_insert<F: FnOnce()->V>(&mut self, key: K, f: F, j: &Journal<P>) -> &V {

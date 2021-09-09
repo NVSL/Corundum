@@ -17,7 +17,7 @@ use std::{mem, ptr};
 pub const DEFAULT_POOL_SIZE: u64 = 8 * 1024 * 1024;
 
 /// Open pool flags
-pub  mod open_flags {
+pub mod open_flags {
     /// Open Flag: Create the pool memory file
     pub const O_C: u32 = 0x00000001;
 
@@ -88,7 +88,7 @@ pub  mod open_flags {
     pub const O_READINFO: u32 = u32::MAX;
 }
 
-pub use open_flags::*;
+use open_flags::*;
 
 /// Shows that the pool has a root object
 pub const FLAG_HAS_ROOT: u64 = 0x0000_0001;
@@ -1316,6 +1316,8 @@ pub(crate) fn create_file(filename: &str, size: u64) -> Result<()> {
 
 #[cfg(test)]
 mod test {
+    use crate::open_flags::*;
+    use crate::alloc::pool::MemPoolTraits;
     use crate::default::*;
 
     #[test]

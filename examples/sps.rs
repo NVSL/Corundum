@@ -5,6 +5,8 @@
 
 extern crate corundum;
 
+use corundum::RootObj;
+use corundum::open_flags::*;
 use corundum::default::*;
 use rand::random;
 use std::time::Instant;

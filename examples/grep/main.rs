@@ -9,6 +9,7 @@ mod stack;
 use consumer::Consumer;
 use hashmap::*;
 use corundum::default::*;
+use corundum::open_flags::*;
 use producer::Producer;
 use stack::*;
 use std::env;
@@ -30,7 +31,7 @@ fn help() {
     println!("  -N            Do not print output (perf test)");
     println!("  -D            Distribute text partitions to consumers (used with -I)");
     println!("  -I            Continue counting in isolation (used with -D)");
-    println!("  -C            Continue from the previous run (used with -)P");
+    println!("  -C            Continue from the previous run (used with -P)");
     println!("  -P            Prepare only (do not run threads, used with -C)");
     println!("  -h            Display help");
     println!();

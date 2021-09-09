@@ -296,6 +296,7 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
     let mut conc_decl = "";
     let mut lock = "";
     let mut other_lock = "";
+    let mut guard_fn = "";
 
     if is_concurrent {
         entry.attrs.concurrent = true;
@@ -305,6 +306,11 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
         carbide::mutex_locker lock(&this->__mu);";
         other_lock = "
         carbide::mutex_locker lock(&const_cast<Self&>(other).__mu);";
+        guard_fn = "
+
+    carbide::mutex_locker guard() const {
+        return &this->__mu;
+    }";
     }
 
     for m in &mods {
@@ -337,8 +343,8 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
 
                 #[no_mangle]
                 pub extern "C" fn #fn_new(#(#new_sizes: usize,)* j: *const c_void) -> *const #new_name<#m> {
-                    use corundum::boxed::Pbox;
-                    use corundum::alloc::MemPoolTraits;
+                    use corundum::Pbox;
+                    use corundum::MemPoolTraits;
 
                     assert!(!j.is_null(), "transactional operation outside a transaction");
                     unsafe {
@@ -349,7 +355,7 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
 
                 #[no_mangle]
                 pub extern "C" fn #fn_drop(obj: *mut #new_name<#m>) {
-                    use corundum::boxed::Pbox;
+                    use corundum::Pbox;
 
                     assert!(!obj.is_null(),);
                     unsafe {
@@ -464,12 +470,14 @@ public:
     }}
 
     explicit {cname}(const {cname} &other) {{{other_lock}
-        assert(!other.moved, \"the object was already moved\");
+        if (pool_traits::valid(this)) {{
+            assert(!other.moved, \"the object was already moved\");
+            const_cast<Self&>(other).moved = true;
+        }}
         inner = other.inner;
         name = other.name;
         is_root = false;
         moved = false;
-        const_cast<Self&>(other).moved = true;
     }}
 
     explicit {cname}(const handle *pool, const std::string &name) noexcept(false) {{{lock}
@@ -493,7 +501,7 @@ public:
     void  operator delete   (void*) = delete;
 
     ~{cname}() noexcept(false) {{{lock}
-        if (!moved) {{
+        if (!moved && pool_traits::valid(this)) {{
             if (is_root) {{
                 auto n = name.c_str();
                 assert(objs.find(n) != objs.end(), \"'%s' is not open\", n);
@@ -506,7 +514,7 @@ public:
                 );
             }}
         }}
-    }}
+    }}{guard_fn}
 
     // other methods
 }};
@@ -523,6 +531,7 @@ name = new_name,
 cname = cname,
 conc_decl = conc_decl,
 lock = lock,
+guard_fn = guard_fn,
 other_lock = other_lock
 );
     entry.decl = format!("{template} class p{name}_t;",
@@ -537,7 +546,7 @@ other_lock = other_lock
     
     let gen: Vec<TokenStream2> = gen_idents.iter().map(|v| if *v == pool_type { quote!(P) } else { quote!(corundum::c_void) } ).collect();
     let expanded = quote! {
-        pub type #new_name<P: MemPool> = #name<#(#gen,)*>;
+        pub type #new_name<P: corundum::MemPool> = #name<#(#gen,)*>;
         #(#expanded)*
     };
 
@@ -974,8 +983,8 @@ pub fn cbindgen(_attr: TokenStream, item: TokenStream) -> TokenStream {
                                     #[no_mangle]
                                     #[deny(improper_ctypes_definitions)]
                                     pub extern "C" fn #fname(#(#args,)* j: *const corundum::c_void) -> *mut #new_name<#m> {
-                                        use corundum::boxed::Pbox;
-                                        use corundum::alloc::MemPoolTraits;
+                                        use corundum::Pbox;
+                                        use corundum::MemPoolTraits;
 
                                         assert!(!j.is_null(), "transactional operation outside a transaction");
                                         unsafe {
@@ -1430,7 +1439,7 @@ pub fn carbide(input: TokenStream) -> TokenStream {
                                         }
                                         mods.push((quote_spanned!(call.span() => #m), quote!(#(#flags)|*)));
                                     } else if let Expr::Path(m) = arg {
-                                        mods.push((quote_spanned!(m.span() => #m), quote!( O_CFNE )));
+                                        mods.push((quote_spanned!(m.span() => #m), quote!( corundum::open_flags::O_CFNE )));
                                     }
                                 }
                             },
@@ -1555,7 +1564,8 @@ pub fn carbide(input: TokenStream) -> TokenStream {
 
             pub mod #mod_name {
                 use super::*;
-                use corundum::*;
+                use corundum::c_void;
+                use corundum::ptr::Ptr;
                 use corundum::stm::{Logger, Notifier};
                 use corundum::stl::HashMap as PHashMap;
                 use corundum::gen::ByteArray;
@@ -1649,7 +1659,7 @@ pub fn carbide(input: TokenStream) -> TokenStream {
                     unsafe {
                         let j = Journal::current(true).expect(&format!("{}", line!()));
                         *j.1 += 1;
-                        let journal = utils::as_mut(j.0);
+                        let journal = corundum::utils::as_mut(j.0);
                         journal.unset(corundum::stm::JOURNAL_COMMITTED);
                         journal as *const _ as *const u8 as *const c_void
                     }
@@ -1684,7 +1694,7 @@ pub fn carbide(input: TokenStream) -> TokenStream {
                 pub extern "C" fn #fn_journal(create: bool) -> *const c_void {
                     unsafe {
                         if let Some(j) = Journal::current(create) {
-                            let journal = utils::as_mut(j.0);
+                            let journal = corundum::utils::as_mut(j.0);
                             journal as *const _ as *const u8 as *const c_void
                         } else {
                             std::ptr::null()
@@ -1772,7 +1782,6 @@ pub fn carbide(input: TokenStream) -> TokenStream {
         "// This file is auto-generated by Corundum. Don't manually modify it.
 #pragma once
 
-#include <pstdlib>
 #include <functional>
 #include <stdio.h>
 #include <execinfo.h>
@@ -1781,6 +1790,8 @@ pub fn carbide(input: TokenStream) -> TokenStream {
 #include <unistd.h>
 #include <proot.h>
 #include <gen.h>
+#include <pstdlib>
+#include <carbide>
 #include <unordered_set>
 
 // forward declarations

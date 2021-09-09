@@ -1285,7 +1285,9 @@ impl<A: MemPool> Vec<u8, A> {
 
 #[cfg(test)]
 mod test {
+    use crate::RootObj;
     use crate::default::*;
+    use crate::open_flags::*;
 
     type A = Allocator;
 
@@ -1366,7 +1368,7 @@ mod test {
     #[test]
     fn test_clear() {
         use crate::vec::Vec;
-        heap::Heap::transaction::<_, _>(|j| {
+        crate::heap::Heap::transaction::<_, _>(|j| {
             let mut vec = Vec::from_slice(&[1, 2, 3], j);
             vec.truncate(0);
             assert_eq!(vec, []);

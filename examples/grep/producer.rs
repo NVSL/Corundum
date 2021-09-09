@@ -13,7 +13,7 @@ const BATCH_SIZE: usize = 1024; // number of chars per job
 
 pub struct Producer {
     filenames: PVec<PString>,
-    // 0: file index, 1: line number
+    // 0: file index, 1: position
     pos: PMutex<(usize, u64)>,
     lines: Parc<PMutex<Stack<PString>>>,
 }

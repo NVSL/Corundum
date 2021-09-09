@@ -3,6 +3,7 @@ use corundum::default::*;
 use std::fmt::{Debug, Display, Error, Formatter};
 use std::panic::*;
 use std::str::FromStr;
+use corundum::open_flags::*;
 
 type P = Allocator;
 type Link<T> = Prc<PRefCell<Option<Node<T>>>>;

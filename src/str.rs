@@ -1588,7 +1588,7 @@ impl<A: MemPool> ops::DerefMut for String<A> {
     }
 }
 
-pub trait ToStringSlice<A: MemPool> {
+pub trait ToPStringSlice<A: MemPool> {
     /// Converts the given value to a `String`.
     ///
     /// # Examples
@@ -1613,7 +1613,7 @@ pub trait ToStringSlice<A: MemPool> {
     fn to_pstring(&self, journal: &Journal<A>) -> StdVec<String<A>>;
 }
 
-impl<T: fmt::Display, A: MemPool> ToStringSlice<A> for [T] {
+impl<T: fmt::Display, A: MemPool> ToPStringSlice<A> for [T] {
     #[inline]
     default fn to_pstring(&self, journal: &Journal<A>) -> StdVec<String<A>> {
         let mut vec = StdVec::<String<A>>::with_capacity(self.len());
@@ -1629,7 +1629,7 @@ impl<T: fmt::Display, A: MemPool> ToStringSlice<A> for [T] {
     }
 }
 
-impl<A: MemPool> ToStringSlice<A> for StdVec<&str> {
+impl<A: MemPool> ToPStringSlice<A> for StdVec<&str> {
     #[inline]
     default fn to_pstring(&self, journal: &Journal<A>) -> StdVec<String<A>> {
         let mut vec = StdVec::<String<A>>::with_capacity(self.len());
@@ -1949,7 +1949,7 @@ mod test {
 
     #[test]
     fn test_pstring() {
-        let root = A::open::<Pbox<PRefCell<PString>>>("sb6.pool", O_CFNE).unwrap();
+        let root = A::open::<Pbox<PRefCell<PString>>>("sb6.pool", open_flags::O_CFNE).unwrap();
 
         // let hello = "Hello World!!!";
         let _ = A::transaction(|j| {

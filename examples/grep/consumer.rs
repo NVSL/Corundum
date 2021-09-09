@@ -4,6 +4,7 @@ use crate::stack::Stack;
 use corundum::default::*;
 use corundum::sync::VWeak;
 use regex::Regex;
+use corundum::may_crash;
 
 type P = Allocator;
 

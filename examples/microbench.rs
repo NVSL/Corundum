@@ -1,8 +1,10 @@
 #![feature(asm)]
 
-use corundum::stm::*;
+use corundum::measure;
 use corundum::default::{*, Journal};
 use corundum::stat::*;
+use corundum::open_flags::*;
+use corundum::stm::{Log, Logger, Notifier};
 
 type P = Allocator;
 const CNT: usize = 50000;

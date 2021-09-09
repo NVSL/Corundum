@@ -13,6 +13,7 @@ use corundum::default::*;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::panic::RefUnwindSafe;
+use corundum::open_flags::*;
 
 const BUCKETS_MAX: usize = 10;
 

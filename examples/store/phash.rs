@@ -5,6 +5,7 @@ use std::fmt::{Debug, Error, Formatter};
 use std::hash::{Hash, Hasher};
 use std::panic::*;
 use std::str::FromStr;
+use corundum::open_flags::*;
 
 const BUCKETS_MAX: usize = 16;
 

@@ -1,4 +1,4 @@
-use crate::alloc::MemPool;
+use crate::alloc::*;
 use crate::ll::*;
 use crate::utils::*;
 use std::ops::{Index,IndexMut};
@@ -747,8 +747,9 @@ impl<T, A: MemPool> IndexMut<usize> for Zones<T, A> {
 
 #[cfg(test)]
 mod test {
+    use crate::RootObj;
     use crate::default::*;
-    // use crate::boxed::Pbox;
+    use crate::open_flags::*;
     type P = Allocator;
 
     #[test]
@@ -807,7 +808,7 @@ mod test {
                                 .take(l)
                                 .collect();
                             //).unwrap();
-                        *m = str::String::from_utf8(s, j).unwrap();
+                        *m = crate::str::String::from_utf8(s, j).unwrap();
                     }
                 }).unwrap();
             }));
@@ -1014,17 +1015,26 @@ macro_rules! pool {
             use std::sync::{Arc, Mutex};
             use std::thread::ThreadId;
             use $crate::ll::*;
-            use $crate::cell::LazyCell;
             use $crate::result::Result;
             use $crate::utils::read;
-            pub use $crate::*;
-            pub use $crate::alloc::*;
-            pub use $crate::cell::{RootCell, RootObj};
-            pub use $crate::clone::PClone;
-            pub use $crate::convert::PFrom;
-            pub use $crate::str::ToPString;
-            pub use $crate::stm::transaction;
-            pub use $crate::ptr::Ptr;
+            use $crate::*;
+            pub use $crate::{
+                PSafe, 
+                TxInSafe, 
+                TxOutSafe, 
+                LooseTxInUnsafe, 
+                AssertTxInSafe, 
+                VSafe, 
+                transaction, 
+                open_flags, 
+                PClone, 
+                Root,
+                RootObj,
+                ToPString,
+                ToPStringSlice,
+                MemPoolTraits,
+                MemPool
+            };
     
             static mut BUDDY_START: u64 = 0;
             static mut BUDDY_VALID_START: u64 = 0;
@@ -1692,7 +1702,7 @@ macro_rules! pool {
     
             /// Compact form of [`Pbox`](../../boxed/struct.Pbox.html)
             /// `<T,`[`Allocator`](./struct.Allocator.html)`>`.
-            pub type Pbox<T> = $crate::boxed::Pbox<T, $name>;
+            pub type Pbox<T> = $crate::Pbox<T, $name>;
     
             /// Compact form of [`Prc`](../../prc/struct.Prc.html)
             /// `<T,`[`Allocator`](./struct.Allocator.html)`>`.
@@ -1708,7 +1718,7 @@ macro_rules! pool {
     
             /// Compact form of [`PCell`](../../cell/struct.PCell.html)
             /// `<T,`[`Allocator`](./struct.Allocator.html)`>`.
-            pub type PCell<T> = $crate::cell::PCell<T, $name>;
+            pub type PCell<T> = $crate::PCell<T, $name>;
     
             /// Compact form of [`LogNonNull`](../../ptr/struct.LogNonNull.html)
             /// `<T,`[`Allocator`](./struct.Allocator.html)`>`.
@@ -1716,23 +1726,23 @@ macro_rules! pool {
     
             /// Compact form of [`PRefCell`](../../cell/struct.PRefCell.html)
             /// `<T,`[`Allocator`](./struct.Allocator.html)`>`.
-            pub type PRefCell<T> = $crate::cell::PRefCell<T, $name>;
+            pub type PRefCell<T> = $crate::PRefCell<T, $name>;
     
             /// Compact form of [`Ref`](../../cell/struct.Ref.html)
             /// `<'b, T, `[`Allocator`](./struct.Allocator.html)`>`.
-            pub type PRef<'b, T> = $crate::cell::Ref<'b, T, $name>;
+            pub type PRef<'b, T> = $crate::Ref<'b, T, $name>;
     
             /// Compact form of [`RefMut`](../../cell/struct.Mut.html)
             /// `<'b, T, `[`Allocator`](./struct.Allocator.html)`>`.
-            pub type PRefMut<'b, T> = $crate::cell::RefMut<'b, T, $name>;
+            pub type PRefMut<'b, T> = $crate::RefMut<'b, T, $name>;
     
             /// Compact form of [`VCell`](../../cell/struct.VCell.html)
             /// `<T,`[`Allocator`](./struct.Allocator.html)`>`.
-            pub type VCell<T> = $crate::cell::VCell<T, $name>;
+            pub type VCell<T> = $crate::VCell<T, $name>;
     
             /// Compact form of [`TCell`](../../cell/struct.TCell.html)
             /// `<T,`[`Allocator`](./struct.Allocator.html)`>`.
-            pub type TCell<T> = $crate::cell::TCell<T, $name>;
+            pub type TCell<T> = $crate::TCell<T, $name>;
     
             /// Compact form of [`Vec`](../../vec/struct.Vec.html)
             /// `<T,`[`Allocator`](./struct.Allocator.html)`>`.
@@ -1740,7 +1750,7 @@ macro_rules! pool {
     
             /// Compact form of [`String`](../../str/struct.String.html)
             /// `<`[`Allocator`](./struct.Allocator.html)`>`.
-            pub type PString = $crate::str::String<$name>;
+            pub type PString = $crate::PString<$name>;
     
             /// Compact form of [`Journal`](../../stm/struct.Journal.html)
             /// `<`[`Allocator`](./struct.Allocator.html)`>`.

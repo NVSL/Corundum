@@ -1,7 +1,3 @@
-use crate::default::PClone;
-use crate::stm::Journal;
-use crate::alloc::MemPool;
-use crate::alloc::PmemUsage;
 use crate::*;
 use std::marker::PhantomData;
 use std::ops::Index;

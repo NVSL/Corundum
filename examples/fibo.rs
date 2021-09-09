@@ -1,6 +1,6 @@
-use corundum::alloc::*;
-use corundum::cell::*;
-use corundum::stm::*;
+use corundum::stm::Chaperon;
+use corundum::*;
+use corundum::open_flags::*;
 
 corundum::pool!(pool1);
 corundum::pool!(pool2);

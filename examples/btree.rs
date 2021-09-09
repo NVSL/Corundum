@@ -1,13 +1,13 @@
 //! Implementation of persistent binary search tree
 
-use corundum::alloc::*;
 use corundum::*;
 use std::env;
 use std::fmt::{Display, Error, Formatter};
+use corundum::open_flags::*;
 
-type P = corundum::default::Allocator;
+type P = default::Allocator;
 //type P = Heap;
-type Pbox<T> = corundum::boxed::Pbox<T, P>;
+type Pbox<T> = corundum::Pbox<T, P>;
 type Ptr = Option<Pbox<BTreeNode>>;
 
 struct FixStr {

@@ -1,6 +1,7 @@
 extern crate num;
 use num::complex::Complex;
 use std::f64::consts::PI;
+use corundum::open_flags::*;
 
 const I: Complex<f64> = Complex { re: 0.0, im: 1.0 };
 
