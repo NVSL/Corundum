@@ -11,6 +11,7 @@ fi
 cd $dir_path
 git clone https://github.com/jerrinsg/go-pmem.git
 cd go-pmem/src
+# git checkout 37287b0a177cb8bab8687c364e42871627560436
 ./make.bash
 # $su apt -y remove golang
 # $su apt -y autoremove

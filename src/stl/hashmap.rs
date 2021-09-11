@@ -128,6 +128,20 @@ where
         self.put_once(key, f(), j)
     }
 
+    pub fn get_or_insert_with_hash<Key, F: FnOnce()->V>(&mut self, key: Key, key_hash: u64, f: F, j: &Journal<P>) -> &V 
+    where K: PartialEq<Key> + PFrom<Key, P>
+    {
+        let index = (key_hash as usize) % BUCKETS_MAX;
+
+        for e in &*self.buckets[index].borrow() {
+            let e = e.borrow();
+            if e.0 == key {
+                return unsafe { &*(&*self.values[e.1].borrow() as *const V) };
+            }
+        }
+        self.put_once(K::pfrom(key, j), f(), j)
+    }
+
     pub fn put_once(&mut self, key: K, val: V, j: &Journal<P>) -> &V {
         let mut hasher = DefaultHasher::new();
         key.hash(&mut hasher);
@@ -139,7 +153,7 @@ where
         unsafe { &*(&*new as *const V) }
     }
 
-    pub fn update_with<F: FnOnce(&V) -> V>(&mut self, key: &K, j: &Journal<P>, f: F)
+    pub fn update_with<F: FnOnce(&mut V)>(&mut self, key: &K, j: &Journal<P>, f: F)
     where
         V: Default,
         K: PClone<P>,
@@ -152,14 +166,42 @@ where
         for e in &*bucket {
             let e = e.borrow();
             if e.0 == *key {
-                *self.values[e.1].borrow_mut(j) = f(&self.values[e.1].borrow());
+                f(&mut *self.values[e.1].borrow_mut(j));
                 return;
             }
         }
 
-        self.values.push(PRefCell::new(f(&V::default())), j);
+        let mut new = V::default();
+        f(&mut new);
+        self.values.push(PRefCell::new(new), j);
         bucket.push(
             PRefCell::new((key.pclone(j), self.values.len() - 1)),
+            j,
+        );
+    }
+
+    pub fn update_with_hash<Key, F: FnOnce(&mut V)>(&mut self, key: &Key, key_hash: u64, j: &Journal<P>, f: F)
+    where
+        V: Default,
+        K: PClone<P> + PartialEq<Key> + PFrom<Key, P>,
+        Key: Clone
+    {
+        let index = (key_hash as usize) % BUCKETS_MAX;
+        let mut bucket = self.buckets[index].borrow_mut(j);
+
+        for e in &*bucket {
+            let e = e.borrow();
+            if e.0 == *key {
+                f(&mut *self.values[e.1].borrow_mut(j));
+                return;
+            }
+        }
+
+        let mut new = V::default();
+        f(&mut new);
+        self.values.push(PRefCell::new(new), j);
+        bucket.push(
+            PRefCell::new((K::pfrom(key.clone(), j), self.values.len() - 1)),
             j,
         );
     }

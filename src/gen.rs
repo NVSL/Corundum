@@ -157,7 +157,11 @@ impl<T, P: MemPool> ByteArray<T, P> {
         Gen::<T, P>::from_ptr(self.get_ptr())
     }
 
-    pub unsafe fn as_mut(&self) -> &mut T {
+    pub fn as_mut(&mut self) -> &mut T {
+        unsafe { &mut *(self.bytes.as_ptr() as *mut T) }
+    }
+
+    pub unsafe fn get_mut(&self) -> &mut T {
         &mut *(self.bytes.as_ptr() as *mut T)
     }
 

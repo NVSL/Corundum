@@ -1550,6 +1550,7 @@ pub fn carbide(input: TokenStream) -> TokenStream {
         let fn_txn_running = format_ident!("{}_txn_running", name_str);
         let fn_log = format_ident!("{}_log", name_str);
         let fn_print_info = format_ident!("{}_print_info", name_str);
+        let fn_used = format_ident!("{}_used", name_str);
         let fn_read64 = format_ident!("{}_read64", name_str);
         let named_open = format_ident!("{}_named_open", name_str);
         let named_data_pointer = format_ident!("{}_named_data_pointer", name_str);
@@ -1731,6 +1732,11 @@ pub fn carbide(input: TokenStream) -> TokenStream {
                 }
 
                 #[no_mangle]
+                pub extern "C" fn #fn_used() -> usize {
+                    Allocator::used()
+                }
+
+                #[no_mangle]
                 pub extern "C" fn #fn_read64(addr: u64) -> u64 {
                     unsafe { *Allocator::get_unchecked(addr) }
                 }
@@ -1843,6 +1849,9 @@ struct pool_traits<{pool}> {{
     static void early_start_transaction() {{
         {pool_journal}(true);
     }}
+    static size_t used() {{
+        return {pool_used}();
+    }}
 }};
 
 std::unordered_set<std::string> pool_traits<{pool}>::objs;
@@ -1899,6 +1908,7 @@ pool_dealloc = fn_dealloc.to_string(),
 pool_valid = fn_valid.to_string(),
 pool_print_info = fn_print_info.to_string(),
 pool_log = fn_log.to_string(),
+pool_used = fn_used.to_string(),
 pool_journal = fn_journal.to_string(),
 pool_txn_running = fn_txn_running.to_string(),
 pool_open = fn_open.to_string(),
