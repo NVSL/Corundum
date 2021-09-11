@@ -64,14 +64,58 @@ unsafe impl<T, P: MemPool> LooseTxInUnsafe for ByteArray<T, P> {}
 impl<T, P: MemPool> UnwindSafe for ByteArray<T, P> {}
 impl<T, P: MemPool> RefUnwindSafe for ByteArray<T, P> {}
 
-impl<T, P: MemPool> Default for ByteArray<T, P> {
-    fn default() -> Self {
-        Self {
-            bytes: Default::default(),
+// impl<T, P: MemPool> Default for ByteArray<T, P> {
+//     fn default() -> Self {
+//         Self {
+//             bytes: Default::default(),
+//             destructor_address: 0,
+//             logged: 0,
+//             phantom: PhantomData
+//         }
+//     }
+// }
+
+pub trait Allocatable<T, P: MemPool> where Self: Sized {
+    unsafe fn alloc(size: usize, j: &Journal<P>) -> Self;
+    unsafe fn alloc_zeroed(size: usize, j: &Journal<P>) -> Self;
+    fn as_ref(&self) -> &T;
+    fn as_mut(&mut self) -> &mut T;
+}
+
+impl<T: Default + Sized, P: MemPool> Allocatable<T, P> for T {
+    unsafe fn alloc(_: usize, _: &Journal<P>) -> Self { Self::default() }
+    unsafe fn alloc_zeroed(_: usize, _: &Journal<P>) -> Self { Self::default() }
+    fn as_ref(&self) -> &T { self }
+    fn as_mut(&mut self) -> &mut T { self }
+}
+
+impl<T: PSafe, P: MemPool> Allocatable<T, P> for ByteArray<T, P> {
+    unsafe fn alloc(size: usize, j: &Journal<P>) -> Self {
+        let ptr = P::new_uninit_for_layout(size, j);
+        Self { 
+            bytes: Slice::from_raw_parts(ptr, size), 
             destructor_address: 0,
             logged: 0,
             phantom: PhantomData
         }
+    }
+    unsafe fn alloc_zeroed(size: usize, j: &Journal<P>) -> Self {
+        let z = vec![0u8;size];
+        let ptr = P::new_copy_slice(z.as_slice(), j);
+        Self { 
+            bytes: Slice::from_raw_parts(ptr.as_ptr(), size), 
+            destructor_address: 0,
+            logged: 0,
+            phantom: PhantomData
+        }
+    }
+
+    fn as_ref(&self) -> &T {
+        unsafe { &*(self.bytes.as_ptr() as *const T) }
+    }
+
+    fn as_mut(&mut self) -> &mut T {
+        unsafe { &mut *(self.bytes.as_ptr() as *mut T) }
     }
 }
 
@@ -106,16 +150,6 @@ impl<T, P: MemPool> Drop for ByteArray<T, P> {
 }
 
 impl<T, P: MemPool> ByteArray<T, P> {
-    pub unsafe fn alloc(size: usize, j: &Journal<P>) -> Self {
-        let ptr = P::new_uninit_for_layout(size, j);
-        Self { 
-            bytes: Slice::from_raw_parts(ptr, size), 
-            destructor_address: 0,
-            logged: 0,
-            phantom: PhantomData
-        }
-    }
-
     pub fn null() -> Self {
         Self {
             bytes: Default::default(),
@@ -123,10 +157,6 @@ impl<T, P: MemPool> ByteArray<T, P> {
             logged: 0,
             phantom: PhantomData
         }
-    }
-
-    pub fn as_ref(&self) -> &T {
-        unsafe { &*(self.bytes.as_ptr() as *const T) }
     }
 
     fn from_gen(obj: Gen<T, P>) -> Self {
@@ -155,10 +185,6 @@ impl<T, P: MemPool> ByteArray<T, P> {
     pub unsafe fn get_gen(&self) -> Gen<T, P> {
         // assert_eq!(self.len(), size_of::<T>(), "Incompatible type casting");
         Gen::<T, P>::from_ptr(self.get_ptr())
-    }
-
-    pub fn as_mut(&mut self) -> &mut T {
-        unsafe { &mut *(self.bytes.as_ptr() as *mut T) }
     }
 
     pub unsafe fn get_mut(&self) -> &mut T {

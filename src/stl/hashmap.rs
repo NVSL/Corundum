@@ -10,6 +10,7 @@ use crate::vec::Vec as PVec;
 use crate::cell::PRefCell;
 use crate::stm::Journal;
 use crate::clone::PClone;
+use crate::gen::Allocatable;
 
 const BUCKETS_MAX: usize = 16;
 
@@ -180,9 +181,9 @@ where
         );
     }
 
-    pub fn update_with_hash<Key, F: FnOnce(&mut V)>(&mut self, key: &Key, key_hash: u64, j: &Journal<P>, f: F)
+    pub fn update_with_hash<Key, Value, F: FnOnce(&mut Value)>(&mut self, key: &Key, value_size: usize, key_hash: u64, j: &Journal<P>, f: F)
     where
-        V: Default,
+        V: Allocatable<Value, P>,
         K: PClone<P> + PartialEq<Key> + PFrom<Key, P>,
         Key: Clone
     {
@@ -192,13 +193,13 @@ where
         for e in &*bucket {
             let e = e.borrow();
             if e.0 == *key {
-                f(&mut *self.values[e.1].borrow_mut(j));
+                f(self.values[e.1].borrow_mut(j).as_mut());
                 return;
             }
         }
 
-        let mut new = V::default();
-        f(&mut new);
+        let mut new = unsafe { V::alloc_zeroed(value_size, j) };
+        f(new.as_mut());
         self.values.push(PRefCell::new(new), j);
         bucket.push(
             PRefCell::new((K::pfrom(key.clone(), j), self.values.len() - 1)),

@@ -301,14 +301,14 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
     if is_concurrent {
         entry.attrs.concurrent = true;
         conc_decl = "
-    std::recursive_mutex __mu;";
+    carbide::recursive_mutex<_P> __mu;";
         lock = "
-        carbide::mutex_locker lock(&this->__mu);";
+        carbide::mutex_locker<_P> lock(&this->__mu);";
         other_lock = "
-        carbide::mutex_locker lock(&const_cast<Self&>(other).__mu);";
+        carbide::mutex_locker<_P> lock(&const_cast<Self&>(other).__mu);";
         guard_fn = "
 
-    carbide::mutex_locker guard() const {
+    carbide::mutex_locker<_P> guard() const {
         return &this->__mu;
     }";
     }
@@ -1174,7 +1174,7 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
             }
         }
         let lock = if cnt.attrs.concurrent { "
-        carbide::mutex_locker lock(&this->__mu);" } else { "" };
+        carbide::mutex_locker<_P> lock(&this->__mu);" } else { "" };
         let mut cbindfile = "".to_owned();
         // let mut funcs = vec!();
         for (_, _, f, _, _, _, _, _, _) in &mut cnt.funcs {
@@ -1549,6 +1549,7 @@ pub fn carbide(input: TokenStream) -> TokenStream {
         let fn_journal = format_ident!("{}_journal", name_str);
         let fn_txn_running = format_ident!("{}_txn_running", name_str);
         let fn_log = format_ident!("{}_log", name_str);
+        let fn_gen = format_ident!("{}_gen", name_str);
         let fn_print_info = format_ident!("{}_print_info", name_str);
         let fn_used = format_ident!("{}_used", name_str);
         let fn_read64 = format_ident!("{}_read64", name_str);
@@ -1727,6 +1728,11 @@ pub fn carbide(input: TokenStream) -> TokenStream {
                 }
 
                 #[no_mangle]
+                pub extern "C" fn #fn_gen() -> u32 {
+                    Allocator::gen()
+                }
+
+                #[no_mangle]
                 pub extern "C" fn #fn_print_info() {
                     Allocator::print_info()
                 }
@@ -1745,6 +1751,7 @@ pub fn carbide(input: TokenStream) -> TokenStream {
 
                 #[no_mangle]
                 pub extern "C" fn #named_open(p: &#root_name, name: *const c_char, size: usize, init: extern fn(*mut c_void)->()) -> *const c_void /* Named */ {
+                    use corundum::gen::Allocatable;
                     let name = unsafe { CStr::from_ptr(name).to_str().expect(&format!("{}", line!())) };
                     let mut hasher = DefaultHasher::new();
                     name.hash(&mut hasher);
@@ -1806,6 +1813,7 @@ template < class P > class Journal;
 template<>
 struct pool_traits<{pool}> {{
     static size_t base;
+    static u_int32_t gen;
     using journal = Journal<{pool}>;
     using handle = {root_name};
     using void_pointer = carbide::pointer_t<void, {pool}>;
@@ -1855,8 +1863,9 @@ struct pool_traits<{pool}> {{
 }};
 
 std::unordered_set<std::string> pool_traits<{pool}>::objs;
-
 size_t pool_traits<{pool}>::base = 0;
+u_int32_t pool_traits<{pool}>::gen = 0;
+
 class {pool}: public carbide::pool_type {{
     const {root_name} *inner;
 public:
@@ -1870,6 +1879,7 @@ public:
         if (check_open) assert(pool_traits<{pool}>::base==0, \"{pool} was already open\");
         inner = {pool_open}(path, flags);
         pool_traits<{pool}>::base = {pool_base}();
+        pool_traits<{pool}>::gen = {pool_gen}();
         __setup_codesegment_base(__get_codesegment_base());
     }}
 
@@ -1914,6 +1924,7 @@ pool_txn_running = fn_txn_running.to_string(),
 pool_open = fn_open.to_string(),
 pool_close = fn_close.to_string(),
 pool_base = fn_base.to_string(),
+pool_gen = fn_gen.to_string(),
 pool_txn_begin = fn_txn_begin.to_string(),
 pool_txn_commit = fn_txn_commit.to_string(),
 pool_txn_rollback = fn_txn_rollback.to_string(),

@@ -14,8 +14,6 @@ pub struct HashMap<K: PSafe, V: PSafe> {
     values: PVec<PCell<V>>,
 }
 
-
-
 impl<K: PSafe, V: PSafe + Copy> HashMap<K, V> {
     pub fn foreach<F: FnMut(&K, V) -> ()>(&self, mut f: F) {
         for i in 0..BUCKETS_MAX {
