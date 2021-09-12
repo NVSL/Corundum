@@ -1,7 +1,6 @@
 use crate::ptr::{LogNonNull,NonNull};
 use crate::convert::PFrom;
 use crate::alloc::MemPool;
-use crate::cell::VCell;
 use crate::stm::Journal;
 use crate::*;
 use std::cell::UnsafeCell;
@@ -12,6 +11,9 @@ use std::panic::{RefUnwindSafe, UnwindSafe};
 
 #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
 use crate::cell::TCell;
+
+#[cfg(not(feature = "no_dyn_borrow_checking"))]
+use crate::cell::VCell;
 
 /// A persistent memory location with safe interior mutability and dynamic
 /// borrow checking
@@ -45,6 +47,7 @@ use crate::cell::TCell;
 pub struct PRefCell<T: PSafe + ?Sized, A: MemPool> {
     heap: PhantomData<A>,
 
+    #[cfg(not(feature = "no_dyn_borrow_checking"))]
     borrow: VCell<i8, A>,
 
     #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
@@ -81,6 +84,8 @@ impl<T: PSafe, A: MemPool> PRefCell<T, A> {
     fn def(value: T) -> Self {
         PRefCell {
             heap: PhantomData,
+
+            #[cfg(not(feature = "no_dyn_borrow_checking"))]
             borrow: VCell::new(0),
 
             #[cfg(any(feature = "use_pspd", feature = "use_vspd"))]
@@ -324,9 +329,12 @@ impl<T: PSafe + ?Sized, A: MemPool> PRefCell<T, A> {
     /// ```
     #[track_caller]
     pub fn borrow(&self) -> Ref<'_, T, A> {
-        let borrow = self.borrow.as_mut();
-        assert!(*borrow <= 0, "Value was already mutably borrowed");
-        *borrow = -1;
+
+        #[cfg(not(feature = "no_dyn_borrow_checking"))] {
+            let borrow = self.borrow.as_mut();
+            assert!(*borrow <= 0, "Value was already mutably borrowed");
+            *borrow = -1;
+        }
         Ref { value: self, phantom: PhantomData }
     }
 
@@ -461,10 +469,12 @@ impl<T: PSafe, A: MemPool> PRefCell<T, A> {
     #[inline]
     #[track_caller]
     pub fn borrow_mut(&self, journal: &Journal<A>) -> RefMut<'_, T, A> {
-        let borrow = self.borrow.as_mut();
-        assert!(*borrow >= 0, "Value was already immutably borrowed");
-        assert!(*borrow == 0, "Value was already mutably borrowed");
-        *borrow = 1;
+        #[cfg(not(feature = "no_dyn_borrow_checking"))] {
+            let borrow = self.borrow.as_mut();
+            assert!(*borrow >= 0, "Value was already immutably borrowed");
+            assert!(*borrow == 0, "Value was already mutably borrowed");
+            *borrow = 1;
+        }
         RefMut {
             value: unsafe { &mut *(self as *const Self as *mut Self) },
             journal,
@@ -584,9 +594,11 @@ impl<'b, T: PSafe + ?Sized, A: MemPool> Ref<'b, T, A> {
     #[inline]
     #[track_caller]
     pub fn clone(orig: &Ref<'b, T, A>) -> Ref<'b, T, A> {
-        let borrow = unsafe {(*orig.value).borrow.as_mut()};
-        assert!(*borrow > i8::MIN);
-        *borrow -= 1;
+        #[cfg(not(feature = "no_dyn_borrow_checking"))] {
+            let borrow = unsafe {(*orig.value).borrow.as_mut()};
+            assert!(*borrow > i8::MIN);
+            *borrow -= 1;
+        }
         Ref { value: orig.value, phantom: PhantomData }
     }
 
@@ -665,8 +677,10 @@ impl<T: fmt::Display + PSafe, A: MemPool> fmt::Display for Ref<'_, T, A> {
 
 impl<T: PSafe + ?Sized, A: MemPool> Drop for Ref<'_, T, A> {
     fn drop(&mut self) {
-        let borrow = unsafe {(*self.value).borrow.as_mut()};
-        *borrow += 1;
+        #[cfg(not(feature = "no_dyn_borrow_checking"))] {
+            let borrow = unsafe {(*self.value).borrow.as_mut()};
+            *borrow += 1;
+        }
     }
 }
 
@@ -745,7 +759,7 @@ impl<T: fmt::Debug + PSafe + ?Sized, A: MemPool> fmt::Debug for RefMut<'_, T, A>
 
 impl<T: PSafe + ?Sized, A: MemPool> Drop for RefMut<'_, T, A> {
     fn drop(&mut self) {
-        unsafe {
+        #[cfg(not(feature = "no_dyn_borrow_checking"))] unsafe {
             let borrow = (*self.value).borrow.as_mut();
             *borrow -= 1;
         }

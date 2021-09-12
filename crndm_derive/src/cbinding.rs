@@ -308,7 +308,7 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
         carbide::mutex_locker<_P> lock(&const_cast<Self&>(other).__mu);";
         guard_fn = "
 
-    carbide::mutex_locker<_P> guard() const {
+    inline carbide::mutex_locker<_P> guard() const {
         return &this->__mu;
     }";
     }
@@ -471,7 +471,7 @@ public:
 
     explicit {cname}(const {cname} &other) {{{other_lock}
         if (pool_traits::valid(this)) {{
-            assert(!other.moved, \"the object was already moved\");
+            assert(!other.moved, \"object was already moved\");
             const_cast<Self&>(other).moved = true;
         }}
         inner = other.inner;
@@ -1174,7 +1174,7 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
             }
         }
         let lock = if cnt.attrs.concurrent { "
-        carbide::mutex_locker<_P> lock(&this->__mu);" } else { "" };
+        auto __guard = guard();" } else { "" };
         let mut cbindfile = "".to_owned();
         // let mut funcs = vec!();
         for (_, _, f, _, _, _, _, _, _) in &mut cnt.funcs {
@@ -1240,6 +1240,7 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
                             sig = re.replace_all(&sig, "_P").to_string();
                         }
                         append = format!("    // other constructors\n    {cname}{sig}: moved(false), is_root(false) {{{lock}
+        assert(!moved, \"object was already moved\");
         {ty}_traits<_P>::{tmp}{fn}{gen}(&inner{comma}{args});
     }}",
                             sig=sig,
