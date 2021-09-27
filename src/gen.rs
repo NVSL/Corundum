@@ -1,6 +1,7 @@
 #![cfg(feature = "cbindings")]
 
 // use std::hash::*;
+use std::ops::Deref;
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 use std::panic::{UnwindSafe, RefUnwindSafe};
@@ -90,6 +91,7 @@ impl<T: Default + Sized, P: MemPool> Allocatable<T, P> for T {
 }
 
 impl<T: PSafe, P: MemPool> Allocatable<T, P> for ByteArray<T, P> {
+    #[inline]
     unsafe fn alloc(size: usize, j: &Journal<P>) -> Self {
         let ptr = P::new_uninit_for_layout(size, j);
         Self { 
@@ -99,6 +101,8 @@ impl<T: PSafe, P: MemPool> Allocatable<T, P> for ByteArray<T, P> {
             phantom: PhantomData
         }
     }
+
+    #[inline]
     unsafe fn alloc_zeroed(size: usize, j: &Journal<P>) -> Self {
         let z = vec![0u8;size];
         let ptr = P::new_copy_slice(z.as_slice(), j);
@@ -110,10 +114,12 @@ impl<T: PSafe, P: MemPool> Allocatable<T, P> for ByteArray<T, P> {
         }
     }
 
+    #[inline]
     fn as_ref(&self) -> &T {
         unsafe { &*(self.bytes.as_ptr() as *const T) }
     }
 
+    #[inline]
     fn as_mut(&mut self) -> &mut T {
         unsafe { &mut *(self.bytes.as_ptr() as *mut T) }
     }
@@ -150,6 +156,7 @@ impl<T, P: MemPool> Drop for ByteArray<T, P> {
 }
 
 impl<T, P: MemPool> ByteArray<T, P> {
+    #[inline]
     pub fn null() -> Self {
         Self {
             bytes: Default::default(),
@@ -159,6 +166,7 @@ impl<T, P: MemPool> ByteArray<T, P> {
         }
     }
 
+    #[inline]
     fn from_gen(obj: Gen<T, P>) -> Self {
         Self { 
             bytes: unsafe { Slice::from_raw_parts(obj.ptr as *const u8, obj.len) }, 
@@ -168,6 +176,7 @@ impl<T, P: MemPool> ByteArray<T, P> {
         }
     }
 
+    #[inline]
     /// Retrieves an unsafe `Gen` sharing the same pointer and leaks the allocation
     /// 
     /// # Safety
@@ -177,6 +186,7 @@ impl<T, P: MemPool> ByteArray<T, P> {
         Gen::from_byte_object(self)
     }
 
+    #[inline]
     /// Retrieves an unsafe `Gen` sharing the same pointer
     /// 
     /// # Safety
@@ -187,18 +197,22 @@ impl<T, P: MemPool> ByteArray<T, P> {
         Gen::<T, P>::from_ptr(self.get_ptr())
     }
 
+    #[inline]
     pub unsafe fn get_mut(&self) -> &mut T {
         &mut *(self.bytes.as_ptr() as *mut T)
     }
 
+    #[inline]
     pub fn get_ptr(&self) -> *const T {
         self.bytes.as_ptr() as *const T
     }
 
+    #[inline]
     pub fn get_ptr_mut(&mut self) -> *mut c_void {
         self.bytes.as_ptr() as *mut c_void
     }
 
+    #[inline]
     pub unsafe fn to_ptr_mut(slf: &mut Self) -> *mut c_void {
         slf.bytes.as_ptr() as *mut c_void
     }
@@ -216,6 +230,7 @@ impl<T, P: MemPool> ByteArray<T, P> {
         }
     }
 
+    #[inline]
     /// Swaps the contents of two `ByteArray`s
     pub fn swap(&mut self, other: &mut Self) {
         let slice = self.bytes;
@@ -223,10 +238,12 @@ impl<T, P: MemPool> ByteArray<T, P> {
         other.bytes = slice;
     }
 
+    #[inline]
     pub fn len(&self) -> usize {
         self.bytes.capacity()
     }
 
+    #[inline]
     pub fn update_from_gen(&self, new: Gen<T, P>, j: &Journal<P>) {
         unsafe {
             let slice = utils::as_mut(self).bytes.as_slice_mut();
@@ -238,6 +255,15 @@ impl<T, P: MemPool> ByteArray<T, P> {
     }
 }
 
+impl<T: PSafe, P: MemPool> Deref for ByteArray<T, P> {
+    type Target = T;
+
+    #[inline]
+    fn deref(&self) -> &T {
+        self.as_ref()
+    } 
+}
+
 impl<T, P: MemPool> From<Gen<T, P>> for ByteArray<T, P> {
     fn from(g: Gen<T, P>) -> Self {
         Self::from_gen(g)
@@ -245,6 +271,7 @@ impl<T, P: MemPool> From<Gen<T, P>> for ByteArray<T, P> {
 }
 
 impl<T, P: MemPool> Gen<T, P> {
+    #[inline]
     pub fn null() -> Self {
         Self {
             ptr: std::ptr::null(),
@@ -256,14 +283,17 @@ impl<T, P: MemPool> Gen<T, P> {
 }
 
 impl<T, P: MemPool> Gen<T, P> {
+    #[inline]
     fn as_slice(&self) -> &[u8] {
         unsafe { std::slice::from_raw_parts(self.ptr as *mut u8, self.len) }
     }
 
+    #[inline]
     fn as_slice_mut(&mut self) -> &mut [u8] {
         unsafe { std::slice::from_raw_parts_mut(self.ptr as *mut u8, self.len) }
     }
 
+    #[inline]
     fn from_ptr(obj: *const T) -> Self {
         Self {
             ptr: obj as *const T as *const c_void,
@@ -273,6 +303,7 @@ impl<T, P: MemPool> Gen<T, P> {
         }
     }
 
+    #[inline]
     fn from_byte_object(obj: ByteArray<T, P>) -> Self {
         let res = Self {
             ptr: obj.bytes.as_ptr() as *const c_void,
@@ -284,6 +315,7 @@ impl<T, P: MemPool> Gen<T, P> {
         res
     }
 
+    #[inline]
     pub fn as_ref(&self) -> &T {
         unsafe { crate::utils::read(self.ptr as *mut u8) }
     }
@@ -295,6 +327,15 @@ impl<T, P: MemPool> Gen<T, P> {
     pub fn len(&self) -> usize {
         self.len
     }
+}
+
+impl<T, P: MemPool> Deref for Gen<T, P> {
+    type Target = T;
+
+    #[inline]
+    fn deref(&self) -> &T {
+        self.as_ref()
+    } 
 }
 
 // #[cfg(test)]

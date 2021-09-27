@@ -1626,11 +1626,11 @@ pub fn carbide(input: TokenStream) -> TokenStream {
 
                 #[no_mangle]
                 pub extern "C" fn #fn_alloc(size: usize) -> *mut c_void {
-                    let j = unsafe {
-                        Journal::current(false)
-                        .expect(&format!("{} cannot be used outside a transaction", stringify!(#fn_alloc)))
-                    };
-                    unsafe { Allocator::new_uninit_for_layout(size, &*j.0) as *mut c_void }
+                    unsafe {
+                        let j = Journal::current(false)
+                            .expect(&format!("{} cannot be used outside a transaction", stringify!(#fn_alloc)));
+                        Allocator::new_uninit_for_layout(size, &*j.0) as *mut c_void
+                    }
                 }
 
                 #[no_mangle]
@@ -1712,7 +1712,7 @@ pub fn carbide(input: TokenStream) -> TokenStream {
 
                 #[no_mangle]
                 pub extern "C" fn #fn_log(obj: *const c_void, logged: *const u8, size: usize, j: *const c_void) {
-                    assert!(!obj.is_null() && !j.is_null());
+                    assert!(!obj.is_null() && !j.is_null(), "unable to log due to null pointers");
                     unsafe {
                         if Allocator::valid(obj) {
                             let slice = std::slice::from_raw_parts(obj as *mut u8, size);
@@ -1762,7 +1762,7 @@ pub fn carbide(input: TokenStream) -> TokenStream {
                     if transaction(AssertTxInSafe(|j| {
                         let mut objs = p.objs.lock(j);
                         if let RootObject::Custom(named) = objs.get_or_insert(key, || unsafe {
-                            let mut obj = ByteArray::alloc(size, j);
+                            let mut obj = ByteArray::<corundum::c_void, Allocator>::alloc(size, j);
                             init(obj.get_ptr_mut());
                             RootObject::Custom(Named(0, obj))
                         }, j) {

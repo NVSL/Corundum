@@ -332,7 +332,7 @@ impl<T: PSafe + ?Sized, A: MemPool> PRefCell<T, A> {
 
         #[cfg(not(feature = "no_dyn_borrow_checking"))] {
             let borrow = self.borrow.as_mut();
-            assert!(*borrow <= 0, "Value was already mutably borrowed");
+            assert!(*borrow <= 0, "Value was already mutably borrowed ({})", *borrow);
             *borrow = -1;
         }
         Ref { value: self, phantom: PhantomData }
@@ -471,8 +471,8 @@ impl<T: PSafe, A: MemPool> PRefCell<T, A> {
     pub fn borrow_mut(&self, journal: &Journal<A>) -> RefMut<'_, T, A> {
         #[cfg(not(feature = "no_dyn_borrow_checking"))] {
             let borrow = self.borrow.as_mut();
-            assert!(*borrow >= 0, "Value was already immutably borrowed");
-            assert!(*borrow == 0, "Value was already mutably borrowed");
+            assert!(*borrow >= 0, "Value was already immutably borrowed ({})", *borrow);
+            assert!(*borrow == 0, "Value was already mutably borrowed ({})", *borrow);
             *borrow = 1;
         }
         RefMut {
