@@ -1171,6 +1171,8 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
                     &format!("// forward declarations\n{}", fwd_decl));
                 pool.contents = pool.contents.replace("    // type aliases",
                     &format!("    // type aliases\n    {}", alias));
+                pool.contents = pool.contents.replace("// friend classes",
+                    &format!("// friend classes\n    {}\n", fwd_decl.replace(">", ">\n    friend")));
             }
         }
         let lock = if cnt.attrs.concurrent { "
@@ -1813,12 +1815,13 @@ template < class P > class Journal;
 
 template<>
 struct pool_traits<{pool}> {{
-    static size_t base;
-    static u_int32_t gen;
     using journal = Journal<{pool}>;
     using handle = {root_name};
     using void_pointer = carbide::pointer_t<void, {pool}>;
 
+private:
+    static size_t base;
+    static u_int32_t gen;
     static std::unordered_set<std::string> objs;
 
     static void_pointer allocate(size_t size) {{
@@ -1861,6 +1864,27 @@ struct pool_traits<{pool}> {{
     static size_t used() {{
         return {pool_used}();
     }}
+
+    // friend classes
+    template<class __Tp, class __P>
+    friend class carbide::pointer_t;
+    
+    template<class __Tp, class __P>
+    friend class carbide::allocator;
+
+    template<class __Tp, class __P>
+    friend class carbide::char_traits;
+
+    template<class __Tp, class __P>
+    friend class carbide::log_traits;
+
+    template<class __P>
+    friend class carbide::recursive_mutex;
+
+    template<class __Tp, class __P>
+    friend class Gen;
+
+    friend class {pool};
 }};
 
 std::unordered_set<std::string> pool_traits<{pool}>::objs;
