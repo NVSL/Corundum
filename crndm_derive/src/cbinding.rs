@@ -271,7 +271,8 @@ pub fn derive_cbindgen(input: TokenStream) -> TokenStream {
     let new_name = format_ident!("__{}", name);
     let name_str = name.to_string();
     let small_name = name_str.to_lowercase();
-    let cname = format!("p{}_t", small_name);
+    // let cname = format!("p{}_t", small_name);
+    let cname = format!("{}", name);
 
     let mut expanded = vec![];
     let mut includes = "".to_owned();
@@ -534,12 +535,12 @@ lock = lock,
 guard_fn = guard_fn,
 other_lock = other_lock
 );
-    entry.decl = format!("{template} class p{name}_t;",
-            name = small_name,
+    entry.decl = format!("{template} class {name};",
+            name = name,
             template = template
         );
-    entry.alias = format!("{generics_list}using {name} = p{name}_t<{generics}{{pool}}>;",
-            name = small_name,
+    entry.alias = format!("{generics_list}using {name} = {name}<{generics}{{pool}}>;",
+            name = name,
             generics = generics_str,
             generics_list = generics_list
         );
@@ -1235,8 +1236,7 @@ pub fn export(dir: PathBuf, span: proc_macro2::Span, overwrite: bool, warning: b
                     let mut append;
                     if *is_cons {
                         let name_str = ty.to_string();
-                        let small_name = name_str.to_lowercase();
-                        let cname = format!("p{}_t", small_name);
+                        let cname = name_str;
                         let mut sig = sig_re.captures(&s).expect(&format!("{}", line!())).get(1).expect(&format!("{}", line!())).as_str().to_owned();
                         if let Some(re) = &re_pool {
                             sig = re.replace_all(&sig, "_P").to_string();
