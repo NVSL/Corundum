@@ -1866,22 +1866,22 @@ private:
     }}
 
     // friend classes
-    template<class __Tp, class __P>
+    template < class T, class _P >
     friend class carbide::pointer_t;
     
-    template<class __Tp, class __P>
+    template < class T, class _P >
     friend class carbide::allocator;
 
-    template<class __Tp, class __P>
+    template < class T, class _P >
     friend class carbide::char_traits;
 
-    template<class __Tp, class __P>
+    template < class T, class _P >
     friend class carbide::log_traits;
 
-    template<class __P>
+    template < class _P >
     friend class carbide::recursive_mutex;
 
-    template<class __Tp, class __P>
+    template < class T, class _P >
     friend class Gen;
 
     friend class {pool};
