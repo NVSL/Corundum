@@ -1819,6 +1819,9 @@ struct pool_traits<{pool}> {{
     using handle = {root_name};
     using void_pointer = carbide::pointer_t<void, {pool}>;
 
+    static const journal* journal_handle() {{
+        return (const journal*) {pool_journal}(false);
+    }}
 private:
     static size_t base;
     static u_int32_t gen;
@@ -1843,9 +1846,6 @@ private:
     static void cell_log(const void *obj, const u_int8_t *logged, size_t size, const journal *j) {{
         {pool_log}(obj, logged, size, j);
     }}
-    static const journal* journal_handle() {{
-        return (const journal*) {pool_journal}(false);
-    }}
     static bool txn_running() {{
         return {pool_txn_running}();
     }}
@@ -1868,6 +1868,12 @@ private:
     // friend classes
     template < class T, class _P >
     friend class carbide::pointer_t;
+
+    template < class T, class _P >
+    friend class carbide::reference;
+
+    template < class T, class _P >
+    friend class carbide::cell;
     
     template < class T, class _P >
     friend class carbide::allocator;
@@ -1880,6 +1886,9 @@ private:
 
     template < class _P >
     friend class carbide::recursive_mutex;
+
+    template < class T, class _P >
+    friend class proot_t;
 
     template < class T, class _P >
     friend class Gen;
