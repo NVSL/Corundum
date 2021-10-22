@@ -21,6 +21,8 @@ use crate::stm::vspd::Scratchpad;
 
 /// Determines that the changes are committed
 pub const JOURNAL_COMMITTED: u64 = 0x0000_0001;
+/// Determines that the changes are committed
+pub const JOURNAL_CONTINUE_COMMIT: u64 = 0x0000_0002;
 
 /// A Journal object to be used for writing logs onto
 ///
@@ -237,6 +239,11 @@ impl<A: MemPool> Journal<A> {
         self.is_set(JOURNAL_COMMITTED)
     }
 
+    /// Returns true if the journal needs to continue committing
+    pub fn is_continue_commit(&self) -> bool {
+        self.is_set(JOURNAL_CONTINUE_COMMIT)
+    }
+
     /// Sets a flag
     pub unsafe fn set(&mut self, flag: u64) {
         self.flags |= flag;
@@ -438,6 +445,9 @@ impl<A: MemPool> Journal<A> {
             page.commit_data();
             curr = page.next;
         }
+        self.set(JOURNAL_CONTINUE_COMMIT);
+        sfence();
+
         let mut curr = self.pages;
         while let Some(page) = curr.as_option() {
             page.commit_dealloc(
@@ -492,7 +502,22 @@ impl<A: MemPool> Journal<A> {
         }
         let mut curr = self.pages;
         let resume = self.resume();
-        if !self.is_set(JOURNAL_COMMITTED) || resume {
+        if self.is_continue_commit() {
+            while let Some(page) = curr.as_option() {
+                page.commit_dealloc(
+                    #[cfg(feature = "check_double_free")]
+                    check_double_free
+                );
+                curr = page.next;
+            }
+            sfence();
+            self.set(JOURNAL_COMMITTED);
+            self.clear(
+                #[cfg(feature = "check_double_free")]
+                &mut *Self::dealloc_history()
+            );
+        }
+        else if !self.is_set(JOURNAL_COMMITTED) || resume {
             let rollback = !resume || !self.is_set(JOURNAL_COMMITTED);
             #[cfg(any(feature = "use_pspd", feature = "use_vspd"))] {
                 if rollback {
