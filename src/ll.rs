@@ -2,6 +2,7 @@
 #![allow(unused)]
 
 use crate::alloc::MemPool;
+use std::arch::asm;
 
 #[inline(always)]
 pub fn cpu() -> usize {
@@ -130,6 +131,6 @@ pub fn sfence() {
 #[inline]
 pub fn mfence() {
     unsafe {
-        _mm_mfence();
+        std::intrinsics::atomic_fence()
     }
 }

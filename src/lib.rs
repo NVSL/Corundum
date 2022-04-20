@@ -103,10 +103,8 @@
 
 #![feature(auto_traits)]
 #![feature(untagged_unions)]
-#![feature(const_fn_trait_bound)]
 #![feature(specialization)]
 #![feature(concat_idents)]
-#![feature(asm)]
 #![feature(core_intrinsics)]
 #![feature(thread_id_value)]
 #![feature(negative_impls)]
@@ -122,7 +120,6 @@
 #![feature(slice_partition_dedup)]
 #![feature(type_name_of_val)]
 #![feature(pattern)]
-#![feature(try_reserve)]
 #![feature(str_internals)]
 #![feature(toowned_clone_into)]
 #![feature(fn_traits)]
@@ -132,7 +129,7 @@
 #![feature(rustc_attrs)]
 #![feature(allocator_api)]
 #![feature(associated_type_bounds)]
-#![feature(async_stream)]
+// #![feature(async_stream)]
 
 #![allow(dead_code)]
 #![allow(incomplete_features)]

@@ -1,6 +1,5 @@
 //! Corundum Markers
 //! 
-use std::stream::Stream;
 use crate::stm::Journal;
 use crate::alloc::MemPool;
 use std::task::Poll;
@@ -221,18 +220,6 @@ impl<F: Future + LooseTxInUnsafe> Future for AssertTxInSafe<F> {
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let pinned_field = unsafe { Pin::map_unchecked_mut(self, |x| &mut x.0) };
         F::poll(pinned_field, cx)
-    }
-}
-
-impl<S: Stream + LooseTxInUnsafe> Stream for AssertTxInSafe<S> {
-    type Item = S::Item;
-
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<S::Item>> {
-        unsafe { self.map_unchecked_mut(|x| &mut x.0) }.poll_next(cx)
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.0.size_hint()
     }
 }
 
