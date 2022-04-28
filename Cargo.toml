@@ -42,7 +42,7 @@ memmap = "0.7.0"
 term-painter = "0.3.0"
 libc = "0.2.82"
 impl-trait-for-tuples = "0.2.0"
-crndm_derive = { path="crndm_derive" }
+crndm_derive = "0.1.1"
 num_cpus = "1.13.0"
 
 # examples
