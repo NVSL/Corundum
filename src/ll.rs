@@ -94,17 +94,19 @@ pub fn clflush<T: ?Sized>(ptr: *const T, len: usize, fence: bool) {
             unsafe {
                 #[cfg(not(any(feature = "use_clflushopt", feature = "use_clwb")))]
                 {
+                    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
                     asm!("clflush [{}]", in(reg) (start as *const u8), options(nostack));
+                    
+                    #[cfg(target_arch = "aarch64")]
+                    asm!("dc cvau, {}", in(reg) (start as *const u8))
                 }
                 #[cfg(all(feature = "use_clflushopt", not(feature = "use_clwb")))]
                 {
                     asm!("clflushopt [{}]", in(reg) (start as *const u8), options(nostack));
-                    // llvm_asm!("clflushopt ($0)" :: "r"(start as *const u8));
                 }
                 #[cfg(all(feature = "use_clwb", not(feature = "use_clflushopt")))]
                 {
                     asm!("clwb [{}]", in(reg) (start as *const u8), options(nostack));
-                    // llvm_asm!("clwb ($0)" :: "r"(start as *const u8));
                 }
                 #[cfg(all(feature = "use_clwb", feature = "use_clflushopt"))]
                 {
